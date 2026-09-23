@@ -21,7 +21,10 @@ import dev.vineengine.vine.Subscription;
  * <p>Each driver hands in its loader's installers at bootstrap
  * ({@code driver1211.<loader>.events}); this class is loader-neutral mechanics
  * only. Hooks whose native source is a documented seam ({@link VineHook}) have no
- * installer and fail subscriptions explicitly.
+ * installer and fail subscriptions explicitly. Content-driven hooks
+ * ({@code PACKET_RECEIVE}, {@code COMMAND_EXECUTE}) install no listener of their
+ * own — their native plumbing exists for the engine regardless — the installer
+ * just captures the sink the live path posts to while subscribed.
  *
  * <p>Seam to sub-01: when {@code DriverContext.bus()} / {@code installHook(...)}
  * land, subscriptions here are re-rooted onto the engine bus and this collector
@@ -39,13 +42,11 @@ public final class HookBus {
     private static final Logger LOG = LoggerFactory.getLogger(HookBus.class);
 
     private final Map<VineHook, Installer> installers;
-    private final CommandQueue commands;
     private final Map<VineHook, List<Consumer<HookEvent>>> handlers = new EnumMap<>(VineHook.class);
     private final Map<VineHook, AutoCloseable> installed = new EnumMap<>(VineHook.class);
 
-    public HookBus(Map<VineHook, Installer> installers, CommandQueue commands) {
+    public HookBus(Map<VineHook, Installer> installers) {
         this.installers = Map.copyOf(Objects.requireNonNull(installers, "installers"));
-        this.commands = Objects.requireNonNull(commands, "commands");
     }
 
     /**
@@ -67,11 +68,6 @@ public final class HookBus {
         }
         list.add(handler);
         return new HookSubscription(hook, handler);
-    }
-
-    /** Queued engine command literals, drained by this loader's command installer. */
-    public CommandQueue commands() {
-        return commands;
     }
 
     /** Native listeners currently installed — the Minimal Footprint debug counter. */

@@ -27,6 +27,6 @@ public final class VineMod {
     public VineMod(IEventBus modEventBus) {
         LOGGER.info("VINE driver 1.21.1-neoforge alive");
         NeoForge1211Driver.handOffModEventBus(modEventBus);
-        DriverBoot.boot(LOGGER);
+        DriverBoot.boot();
     }
 }

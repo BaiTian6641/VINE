@@ -6,13 +6,13 @@ package dev.vineengine.vine.internal.driver1211.common.events;
  * its native listener lazily on first subscription and uninstalls on last close
  * (Minimal Footprint, §5.1) via {@link HookBus}.
  *
- * <p>Seams pending sibling SPIs (documented, never silently absent): packet
- * receive waits on sub-05's payload SPI, and the Fabric rows with no native
- * callback (block place, world save) wait on the quarantined per-driver Mixin
- * config — subscribing to one of these hooks throws instead of misfiring.
- * {@link #REGISTRY_REGISTER} is live since sub-02 Stage B: its source is the
- * engine's own structural materialization (driver-side tap), not a loader
- * callback.
+ * <p>Seams pending sibling work (documented, never silently absent): the Fabric
+ * rows with no native callback (block place, world save) wait on the quarantined
+ * per-driver Mixin config — subscribing to one of these hooks throws instead of
+ * misfiring. {@link #REGISTRY_REGISTER} is live since sub-02 Stage B (engine
+ * materialization tap); {@link #PACKET_RECEIVE} and {@link #COMMAND_EXECUTE} are
+ * live since sub-05/sub-06 Stage A — content-driven hooks whose installers
+ * capture the sink the live path posts to.
  */
 public enum VineHook {
     /** A structural descriptor was materialized into a vanilla static registry. Source: sub-02 Stage B materialization tap. */
@@ -25,8 +25,8 @@ public enum VineHook {
     WORLD_LOAD,
     /** A world is being saved. NF: {@code LevelEvent.Save}; Fabric: †Mixin (deferred). */
     WORLD_SAVE,
-    /** An engine payload arrived. Seam: sub-05 payload SPI (Stage D). */
+    /** An engine payload arrived. Live since sub-05 Stage A: the NetDriver inbound path (NF payload handler / Fabric play receiver). */
     PACKET_RECEIVE,
-    /** A queued engine command literal executed. NF: {@code RegisterCommandsEvent}; Fabric: {@code CommandRegistrationCallback}. */
+    /** An engine command executed. Live since sub-06 Stage A: the EngineCommands attach path (NF RegisterCommandsEvent / Fabric CommandRegistrationCallback). */
     COMMAND_EXECUTE
 }

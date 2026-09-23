@@ -34,3 +34,10 @@ loom {
         }
     }
 }
+
+// The dev server reads console commands from stdin — the TCK harness drives
+// scenarios (and its graceful stop) through it. JavaExec gets an empty stdin
+// unless it asks, so the pipe would otherwise never reach the server.
+tasks.named('runServer') {
+    standardInput = System.in
+}

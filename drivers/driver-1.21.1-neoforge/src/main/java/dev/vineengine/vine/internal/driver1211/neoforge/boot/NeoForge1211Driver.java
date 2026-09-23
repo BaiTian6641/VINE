@@ -1,9 +1,14 @@
 package dev.vineengine.vine.internal.driver1211.neoforge.boot;
 
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
+
 import net.minecraft.SharedConstants;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
+import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 
@@ -14,9 +19,12 @@ import dev.vineengine.vine.EnginePhase;
 import dev.vineengine.vine.internal.driver1211.common.CellProbes;
 import dev.vineengine.vine.internal.driver1211.common.CellWindow;
 import dev.vineengine.vine.internal.driver1211.common.DriverRuntime;
-import dev.vineengine.vine.internal.driver1211.common.events.CommandQueue;
+import dev.vineengine.vine.internal.driver1211.common.command.EngineCommands;
 import dev.vineengine.vine.internal.driver1211.common.events.HookBus;
+import dev.vineengine.vine.internal.driver1211.common.events.HookEvent;
+import dev.vineengine.vine.internal.driver1211.neoforge.command.NeoForgeCommandFactory;
 import dev.vineengine.vine.internal.driver1211.neoforge.events.NeoForgeHookInstallers;
+import dev.vineengine.vine.internal.driver1211.neoforge.net.NeoForgeNetDriver;
 import dev.vineengine.vine.internal.driver1211.neoforge.registry.NeoForgeStructuralMaterializer;
 import dev.vineengine.vine.internal.spi.VineDriver;
 
@@ -83,8 +91,18 @@ public final class NeoForge1211Driver implements VineDriver {
         NeoForge.EVENT_BUS.addListener(ServerStartedEvent.class,
             event -> ctx.advancePhase(EnginePhase.SERVER_UP));
 
-        CommandQueue commands = new CommandQueue();
-        DriverRuntime.install(new HookBus(NeoForgeHookInstallers.create(commands), commands));
-        LOG.debug("[VINE] driver {} bootstrap complete: hook collectors armed (0 native listeners)", DRIVER_ID);
+        AtomicReference<Consumer<HookEvent>> packetHook = new AtomicReference<>();
+        DriverRuntime.install(new HookBus(NeoForgeHookInstallers.create(packetHook)));
+
+        // Networking (sub-05 Stage A): engine pushes channel registrations to the
+        // driver; native payload types bind when NF fires its payload event.
+        NeoForgeNetDriver net = new NeoForgeNetDriver(packetHook);
+        net.bindTransport();
+        modBus.addListener(RegisterPayloadHandlersEvent.class, net::bindNative);
+
+        // Commands (sub-06 Stage A): every native dispatcher build attaches the
+        // engine's descriptor snapshot (fires post-REGISTRIES_FROZEN on NF).
+        NeoForge.EVENT_BUS.addListener(RegisterCommandsEvent.class,
+            event -> EngineCommands.attach(event.getDispatcher(), NeoForgeCommandFactory.instance(), LOG));
     }
 }

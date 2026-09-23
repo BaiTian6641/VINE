@@ -1,5 +1,9 @@
 package dev.vineengine.vine.internal.driver1211.fabric.boot;
 
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
+
+import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.minecraft.SharedConstants;
 
@@ -10,9 +14,12 @@ import dev.vineengine.vine.EnginePhase;
 import dev.vineengine.vine.internal.driver1211.common.CellProbes;
 import dev.vineengine.vine.internal.driver1211.common.CellWindow;
 import dev.vineengine.vine.internal.driver1211.common.DriverRuntime;
-import dev.vineengine.vine.internal.driver1211.common.events.CommandQueue;
+import dev.vineengine.vine.internal.driver1211.common.command.EngineCommands;
 import dev.vineengine.vine.internal.driver1211.common.events.HookBus;
+import dev.vineengine.vine.internal.driver1211.common.events.HookEvent;
+import dev.vineengine.vine.internal.driver1211.fabric.command.FabricCommandFactory;
 import dev.vineengine.vine.internal.driver1211.fabric.events.FabricHookInstallers;
+import dev.vineengine.vine.internal.driver1211.fabric.net.FabricNetDriver;
 import dev.vineengine.vine.internal.driver1211.fabric.registry.FabricStructuralMaterializer;
 import dev.vineengine.vine.internal.spi.VineDriver;
 
@@ -67,11 +74,26 @@ public final class Fabric1211Driver implements VineDriver {
             ctx.advancePhase(EnginePhase.REGISTRIES_FROZEN);
             ctx.advancePhase(EnginePhase.WORLD_LOAD);
         });
-        ServerLifecycleEvents.SERVER_STARTED.register(server -> ctx.advancePhase(EnginePhase.SERVER_UP));
 
-        CommandQueue commands = new CommandQueue();
-        DriverRuntime.install(new HookBus(FabricHookInstallers.create(commands), commands));
-        LOG.debug("[VINE] driver {} bootstrap complete: hook collectors armed (0 native listeners)", DRIVER_ID);
+        AtomicReference<Consumer<HookEvent>> packetHook = new AtomicReference<>();
+        DriverRuntime.install(new HookBus(FabricHookInstallers.create(packetHook)));
+
+        // Networking (sub-05 Stage A): Fabric binds payload types/receivers
+        // imperatively, so each engine push binds natively at once.
+        FabricNetDriver net = new FabricNetDriver(packetHook);
+        net.bindTransport();
+        ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+            net.server(server);
+            ctx.advancePhase(EnginePhase.SERVER_UP);
+        });
+        ServerLifecycleEvents.SERVER_STOPPING.register(server -> net.server(null));
+
+        // Commands (sub-06 Stage A): Fabric's command callback fires at dispatcher
+        // construction — before SERVER_STARTING on this cell, but the descriptor
+        // snapshot is complete (consumer initializers ran during REGISTRIES_OPEN),
+        // and the engine's native-pass snapshot is stable per build.
+        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
+            EngineCommands.attach(dispatcher, FabricCommandFactory.instance(), LOG));
     }
 
     /**
