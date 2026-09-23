@@ -111,11 +111,39 @@ public enum TckTag { SMOKE, PERSISTENCE, NETWORK, BRAIN, ANIMATION, PERF, QUARAN
 
 ### Stage D — CI reporting + flaky policy
 
-- [ ] **Do:** aggregate job rendering a per-scenario × cell matrix with
+- [x] **Do:** aggregate job rendering a per-scenario × cell matrix with
   history; fixture diffs as failure artifacts; quarantine as code: two
   consecutive identical-seed failures ⇒ auto-tag `QUARANTINED`, gate
   exemption, `QUARANTINE.md` ledger entry (owner + expiry); quarantine count
   is a reported metric.
+  - **Landed 2026-09-24:** the runner journals every outcome to
+    `results/<cell>.jsonl` (`run`, `cell`, `scenario`, `status`, `durationMs`,
+    `failure`) and writes a failure artifact per red scenario (failure detail +
+    the last 40 console lines). `ResultReporter` (`:vine-tck:tckReport`) renders
+    `reports/matrix.md` + `matrix.json` (per-scenario × cell with status
+    history), computes quarantine (two consecutive failures of the same
+    scenario — any cell), writes the gate decision
+    (`results/quarantine.json`) and maintains `vine-tck/QUARANTINE.md` with
+    owner + expiry; the quarantine count is printed with the report. The runner
+    reads the decision before each run: quarantined failures print as
+    `QUARANTINED`, are journaled, and do **not** gate. Drill scenario sets ride
+    `-Pvine.tck.scenariosDir=<dir>` (a `scenarios/` dir), so the flaky policy
+    itself is testable in ~2.5 minutes instead of a full suite.
+  - **Evidence — the full drill, then reverted:** (1) a forced failing scenario
+    goes red (`BUILD FAILED`) with journal + `artifact-<cell>-<scenario>.txt`;
+    (2) the second identical run goes red, then `tckReport` reports
+    `quarantined=1` and writes the decision + a ledger row
+    (`owner: unassigned, expires: <now+14d>`); (3) the next run prints
+    `1 scenario(s) quarantined`, reports the scenario as `QUARANTINED`, and the
+    gate **passes** (`2/2 scenarios passed`). Removing the drill restores an
+    empty ledger (`| _(none)_ |`) and the real suite runs green afterwards.
+  - **Bugs the drill caught:** the journal writer emitted a stray quote
+    (`"durationMs":90062"`) so every line failed to parse — surfaced by the
+    reporter's new unreadable-line diagnostic rather than silently reporting
+    "0 scenarios"; the runner read the quarantine decision from the wrong
+    directory; and quarantined failures still incremented the gate tally, so the
+    exemption had to be applied to the tally itself (a scenario can be
+    quarantined and still fail the build only if the policy says so).
 - **Acceptance:** a forced failing scenario goes red with diff artifact, then
   quarantines on the second run with ledger entry; revert afterwards.
 - **Touches:** workflows, `tck-core` report renderer, ledger.

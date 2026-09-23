@@ -57,6 +57,38 @@ public final class ScenarioRunner {
     private static final Duration ASSERT_TIMEOUT = Duration.ofSeconds(90);
     private static final Duration STOP_GRACE = Duration.ofSeconds(90);
 
+    /** One scenario's outcome for the results journal (sub-21 Stage D). */
+    private record Outcome(String scenario, String status, String failure, long durationMs) {
+    }
+
+    /** Quarantined scenarios — failures here are reported, not gated (sub-21 Stage D). */
+    private final java.util.Set<String> quarantined = new java.util.HashSet<>();
+    /** This run's outcomes, journaled at the end. */
+    private final List<Outcome> outcomes = new java.util.ArrayList<>();
+
+    /** Loads the report renderer's quarantine decision ({@code <tck-build>/results/quarantine.json}). */
+    private void loadQuarantine() {
+        Path decision = projectCacheDir.resolveSibling("results").resolve("quarantine.json");
+        if (!Files.exists(decision)) {
+            return;
+        }
+        try {
+            var root = com.google.gson.JsonParser.parseString(
+                Files.readString(decision, StandardCharsets.UTF_8)).getAsJsonObject();
+            if (root.has("scenarios")) {
+                for (var element : root.getAsJsonArray("scenarios")) {
+                    quarantined.add(element.getAsString());
+                }
+            }
+            if (!quarantined.isEmpty()) {
+                System.out.println("[TCK] " + quarantined.size()
+                    + " scenario(s) quarantined — failures reported, gate exempt (see QUARANTINE.md)");
+            }
+        } catch (Exception e) {
+            System.out.println("[TCK] quarantine decision unreadable, treated as empty: " + e);
+        }
+    }
+
     private final String cell;
     private int bootCount;
     private final Path rootDir;
@@ -133,11 +165,20 @@ public final class ScenarioRunner {
         startServer();
 
         int failed = 0;
+        outcomes.clear();
+        loadQuarantine();
         for (Path file : files) {
             String id = file.getFileName().toString().replaceFirst("\\.json$", "");
+            long startedAt = System.nanoTime();
             String failure = runScenario(file);
+            outcomes.add(new Outcome(id, failure == null ? "PASS" : "FAIL", failure,
+                java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt)));
             if (failure == null) {
                 System.out.println("[TCK] scenario " + id + ": PASS");
+            } else if (quarantined.contains(id)) {
+                // Quarantine is a policy exemption, not a silent pass: the
+                // failure is printed and journaled, but it does not gate.
+                System.out.println("[TCK] scenario " + id + ": QUARANTINED — " + failure);
             } else {
                 failed++;
                 System.out.println("[TCK] scenario " + id + ": FAIL — " + failure);
@@ -156,6 +197,7 @@ public final class ScenarioRunner {
         }
         System.out.println("[TCK] " + cell + ": " + (files.size() - failed) + "/" + files.size()
                 + " scenarios passed");
+        writeJournal(cell, files.size(), failed);
         return failed == 0 ? 0 : EXIT_FAIL;
     }
 
@@ -390,6 +432,65 @@ public final class ScenarioRunner {
         synchronized (log) {
             return log.size();
         }
+    }
+
+    /**
+     * Appends this run's outcomes to {@code results/<cell>.jsonl} (sub-21 Stage D):
+     * the journal the report renderer reads for the matrix, history and
+     * quarantine decisions. Quarantined scenarios are recorded but never gate the
+     * build — the ledger stays visible either way.
+     */
+    private void writeJournal(String cell, int total, int failed) {
+        Path resultsDir = projectCacheDir.resolveSibling("results");
+        try {
+            Files.createDirectories(resultsDir);
+            StringBuilder journal = new StringBuilder();
+            String runId = java.time.Instant.now().toString();
+            for (Outcome outcome : outcomes) {
+                boolean isQuarantined = quarantined.contains(outcome.scenario());
+                journal.append("{\"run\":\"").append(runId)
+                    .append("\",\"cell\":\"").append(cell)
+                    .append("\",\"scenario\":\"").append(outcome.scenario())
+                    .append("\",\"status\":\"").append(isQuarantined ? "QUARANTINED" : outcome.status())
+                    .append("\",\"durationMs\":").append(outcome.durationMs())
+                    .append(",\"failure\":").append(jsonString(outcome.failure()))
+                    .append("}\n");
+            }
+            Path target = resultsDir.resolve(cell + ".jsonl");
+            Files.writeString(target, journal.toString(), StandardCharsets.UTF_8,
+                java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
+            // Failure artifact: an excerpt bundle the report links to.
+            for (Outcome outcome : outcomes) {
+                if (!"FAIL".equals(outcome.status()) || isQuarantinedSkip(outcome)) {
+                    continue;
+                }
+                Path artifact = resultsDir.resolve("artifact-" + cell + "-" + outcome.scenario() + ".txt");
+                Files.writeString(artifact, "scenario: " + outcome.scenario() + System.lineSeparator()
+                    + "cell: " + cell + System.lineSeparator()
+                    + "failure: " + outcome.failure() + System.lineSeparator()
+                    + System.lineSeparator() + lastConsoleLines(40));
+            }
+        } catch (IOException e) {
+            System.out.println("[TCK] could not write results journal: " + e);
+        }
+    }
+
+    private boolean isQuarantinedSkip(Outcome outcome) {
+        return quarantined.contains(outcome.scenario());
+    }
+
+    private String lastConsoleLines(int count) {
+        synchronized (log) {
+            int from = Math.max(0, log.size() - count);
+            return String.join(System.lineSeparator(), log.subList(from, log.size()));
+        }
+    }
+
+    private static String jsonString(String value) {
+        if (value == null) {
+            return "null";
+        }
+        return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
     }
 
     /** Prints the tail of the captured console so a failure carries its evidence. */

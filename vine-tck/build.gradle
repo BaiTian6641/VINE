@@ -87,8 +87,11 @@ tasks.register('bootSmoke') {
 // ---------------------------------------------------------------------------
 
 def tckScenarioTimeoutSeconds = providers.gradleProperty('vine.tck.scenarioTimeoutSeconds').orElse('900')
-def scenariosDir = rootProject.layout.projectDirectory
-        .dir('vine-testmod/src/main/resources/vine-tck/scenarios')
+// Drills override the scenario set: -Pvine.tck.scenariosDir=<path>
+def scenariosDir = providers.gradleProperty('vine.tck.scenariosDir')
+        .map { new File(it) }
+        .getOrElse(rootProject.layout.projectDirectory
+            .dir('vine-testmod/src/main/resources/vine-tck/scenarios').asFile)
 def perCellScenarioTasks = [:]
 rootProject.project(':drivers').subprojects.each { driver ->
     def cell = driver.name - 'driver-'
@@ -103,7 +106,7 @@ rootProject.project(':drivers').subprojects.each { driver ->
                 '--root-dir', rootProject.layout.projectDirectory.asFile.absolutePath,
                 '--gradle-task', ":drivers:${driver.name}:runServer",
                 '--project-cache-dir', tckBuildDir.dir('project-cache').get().asFile.absolutePath,
-                '--scenarios-dir', scenariosDir.asFile.absolutePath,
+                '--scenarios-dir', scenariosDir.absolutePath,
                 '--timeout-seconds', tckScenarioTimeoutSeconds.get(),
         ]
         usesService(tckServerLock)
@@ -149,5 +152,22 @@ tasks.register('verifyDatagen', JavaExec) {
     mainClass = 'dev.vineengine.vine.internal.tck.DatagenVerifier'
     args = ['--root-dir', rootProject.layout.projectDirectory.asFile.absolutePath,
             '--fixtures-dir', new File(projectDir, 'fixtures/datagen').absolutePath] +
+            m0Cells.collectMany { ['--cells', it] }
+}
+
+
+// ---------------------------------------------------------------------------
+// sub-21 Stage D — CI reporting + flaky policy: renders the per-scenario × cell
+// matrix with history, decides quarantine (two consecutive failures), writes the
+// gate-exemption file and maintains vine-tck/QUARANTINE.md.
+// ---------------------------------------------------------------------------
+tasks.register('tckReport', JavaExec) {
+    group = 'verification'
+    description = 'Renders the TCK matrix + quarantine decision from the results journal (sub-21 Stage D).'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'dev.vineengine.vine.internal.tck.ResultReporter'
+    args = ['--root-dir', rootProject.layout.projectDirectory.asFile.absolutePath,
+            '--results-dir', tckBuildDir.dir('results').get().asFile.absolutePath,
+            '--ledger', new File(projectDir, 'QUARANTINE.md').absolutePath] +
             m0Cells.collectMany { ['--cells', it] }
 }
