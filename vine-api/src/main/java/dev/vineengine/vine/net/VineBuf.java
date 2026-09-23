@@ -65,6 +65,15 @@ public interface VineBuf {
      */
     byte[] readBytes();
 
+    /**
+     * The bytes written so far (sub-05 Stage B): the payload a codec produced,
+     * ready for {@link VineCodecs#decode}.
+     */
+    byte[] toByteArray();
+
+    /** Bytes left to read on a decode buffer ({@code 0} means fully consumed). */
+    int readableBytes();
+
     /** Writes an id as its canonical {@code "namespace:path"} string. */
     void writeId(VineId id);
 

@@ -62,7 +62,23 @@ public enum Endpoint { SERVER, CLIENT }          // handler side
 
 ### Stage B — full codec DSL
 
-- [ ] **Do:** `record()` builder with field accessors; `list(max)`, `optional`, `VOXEL` hook; length-prefix sanity before every variable-length allocation.
+- [x] **Do:** `record()` builder with field accessors; `list(max)`, `optional`, `VOXEL` hook; length-prefix sanity before every variable-length allocation.
+  - **Landed 2026-09-24:** `VineCodecs.record()` — a declaration-order field
+    builder (`field(name, codec, getter)` + `build(factory)`, field encode
+    failures wrapped as `CodecException` with the field name) — plus the
+    `VOXEL` codec (tree travels as its engine blob, decoding through the schema
+    registry so fix-on-load applies on the wire too) and consumer round-trip
+    helpers `VineCodecs.encode/decode` with a trailing-byte check. Buffers stay
+    engine-owned: `NetBackend.allocate/wrap` hand out the engine's byte-array
+    buffer, and `VineBuf` gained `toByteArray()`/`readableBytes()` so a consumer
+    can round-trip a payload without ever constructing a buffer.
+  - **Evidence:** `vine_test:codec_roundtrip` TCK scenario — a nested record
+    (varInt + bounded list + optional id + VoxelData with a nested compound)
+    round-trips, and its encoded **hex is byte-identical across the two loader
+    cells** (the scenario asserts the exact byte string). Four hostile cases are
+    rejected with `CodecException` and never allocate: an oversized list prefix,
+    a truncated payload, a voxel length prefix beyond the remaining budget, and
+    trailing bytes after a decode. **16/16 scenarios PASS on both 1.21.1 cells.**
 - **Acceptance:** TCK codec round-trip (nested record/list/optional/VoxelData, byte-identical both loaders); negative/oversized length prefixes throw codec exceptions, never large-allocate.
 - **Touches:** vine-api `VineCodecs`, vine-core codec machinery, TCK.
 - **Bootstrap prompt:**

@@ -16,4 +16,10 @@ public interface NetBackend {
 
     /** See {@code VineNet#get()}. */
     VineNet net();
+
+    /** A writable engine buffer (sub-05 Stage B codec round-trips). */
+    dev.vineengine.vine.net.VineBuf allocate();
+
+    /** A read buffer over {@code payload} (sub-05 Stage B codec round-trips). */
+    dev.vineengine.vine.net.VineBuf wrap(byte[] payload);
 }

@@ -203,6 +203,16 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
         return net;
     }
 
+    @Override
+    public dev.vineengine.vine.net.VineBuf allocate() {
+        return dev.vineengine.vine.internal.net.ByteArrayVineBuf.writable();
+    }
+
+    @Override
+    public dev.vineengine.vine.net.VineBuf wrap(byte[] payload) {
+        return dev.vineengine.vine.internal.net.ByteArrayVineBuf.wrap(payload);
+    }
+
     /**
      * The command registration service (sub-06). Dormant with zero consumers —
      * no driver-side command is attached until a descriptor is registered and a

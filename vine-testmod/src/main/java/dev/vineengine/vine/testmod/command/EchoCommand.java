@@ -85,6 +85,11 @@ public final class EchoCommand {
                     dev.vineengine.vine.testmod.design.DesignProbeExemplar.report();
                     return 1;
                 }))
+            .then(VineCommand.literal("tck_codecs")
+                .executes(ctx -> {
+                    dev.vineengine.vine.testmod.net.CodecExemplar.runProof();
+                    return 1;
+                }))
             .then(VineCommand.literal("tck_features")
                 .executes(ctx -> {
                     dev.vineengine.vine.testmod.feature.FeatureExemplar.runProof();

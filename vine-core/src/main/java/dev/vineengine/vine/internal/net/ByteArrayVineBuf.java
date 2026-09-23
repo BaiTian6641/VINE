@@ -22,7 +22,7 @@ import dev.vineengine.vine.registry.VineId;
  * <p>Stage A allocates one buffer per message; pooled buffers land with the
  * stage-B allocation budget work (§2).
  */
-final class ByteArrayVineBuf implements VineBuf {
+public final class ByteArrayVineBuf implements VineBuf {
 
     /** UTF-8 encodes at most 4 bytes per char (surrogate pairs). */
     private static final int MAX_UTF_BYTES = MAX_UTF_CHARS * 4;
@@ -38,12 +38,12 @@ final class ByteArrayVineBuf implements VineBuf {
     }
 
     /** A new empty buffer for encoding. */
-    static ByteArrayVineBuf writable() {
+    public static ByteArrayVineBuf writable() {
         return new ByteArrayVineBuf(new byte[64], 0);
     }
 
     /** A reader over received {@code payload} bytes (defensively copied by the caller's contract). */
-    static ByteArrayVineBuf wrap(byte[] payload) {
+    public static ByteArrayVineBuf wrap(byte[] payload) {
         return new ByteArrayVineBuf(payload, payload.length);
     }
 
@@ -205,5 +205,15 @@ final class ByteArrayVineBuf implements VineBuf {
         } catch (IllegalArgumentException e) {
             throw new CodecException("invalid id on wire: \"" + raw + "\"", e);
         }
+    }
+
+    @Override
+    public byte[] toByteArray() {
+        return java.util.Arrays.copyOf(data, writerIndex);
+    }
+
+    @Override
+    public int readableBytes() {
+        return writerIndex - readerIndex;
     }
 }

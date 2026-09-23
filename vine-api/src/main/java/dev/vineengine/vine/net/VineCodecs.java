@@ -102,6 +102,137 @@ public final class VineCodecs {
     };
 
     /**
+     * VoxelData codec (sub-05 Stage B): the tree travels as its engine blob —
+     * schema id and version in the header, so a decoder routes fixing through
+     * the schema registry exactly like a save file does.
+     */
+    public static final PayloadCodec<dev.vineengine.vine.data.VoxelData> VOXEL = new PayloadCodec<>() {
+        @Override
+        public dev.vineengine.vine.data.VoxelData decode(VineBuf buf) {
+            byte[] blob = buf.readBytes();
+            try {
+                return dev.vineengine.vine.data.VineData.decode(blob);
+            } catch (RuntimeException e) {
+                throw new CodecException("voxel payload rejected: " + e.getMessage());
+            }
+        }
+
+        @Override
+        public void encode(VineBuf buf, dev.vineengine.vine.data.VoxelData value) {
+            buf.writeBytes(dev.vineengine.vine.data.VineData.encode(value));
+        }
+    };
+
+    /**
+     * Encodes {@code value} standalone: allocate an engine buffer, write, return
+     * its bytes — the consumer-side half of a codec round-trip.
+     */
+    public static <T> byte[] encode(PayloadCodec<T> codec, T value) {
+        VineBuf buf = buffer();
+        codec.encode(buf, value);
+        return buf.toByteArray();
+    }
+
+    /** Decodes bytes produced by {@link #encode} (or by a peer over the wire). */
+    public static <T> T decode(PayloadCodec<T> codec, byte[] payload) {
+        VineBuf buf = readBuffer(payload);
+        T value = codec.decode(buf);
+        if (buf.readableBytes() != 0) {
+            throw new CodecException("payload has trailing bytes after decode");
+        }
+        return value;
+    }
+
+    /** A writable engine buffer — consumers never construct one themselves. */
+    public static VineBuf buffer() {
+        return backend().allocate();
+    }
+
+    /** A read buffer over an existing payload. */
+    public static VineBuf readBuffer(byte[] payload) {
+        return backend().wrap(payload);
+    }
+
+    private static dev.vineengine.vine.internal.NetBackend backend() {
+        if (dev.vineengine.vine.internal.EngineAccess.get() instanceof dev.vineengine.vine.internal.NetBackend backend) {
+            return backend;
+        }
+        throw new IllegalStateException(
+            "vine-core engine does not provide networking services — mismatched vine-api/vine-core jars");
+    }
+
+    /**
+     * Record-composition builder (sub-05 Stage B): fields encode in declaration
+     * order; the factory receives the decoded values in the same order.
+     */
+    public static final class RecordBuilder<T> {
+
+        private final List<Field<?>> fields = new ArrayList<>();
+
+        private RecordBuilder() {
+        }
+
+        public <F> RecordBuilder<T> field(String name, PayloadCodec<F> codec,
+                java.util.function.Function<T, F> getter) {
+            fields.add(new Field<>(name, codec, getter));
+            return this;
+        }
+
+        public PayloadCodec<T> build(java.util.function.Function<Object[], T> factory) {
+            List<Field<?>> snapshot = List.copyOf(fields);
+            return new PayloadCodec<>() {
+                @Override
+                public T decode(VineBuf buf) {
+                    Object[] values = new Object[snapshot.size()];
+                    for (int i = 0; i < snapshot.size(); i++) {
+                        values[i] = snapshot.get(i).codec.decode(buf);
+                    }
+                    try {
+                        return factory.apply(values);
+                    } catch (RuntimeException e) {
+                        throw new CodecException("record factory rejected decoded fields: " + e);
+                    }
+                }
+
+                @Override
+                public void encode(VineBuf buf, T value) {
+                    for (Field<?> field : snapshot) {
+                        field.encode(buf, value);
+                    }
+                }
+            };
+        }
+
+        /** One declared field; the name is documentation and diagnostics. */
+        private final class Field<F> {
+
+            private final String name;
+            private final PayloadCodec<F> codec;
+            private final java.util.function.Function<T, F> getter;
+
+            private Field(String name, PayloadCodec<F> codec, java.util.function.Function<T, F> getter) {
+                this.name = name;
+                this.codec = codec;
+                this.getter = getter;
+            }
+
+            @SuppressWarnings("unchecked")
+            void encode(VineBuf buf, Object value) {
+                try {
+                    codec.encode(buf, ((java.util.function.Function<Object, F>) getter).apply(value));
+                } catch (RuntimeException e) {
+                    throw new CodecException("field '" + name + "' failed to encode: " + e.getMessage());
+                }
+            }
+        }
+    }
+
+    /** Starts a record codec; see {@link RecordBuilder}. */
+    public static <T> RecordBuilder<T> record() {
+        return new RecordBuilder<>();
+    }
+
+    /**
      * Bounded list codec: varInt size prefix + elements in order.
      *
      * @param max maximum element count; enforced on encode and checked on

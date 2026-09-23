@@ -1,0 +1,24 @@
+{
+  "id": "vine_test:codec_roundtrip",
+  "tags": [
+    "SMOKE"
+  ],
+  "steps": [
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_codecs"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "codec",
+      "expect": [
+        "codec hex=070205616c7068610462657461010e76696e655f746573743a68756e7443564f584401001676696e655f746573743a636f6465635f73616d706c65000000010a0300046d616e610000002a0a000573746174730300056b696c6c73000000030000",
+        "codec decoded level=7 tags=[alpha, beta] focus=vine_test:hunt mana=42 kills=3",
+        "codec list rejected=true",
+        "codec truncated rejected=true",
+        "codec voxel rejected=true",
+        "codec trailing rejected=true"
+      ]
+    }
+  ]
+}
