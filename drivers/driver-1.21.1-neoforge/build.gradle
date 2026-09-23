@@ -65,3 +65,23 @@ tasks.named('runServer') {
         jvmArgs '-Dvine.tck.loopback=true'
     }
 }
+
+
+// ---------------------------------------------------------------------------
+// sub-02 Stage E — driver-owned content cooking: consumer source assets ->
+// per-cell derived resources (blockstates, models, sounds.json). Deterministic;
+// the TCK's verifyDatagen task byte-compares the result against golden fixtures.
+// ---------------------------------------------------------------------------
+tasks.register('datagenContent', JavaExec) {
+    group = 'vine'
+    description = 'Cooks consumer source assets into this cell\'s derived resources (sub-02 Stage E).'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'dev.vineengine.vine.internal.driver1211.common.datagen.ContentCooker'
+    def outDir = layout.buildDirectory.dir('datagen/1.21.1-neoforge').get().asFile
+    args = [
+            '--cell', '1.21.1-neoforge',
+            '--assets', project(':vine-testmod').file('src/main/resources/assets').absolutePath,
+            '--out', outDir.absolutePath,
+    ]
+    outputs.dir(outDir)
+}

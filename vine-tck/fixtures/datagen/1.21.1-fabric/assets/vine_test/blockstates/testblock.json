@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "vine_test:block/testblock"
+    }
+  }
+}

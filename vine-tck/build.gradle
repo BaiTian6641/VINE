@@ -133,3 +133,21 @@ tasks.register('crossCellRoundTrip', JavaExec) {
     ]
     usesService(tckServerLock)
 }
+
+
+// ---------------------------------------------------------------------------
+// sub-02 Stage E — golden-fixture check for the driver-owned content pipeline:
+// each cell's cooked resources must match its committed goldens byte-for-byte.
+// The comparison runs in tck-core (config-cache safe); task paths are strings so
+// no driver project has to be configured before this script runs.
+// ---------------------------------------------------------------------------
+tasks.register('verifyDatagen', JavaExec) {
+    group = 'verification'
+    description = 'Byte-compares each 1.21.1 cell\'s cooked content against its golden fixtures (sub-02 Stage E).'
+    dependsOn m0Cells.collect { ":drivers:driver-${it}:datagenContent" }
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'dev.vineengine.vine.internal.tck.DatagenVerifier'
+    args = ['--root-dir', rootProject.layout.projectDirectory.asFile.absolutePath,
+            '--fixtures-dir', new File(projectDir, 'fixtures/datagen').absolutePath] +
+            m0Cells.collectMany { ['--cells', it] }
+}

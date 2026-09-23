@@ -184,9 +184,28 @@ retained), `DROP`, `FAIL` (refuse load).
 
 ### Stage E — content pipeline (datagen) *(parallelizable with D)*
 
-- [ ] **Do:** driver-owned per-cell Gradle datagen run cooking
+- [x] **Do:** driver-owned per-cell Gradle datagen run cooking
   blockstate/item-model/`sounds.json` from source assets; deterministic;
   golden fixtures in vine-tck. Touches: drivers, vine-testmod assets, vine-tck.
+  - **Landed 2026-09-24:** `ContentCooker` (driver-common, loader-neutral)
+    cooks a consumer's source assets — `textures/block/<name>.png` →
+    `blockstates/<name>.json` + `models/block/<name>.json`,
+    `textures/item/<name>.png` → `models/item/<name>.json`,
+    `sounds.source.json` → `sounds.json` (canonicalized, sorted keys) — with
+    sorted traversal and fixed formatting (2-space, LF, trailing newline), so
+    identical inputs give identical bytes. Per-cell Gradle tasks
+    (`:drivers:driver-<cell>:datagenContent`) run it into
+    `build/datagen/<cell>/`; the testmod ships the source assets (two 1×1
+    placeholder textures + a two-event sound manifest).
+  - **Evidence:** `:vine-tck:verifyDatagen` (tck-core `DatagenVerifier`)
+    byte-compares both cells' cooked trees against committed goldens
+    (`vine-tck/fixtures/datagen/<cell>/`): 4 files per cell, byte-identical.
+    A drift drill (mutating one golden byte) turns the task red with
+    `bytes differ`, and reverting turns it green — the check is not a no-op.
+  - **Note:** the first implementation of this check was silently empty (it
+    queried driver tasks at configuration time before their scripts ran) and
+    the drill exposed it; the task now depends on driver task paths as strings
+    and does the comparison in Java, which is also configuration-cache safe.
 - **Acceptance:** both 1.21.1 cells' output byte-identical to golden fixtures.
 - **Bootstrap prompt:**
   > Implement SUB-02 Stage E (plan §5.2 content pipeline): per-1.21.1-cell

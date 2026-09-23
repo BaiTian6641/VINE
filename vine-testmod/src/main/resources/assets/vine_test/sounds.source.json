@@ -1,0 +1,12 @@
+{
+  "block.vine_test.testblock.break": {
+    "sounds": [
+      { "name": "minecraft:block.stone.break" }
+    ]
+  },
+  "block.vine_test.testblock.place": {
+    "sounds": [
+      { "name": "minecraft:block.stone.place" }
+    ]
+  }
+}
