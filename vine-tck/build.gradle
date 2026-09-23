@@ -1,8 +1,80 @@
+import org.gradle.api.services.BuildService
+import org.gradle.api.services.BuildServiceParameters
+
 plugins {
     id 'vine.java-shared'
 }
-
 dependencies {
-    // TCK drives the engine through the public API + testmod scenarios (sub-21).
-    implementation project(':vine-core')
+    // tck-core: loader-free harness code (runner, later DSL/result model) —
+    // vine-tck itself only hosts the Gradle wiring below. Deliberately NO
+    // vine-api/vine-core here: the BootSmoke JVM's classpath jars stay locked
+    // for the whole boot watch, and the nested driver build must be able to
+    // rebuild its own dependency jars on Windows.
+    implementation project(':vine-tck:tck-core')
+}
+
+// ---------------------------------------------------------------------------
+// sub-21 Stage A — headless boot smoke.
+//
+// One task per discovered driver cell (machinery is cell-count-agnostic,
+// sub-21 §4): launches the cell's dev runServer config as a child process,
+// asserts the boot markers from the log within a timeout, then stops it.
+// Cells run sequentially — the dev servers share the default port and reuse
+// the gitignored run/ dirs.
+// ---------------------------------------------------------------------------
+
+def tckTimeoutSeconds = providers.gradleProperty('vine.tck.bootTimeoutSeconds').orElse('600')
+
+// Phase-machine assertion ([VINE] phase VINE_BOOT ... SERVER_UP, sub-01
+// Stage A) is a second, separately-named assertion that stays off until
+// sub-18 Stage B wires drivers into the engine bootstrap. Activate with
+// -Pvine.tck.assertPhaseMarkers=true; once sub-18 Stage B lands, flip the
+// default here — no restructuring needed.
+def tckAssertPhaseMarkers = providers.gradleProperty('vine.tck.assertPhaseMarkers')
+        .map { it.toBoolean() }
+        .orElse(false)
+
+// M0 acceptance matrix (docs/README.md acceptance-matrix rule): the two
+// 1.21.1 cells. Discovered 26.x cells get boot tasks from the same loop and
+// join this aggregate at M4 (sub-19).
+def m0Cells = ['1.21.1-neoforge', '1.21.1-fabric']
+
+def tckBuildDir = layout.buildDirectory
+def perCellBootTasks = [:]
+rootProject.project(':drivers').subprojects.each { driver ->
+    def cell = driver.name - 'driver-'
+    def camel = cell.split(/[-.]/).collect { it.capitalize() }.join('')
+    perCellBootTasks[cell] = tasks.register("bootSmoke${camel}", JavaExec) {
+        group = 'verification'
+        description = "Headless dedicated-server boot smoke on cell ${cell} (sub-21 Stage A)."
+        classpath = sourceSets.main.runtimeClasspath
+        mainClass = 'dev.vineengine.vine.internal.tck.BootSmoke'
+        def bootArgs = [
+                '--cell', cell,
+                '--root-dir', rootProject.layout.projectDirectory.asFile.absolutePath,
+                '--gradle-task', ":drivers:${driver.name}:runServer",
+                '--project-cache-dir', tckBuildDir.dir('project-cache').get().asFile.absolutePath,
+                '--timeout-seconds', tckTimeoutSeconds.get(),
+        ]
+        if (tckAssertPhaseMarkers.get()) {
+            bootArgs += '--assert-phase-markers'
+        }
+        args = bootArgs
+    }
+}
+
+// Mutual exclusion, not just ordering: the dev servers share the default
+// port (25565), so boot smokes must never overlap even under
+// org.gradle.parallel=true.
+abstract class TckServerLock implements BuildService<BuildServiceParameters.None> {}
+
+def tckServerLock = gradle.sharedServices.registerIfAbsent('tckServerLock', TckServerLock) {
+    maxParallelUsages.set(1)
+}
+perCellBootTasks.values().each { it.configure { usesService(tckServerLock) } }
+
+tasks.register('bootSmoke') {
+    group = 'verification'
+    description = 'Headless boot smoke on the M0 acceptance matrix (both 1.21.1 cells).'
+    dependsOn m0Cells.collect { perCellBootTasks[it] }
 }

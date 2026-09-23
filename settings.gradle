@@ -22,6 +22,9 @@ include 'vine-client-api'
 include 'vine-core'
 include 'vine-spi'
 include 'vine-tck'
+// TCK machinery lives one level down so the harness stays loader-free
+// (sub-21 §2): vine-tck hosts the Gradle wiring, tck-core the code.
+include 'vine-tck:tck-core'
 include 'vine-testmod'
 
 // Driver subprojects (sub-00 stages B/C): one per cell. Their toolchain plugins

@@ -1,6 +1,6 @@
 # SUB-21 — TCK harness
 
-> **Status:** `planning` — one of `planning | in-progress | blocked(<reason>) | done`
+> **Status:** `in-progress` — one of `planning | in-progress | blocked(<reason>) | done`
 > **Milestone:** M0 + continuous · **Depends on:** SUB-00 · **Blocks:** every API-surface merge (§8 rule); the M0 gate jointly with SUB-18 + SUB-22
 > **Cells:** all (M0: 1.21.1 only; 26.x joins at M4) · **Loaders:** both
 > **Master plan:** §7 (primary), §5.10, §6, §8, §10 · **Module(s):** vine-tck
@@ -54,7 +54,7 @@ public enum TckTag { SMOKE, PERSISTENCE, NETWORK, BRAIN, ANIMATION, PERF, QUARAN
 
 ### Stage A — Skeleton + headless boot on both 1.21.1 cells
 
-- [ ] **Do:** `tck-core` module; per-cell boot scripts launching the
+- [x] **Do:** `tck-core` module; per-cell boot scripts launching the
   dedicated server with driver+testmod, asserting SUB-01's phase `SERVER_UP`
   marker line (the engine-ready boot marker: the fifth phase-transition log
   line, sub-01 Stage A); GH Actions workflow, 2 jobs × JDK 21.
@@ -133,6 +133,26 @@ public enum TckTag { SMOKE, PERSISTENCE, NETWORK, BRAIN, ANIMATION, PERF, QUARAN
   > as above.
 
 ## 4. Problems & blockers
+
+- **MDG runServer stdin (NeoForge 21.1.251, ModDevGradle):** `stop` over
+  stdin does not reach the dev server through the harness's nested
+  `gradlew --no-daemon` chain — the graceful-stop grace window expires and
+  the runner falls back to a process-tree kill. Loom 1.17.21 forwards stdin
+  and stops gracefully (exit 0). Boot assertions are unaffected (markers are
+  log-watched); the kill fallback is the designed stop path, but NF cells
+  pay up to `stop-grace-seconds` (default 90s) extra per run until a
+  working stdin path is found.
+- **Nested-build file locks (Windows):** the boot-watch JVM must not carry
+  vine-api/vine-core jars on its own classpath — Windows file locks then
+  break the nested driver build's `jar` tasks ("Unable to delete file").
+  `vine-tck` therefore depends only on `tck-core` (pure Java); engine deps
+  for scenario execution arrive with Stage B's in-server harness, not the
+  process launcher. The nested build also runs with its own
+  `--project-cache-dir` to avoid the outer build's project lock.
+- **CI workflow pending:** `.github/workflows/tck.yml` (Stage A's GH Actions
+  matrix, 2 jobs × JDK 21) is owned by sub-00's CI/publishing stage this
+  wave; the local tasks (`:vine-tck:bootSmoke<Cell>`, aggregate
+  `:vine-tck:bootSmoke`) are the exact commands those jobs will run.
 
 - **GameTest headless quirks per loader** (batch timing, exit codes,
   template loading differ NF vs Fabric) — the command fallback is equal-rank
