@@ -32,4 +32,11 @@ public interface EventBus {
      * inspection.
      */
     <E extends VineEvent> E post(E event);
+
+    /**
+     * Debug counter for the Minimal Footprint rule (§5.1): how many hook slots
+     * currently have their native source installed. Zero at boot with zero
+     * consumers — the TCK's zero-consumer assertion.
+     */
+    int activeHookInstalls();
 }

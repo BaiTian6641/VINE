@@ -1,0 +1,22 @@
+{
+  "id": "vine_test:hooks",
+  "tags": ["SMOKE"],
+  "steps": [
+    { "type": "RunCommand", "command": "vine_test tck_hooks" },
+    { "type": "RunCommand", "command": "vine_test tck_hooks_fire" },
+    { "type": "SendPacket", "channel": "vine_test:echo", "payload": { "number": 7, "text": "hook" } },
+    { "type": "AssertTrace", "trace": "hooks", "expect": [
+      "hooks native=0",
+      "hooks after-subscribe native=1",
+      "hooks after-close native=0",
+      "hooks subscribed",
+      "hook veto-check input=synthetic-normal",
+      "hook post vetoed=false",
+      "hook observer count=1",
+      "hook veto-check input=synthetic-cancel",
+      "hook post vetoed=true",
+      "hook observer count=1",
+      "hook packet channel=vinetest:echo/echo"
+    ] }
+  ]
+}

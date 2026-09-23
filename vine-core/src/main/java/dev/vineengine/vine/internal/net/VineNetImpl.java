@@ -8,6 +8,8 @@ import dev.vineengine.vine.internal.spi.NetDriver;
 import dev.vineengine.vine.net.Channel;
 import dev.vineengine.vine.net.ChannelSpec;
 import dev.vineengine.vine.net.CodecException;
+import dev.vineengine.vine.EventBus;
+import dev.vineengine.vine.hook.HookEvents;
 import dev.vineengine.vine.net.Endpoint;
 import dev.vineengine.vine.net.MessageHandler;
 import dev.vineengine.vine.net.VineNet;
@@ -33,9 +35,11 @@ public final class VineNetImpl implements VineNet {
     private static final System.Logger LOG = System.getLogger("vine.net");
 
     private final ChannelRegistry registry = new ChannelRegistry();
+    private final EventBus bus;
     private volatile NetDriver transport;
 
-    public VineNetImpl() {
+    public VineNetImpl(EventBus bus) {
+        this.bus = java.util.Objects.requireNonNull(bus, "bus");
         NetTransportBinding.engineSink(this::onInbound);
         NetTransportBinding.onBind(bound -> {
             transport = bound;
@@ -87,6 +91,10 @@ public final class VineNetImpl implements VineNet {
 
     private void onInbound(VineId wireId, Endpoint receiving, VinePlayer from,
                            byte[] payload, Executor mainThread) {
+        // Sub-01 Stage C packetReceive hook: the engine's single inbound
+        // dispatch, so every transport (real loaders and the TCK loopback)
+        // posts the same pre-event before decode/handler work.
+        bus.post(new HookEvents.PacketReceive(wireId.toString(), from.uniqueId().toString(), payload));
         MessageEntry entry = registry.byWireId(wireId);
         if (entry == null) {
             LOG.log(System.Logger.Level.WARNING, "[VINE] dropping inbound payload with unknown wire id " + wireId);

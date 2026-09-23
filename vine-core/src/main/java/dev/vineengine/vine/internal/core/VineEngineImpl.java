@@ -77,7 +77,7 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
     private final EngineEventBus bus = new EngineEventBus();
     private volatile FeatureMatrix features = FeatureMatrix.EMPTY;
     private final DescriptorStore registries = new DescriptorStore();
-    private final VineNetImpl net = new VineNetImpl();
+    private final VineNetImpl net = new VineNetImpl(bus);
     private final CommandService commands = new CommandService();
 
     private final SchemaRegistry schemas = new SchemaRegistry();
@@ -127,7 +127,7 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
                 + " (loader=" + cell.loader() + ", dataVersion=" + cell.dataVersion() + ")");
         features = new FeatureMatrix(cell.features());
         LOG.log(System.Logger.Level.INFO, "[VINE] features " + features.ids());
-        driver.bootstrap(new CoreDriverContext(machine, registries));
+        driver.bootstrap(new CoreDriverContext(machine, registries, bus));
     }
 
     @Override

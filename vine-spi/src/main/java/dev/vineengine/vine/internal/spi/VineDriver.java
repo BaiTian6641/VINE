@@ -4,6 +4,8 @@ import java.util.Objects;
 import java.util.Set;
 
 import dev.vineengine.vine.EnginePhase;
+import dev.vineengine.vine.EventBus;
+import dev.vineengine.vine.hook.HookSlot;
 
 /**
  * The one-per-cell driver contract. NOT public API — implemented only by VINE's
@@ -70,6 +72,24 @@ public interface VineDriver {
          * {@link RegistryDriver} implementation.
          */
         StructuralRegistryView structuralRegistries();
+
+        /**
+         * The engine event bus (sub-01 Stage B). Driver translation posts
+         * normalized hook events here; nothing else in the driver needs a
+         * separate collector.
+         */
+        EventBus bus();
+
+        /**
+         * Binds a {@link HookSlot} to its native source (sub-01 Stage C,
+         * Minimal Footprint §5.1): {@code install} runs when the first handler
+         * for {@code slot.type()} subscribes, {@code uninstall} when the last
+         * one closes. Install/uninstall must be idempotent-safe and must never
+         * throw; both run on the subscribing thread. The driver's install
+         * closure posts the native payload to {@link #bus()} as the slot's
+         * event type.
+         */
+        void installHook(HookSlot slot, Runnable install, Runnable uninstall);
     }
 
     /**

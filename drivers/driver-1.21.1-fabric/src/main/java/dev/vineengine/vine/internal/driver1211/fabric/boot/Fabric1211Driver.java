@@ -1,7 +1,5 @@
 package dev.vineengine.vine.internal.driver1211.fabric.boot;
 
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Consumer;
 
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
@@ -13,10 +11,10 @@ import org.slf4j.LoggerFactory;
 import dev.vineengine.vine.EnginePhase;
 import dev.vineengine.vine.internal.driver1211.common.CellProbes;
 import dev.vineengine.vine.internal.driver1211.common.CellWindow;
+import dev.vineengine.vine.EventBus;
+import dev.vineengine.vine.hook.HookEvents;
 import dev.vineengine.vine.internal.driver1211.common.DriverRuntime;
 import dev.vineengine.vine.internal.driver1211.common.command.EngineCommands;
-import dev.vineengine.vine.internal.driver1211.common.events.HookBus;
-import dev.vineengine.vine.internal.driver1211.common.events.HookEvent;
 import dev.vineengine.vine.internal.driver1211.fabric.command.FabricCommandFactory;
 import dev.vineengine.vine.internal.driver1211.fabric.events.FabricHookInstallers;
 import dev.vineengine.vine.internal.driver1211.fabric.net.FabricNetDriver;
@@ -75,12 +73,11 @@ public final class Fabric1211Driver implements VineDriver {
             ctx.advancePhase(EnginePhase.WORLD_LOAD);
         });
 
-        AtomicReference<Consumer<HookEvent>> packetHook = new AtomicReference<>();
-        DriverRuntime.install(new HookBus(FabricHookInstallers.create(packetHook)));
+        FabricHookInstallers.bind(ctx, ctx.bus());
 
         // Networking (sub-05 Stage A): Fabric binds payload types/receivers
         // imperatively, so each engine push binds natively at once.
-        FabricNetDriver net = new FabricNetDriver(packetHook);
+        FabricNetDriver net = new FabricNetDriver();
         net.bindTransport();
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             net.server(server);

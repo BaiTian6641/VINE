@@ -3,6 +3,8 @@ package dev.vineengine.vine.internal.core;
 import java.util.Objects;
 
 import dev.vineengine.vine.EnginePhase;
+import dev.vineengine.vine.EventBus;
+import dev.vineengine.vine.hook.HookSlot;
 import dev.vineengine.vine.internal.registry.DescriptorStore;
 import dev.vineengine.vine.internal.spi.StructuralRegistryView;
 import dev.vineengine.vine.internal.spi.VineDriver;
@@ -16,10 +18,12 @@ final class CoreDriverContext implements VineDriver.DriverContext {
 
     private final PhaseMachine machine;
     private final DescriptorStore registries;
+    private final EngineEventBus bus;
 
-    CoreDriverContext(PhaseMachine machine, DescriptorStore registries) {
+    CoreDriverContext(PhaseMachine machine, DescriptorStore registries, EngineEventBus bus) {
         this.machine = machine;
         this.registries = registries;
+        this.bus = bus;
     }
 
     @Override
@@ -30,5 +34,17 @@ final class CoreDriverContext implements VineDriver.DriverContext {
     @Override
     public StructuralRegistryView structuralRegistries() {
         return registries.structuralView();
+    }
+
+    @Override
+    public EventBus bus() {
+        return bus;
+    }
+
+    @Override
+    public void installHook(HookSlot slot, Runnable install, Runnable uninstall) {
+        bus.attachSlot(Objects.requireNonNull(slot, "slot"),
+            Objects.requireNonNull(install, "install"),
+            Objects.requireNonNull(uninstall, "uninstall"));
     }
 }

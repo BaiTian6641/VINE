@@ -31,7 +31,7 @@ import org.slf4j.LoggerFactory;
 
 import dev.vineengine.vine.VinePlayer;
 import dev.vineengine.vine.internal.driver1211.common.DriverRuntime;
-import dev.vineengine.vine.internal.driver1211.common.events.HookEvent;
+import dev.vineengine.vine.hook.HookEvents;
 import dev.vineengine.vine.internal.driver1211.common.net.ChannelTable;
 import dev.vineengine.vine.internal.driver1211.common.net.DriverVinePlayer;
 import dev.vineengine.vine.internal.net.NetTransportBinding;
@@ -69,12 +69,10 @@ public final class NeoForgeNetDriver implements NetDriver {
 
     private final ChannelTable table = new ChannelTable();
     private final Set<VineId> bound = ConcurrentHashMap.newKeySet();
-    private final AtomicReference<Consumer<HookEvent>> packetHook;
     private volatile InboundSink engineSink;
     private static volatile BiConsumer<VineId, byte[]> clientSender;
 
-    public NeoForgeNetDriver(AtomicReference<Consumer<HookEvent>> packetHook) {
-        this.packetHook = packetHook;
+    public NeoForgeNetDriver() {
     }
 
     /** The payload type for {@code wireId}, created once (shared with the client sender). */
@@ -185,9 +183,5 @@ public final class NeoForgeNetDriver implements NetDriver {
         DriverVinePlayer from = new DriverVinePlayer(
             nativePlayer.getUUID(), nativePlayer.getGameProfile().getName());
         engineSink.accept(wireId, receiving, from, data, mainThread);
-        Consumer<HookEvent> hook = packetHook.get();
-        if (hook != null) {
-            hook.accept(new HookEvent.PacketReceive(wireId.toString(), from.uniqueId().toString(), data));
-        }
     }
 }

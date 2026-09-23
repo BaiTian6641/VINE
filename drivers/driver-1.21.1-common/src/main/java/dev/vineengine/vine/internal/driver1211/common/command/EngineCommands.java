@@ -20,7 +20,7 @@ import dev.vineengine.vine.command.VineArgumentTypes;
 import dev.vineengine.vine.command.VineCommandExecutor;
 import dev.vineengine.vine.command.VinePermission;
 import dev.vineengine.vine.internal.command.CommandBridge;
-import dev.vineengine.vine.internal.driver1211.common.events.HookEvent;
+import dev.vineengine.vine.hook.HookEvents;
 
 /**
  * Loader-neutral Brigadier walker (sub-06 Stage A, driver delta A): pulls the
@@ -64,17 +64,17 @@ public final class EngineCommands {
     }
 
     /**
-     * The {@link dev.vineengine.vine.internal.driver1211.common.events.VineHook#COMMAND_EXECUTE}
-     * sink while subscribed — the real install for that collector hook (it replaced
-     * the placeholder command queue). {@code null} = zero consumers = zero posts.
+     * The {@code commandExecute} hook sink while subscribed — the real install
+     * for that slot. {@code null} = zero consumers = zero posts, and the command
+     * path skips event construction entirely (Minimal Footprint §5.1).
      */
-    private static volatile Consumer<HookEvent> executeHook;
+    private static volatile Consumer<HookEvents.CommandExecute> executeHook;
 
     private EngineCommands() {
     }
 
-    /** Installs the COMMAND_EXECUTE hook sink ({@code null} clears it). */
-    public static void executeHook(Consumer<HookEvent> sink) {
+    /** Installs the commandExecute sink ({@code null} clears it). */
+    public static void executeHook(Consumer<HookEvents.CommandExecute> sink) {
         executeHook = sink;
     }
 
@@ -127,12 +127,18 @@ public final class EngineCommands {
                     arguments.put(name, factory.getStringArg(context, name));
                 }
                 CommandBridge.NativeSource source = factory.adapt(context.getSource());
-                int result = CommandBridge.execute(executor, arguments, source);
-                Consumer<HookEvent> hook = executeHook;
+                Consumer<HookEvents.CommandExecute> hook = executeHook;
                 if (hook != null) {
-                    hook.accept(new HookEvent.CommandExecute(context.getInput(), source.name()));
+                    HookEvents.CommandExecute event =
+                        new HookEvents.CommandExecute(context.getInput(), source.name());
+                    hook.accept(event);
+                    if (event.isCancelled()) {
+                        // Veto semantics (sub-01 Stage C): a cancelled pre-event
+                        // suppresses execution; nothing unwinds.
+                        return 0;
+                    }
                 }
-                return result;
+                return CommandBridge.execute(executor, arguments, source);
             });
         }
         for (CommandDescriptor.Node child : node.children()) {

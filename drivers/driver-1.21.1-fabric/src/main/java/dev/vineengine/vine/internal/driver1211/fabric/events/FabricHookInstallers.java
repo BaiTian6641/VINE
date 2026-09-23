@@ -1,52 +1,65 @@
 package dev.vineengine.vine.internal.driver1211.fabric.events;
 
-import java.util.EnumMap;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.minecraft.registry.Registries;
 
+import dev.vineengine.vine.EventBus;
+import dev.vineengine.vine.hook.HookEvents;
+import dev.vineengine.vine.hook.HookSlot;
 import dev.vineengine.vine.internal.driver1211.common.command.EngineCommands;
-import dev.vineengine.vine.internal.driver1211.common.events.HookBus;
-import dev.vineengine.vine.internal.driver1211.common.events.HookEvent;
-import dev.vineengine.vine.internal.driver1211.common.events.VineHook;
+import dev.vineengine.vine.internal.driver1211.common.events.HookSlots;
 import dev.vineengine.vine.internal.driver1211.common.registry.RegistryHookTap;
+import dev.vineengine.vine.internal.spi.VineDriver;
 
 /**
- * Fabric 1.21.1 native sources for the M0 hook set (sub-18 §2 table). Seams (no
- * installer): {@code BLOCK_PLACE} and {@code WORLD_SAVE} have no Fabric callback —
- * they wait on the quarantined per-driver Mixin config († rows, deferred with the
- * Mixin work). {@code REGISTRY_REGISTER} is backed by sub-02 Stage B's structural
- * materialization tap — the engine's own registration is the source.
- * {@code PACKET_RECEIVE} and {@code COMMAND_EXECUTE} are content-driven: their
- * native plumbing (sub-05 payload handlers / sub-06 command attach) exists for
- * the engine regardless, so the installer just captures the sink the live path
- * posts to while subscribed. Subscribing to a seam hook throws, never misfires.
+ * Fabric 1.21.1 native sources bound to engine hook slots (sub-01 Stage C).
+ * Binding a slot means: first subscription installs the loader listener, which
+ * posts the normalized event to the engine bus; last close uninstalls.
  *
- * <p>Loader difference absorbed: Fabric API events have no {@code unregister}
- * (unlike the NF bus), so dormancy is a gate — the returned close handle flips the
- * listener into a permanent no-op instead of detaching it. Zero consumers still
- * means zero behavior change; the residual cost is one empty callback dispatch,
- * which sub-01's {@code HookSlot} machinery may later tighten.
+ * <p>Seams (never bound on this loader): {@code blockPlace} and {@code worldSave}
+ * have no Fabric callback — they wait on the quarantined per-driver Mixin config,
+ * so a subscription to them fails loudly instead of sitting silently inert.
+ * Loader difference absorbed: Fabric API events have no {@code unregister}, so
+ * uninstall flips the listener into a permanent no-op; zero consumers still mean
+ * zero behavior change (one empty callback dispatch remains).
+ *
+ * <p>Content-driven slots ({@code registryRegister}, {@code packetReceive},
+ * {@code commandExecute}) install by capturing the sink the live path posts to —
+ * their native plumbing exists for the engine regardless.
  */
 public final class FabricHookInstallers {
+
+    /** Registers a native source on first subscribe; returns its uninstall action. */
+    @FunctionalInterface
+    private interface Binder {
+        Runnable bind();
+    }
 
     private FabricHookInstallers() {
     }
 
-    public static Map<VineHook, HookBus.Installer> create(AtomicReference<Consumer<HookEvent>> packetHook) {
-        Map<VineHook, HookBus.Installer> installers = new EnumMap<>(VineHook.class);
-        installers.put(VineHook.REGISTRY_REGISTER, RegistryHookTap::subscribe);
+    /** Binds every Fabric-backed slot on {@code ctx}. */
+    public static void bind(VineDriver.DriverContext ctx, EventBus bus) {
+        bind(ctx, HookSlots.REGISTRY_REGISTER, () -> {
+            AutoCloseable handle = RegistryHookTap.subscribe(bus::post);
+            return () -> {
+                try {
+                    handle.close();
+                } catch (Exception e) {
+                    // Idempotent removal; a failed close only leaks one sink.
+                }
+            };
+        });
 
-        installers.put(VineHook.BLOCK_BREAK, sink -> {
+        bind(ctx, HookSlots.BLOCK_BREAK, () -> {
             AtomicBoolean live = new AtomicBoolean(true);
             PlayerBlockBreakEvents.After listener = (world, player, pos, state, blockEntity) -> {
                 if (live.get()) {
-                    sink.accept(new HookEvent.BlockBreak(
+                    bus.post(new HookEvents.BlockBreak(
                         world.getRegistryKey().getValue().toString(),
                         Registries.BLOCK.getId(state.getBlock()).toString(),
                         pos.getX(), pos.getY(), pos.getZ(),
@@ -54,30 +67,32 @@ public final class FabricHookInstallers {
                 }
             };
             PlayerBlockBreakEvents.AFTER.register(listener);
+            // Fabric has no unregister: dormancy is the gate.
             return () -> live.set(false);
         });
 
-        installers.put(VineHook.WORLD_LOAD, sink -> {
+        bind(ctx, HookSlots.WORLD_LOAD, () -> {
             AtomicBoolean live = new AtomicBoolean(true);
             ServerWorldEvents.Load listener = (server, world) -> {
                 if (live.get()) {
-                    sink.accept(new HookEvent.WorldLoad(world.getRegistryKey().getValue().toString()));
+                    bus.post(new HookEvents.WorldLoad(world.getRegistryKey().getValue().toString()));
                 }
             };
             ServerWorldEvents.LOAD.register(listener);
             return () -> live.set(false);
         });
 
-        installers.put(VineHook.PACKET_RECEIVE, sink -> {
-            packetHook.set(sink);
-            return () -> packetHook.compareAndSet(sink, null);
-        });
-
-        installers.put(VineHook.COMMAND_EXECUTE, sink -> {
-            EngineCommands.executeHook(sink);
+        bind(ctx, HookSlots.COMMAND_EXECUTE, () -> {
+            EngineCommands.executeHook(bus::post);
             return () -> EngineCommands.executeHook(null);
         });
+    }
 
-        return installers;
+    /** Wires install/uninstall around a {@link Binder}: install returns the uninstall action. */
+    private static void bind(VineDriver.DriverContext ctx, HookSlot slot, Binder binder) {
+        Runnable[] uninstall = {() -> { }};
+        ctx.installHook(slot,
+            () -> uninstall[0] = binder.bind(),
+            () -> uninstall[0].run());
     }
 }

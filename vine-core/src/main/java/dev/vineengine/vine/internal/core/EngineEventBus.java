@@ -12,6 +12,7 @@ import dev.vineengine.vine.EventBus;
 import dev.vineengine.vine.EventPriority;
 import dev.vineengine.vine.Subscription;
 import dev.vineengine.vine.VineEvent;
+import dev.vineengine.vine.hook.HookSlot;
 
 /**
  * The engine event bus (sub-01 Stage B, §2): per-type registrations ordered by
@@ -30,7 +31,34 @@ final class EngineEventBus implements EventBus {
 
     /** Registrations per event class — guarded by {@link #lock}. */
     private final Map<Class<?>, List<Registration<?>>> byType = new HashMap<>();
+    /** Hook slots per event class (sub-01 Stage C) — guarded by {@link #lock}. */
+    private final Map<Class<?>, Slot> slots = new HashMap<>();
     private final Object lock = new Object();
+
+    /**
+     * Binds a hook slot to its event type (sub-01 Stage C): {@code install} runs
+     * when the first handler for {@code type} subscribes, {@code uninstall} when
+     * the last one closes. One slot per type; re-attaching replaces nothing.
+     */
+    void attachSlot(HookSlot slot, Runnable install, Runnable uninstall) {
+        synchronized (lock) {
+            slots.put(slot.type(), new Slot(slot, install, uninstall));
+        }
+    }
+
+    /** Hook slots with their native source currently installed — the Minimal Footprint counter. */
+    @Override
+    public int activeHookInstalls() {
+        synchronized (lock) {
+            int active = 0;
+            for (Slot slot : slots.values()) {
+                if (slot.installed) {
+                    active++;
+                }
+            }
+            return active;
+        }
+    }
 
     @Override
     public <E extends VineEvent> Subscription subscribe(Class<E> type, Consumer<E> handler) {
@@ -44,8 +72,10 @@ final class EngineEventBus implements EventBus {
         Objects.requireNonNull(priority, "priority");
         Objects.requireNonNull(handler, "handler");
         Registration<E> registration = new Registration<>(type, priority, handler, ownerOf());
+        Slot slotToInstall = null;
         synchronized (lock) {
             List<Registration<?>> list = byType.computeIfAbsent(type, k -> new ArrayList<>());
+            boolean wasEmpty = list.isEmpty();
             // Insert before the first higher-priority entry; append after equals,
             // which keeps registration order stable within a priority.
             int i = 0;
@@ -53,6 +83,27 @@ final class EngineEventBus implements EventBus {
                 i++;
             }
             list.add(i, registration);
+            if (wasEmpty) {
+                Slot slot = slots.get(type);
+                if (slot != null && !slot.installed) {
+                    slotToInstall = slot;
+                }
+            }
+        }
+        if (slotToInstall != null) {
+            Slot slot = slotToInstall;
+            // Native install outside the bus lock: driver installers may re-enter.
+            try {
+                slot.runInstall();
+            } catch (RuntimeException e) {
+                // No native source, no subscription: a seam hook must fail loudly,
+                // never sit silently inert. Roll back and rethrow.
+                registration.close();
+                throw e;
+            }
+            synchronized (lock) {
+                slot.installed = true;
+            }
         }
         return registration;
     }
@@ -99,6 +150,36 @@ final class EngineEventBus implements EventBus {
         return "unknown";
     }
 
+    /** One hook slot bound to an event type; {@code installed} is the native-source state. */
+    private static final class Slot {
+
+        final HookSlot slot;
+        final Runnable install;
+        final Runnable uninstall;
+        boolean installed;
+
+        Slot(HookSlot slot, Runnable install, Runnable uninstall) {
+            this.slot = slot;
+            this.install = install;
+            this.uninstall = uninstall;
+        }
+
+        void runInstall() {
+            install.run();
+            LOG.log(System.Logger.Level.DEBUG,
+                "[VINE] hook slot " + slot.id() + " installed (" + slot.source() + ")");
+        }
+
+        void runUninstall() {
+            try {
+                uninstall.run();
+                LOG.log(System.Logger.Level.DEBUG, "[VINE] hook slot " + slot.id() + " uninstalled");
+            } catch (RuntimeException e) {
+                LOG.log(System.Logger.Level.WARNING, "[VINE] hook slot " + slot.id() + " uninstall failed", e);
+            }
+        }
+    }
+
     private final class Registration<E extends VineEvent> implements Subscription {
 
         private final Class<E> type;
@@ -133,14 +214,24 @@ final class EngineEventBus implements EventBus {
                 return;
             }
             active = false;
+            Slot slotToUninstall = null;
             synchronized (lock) {
                 List<Registration<?>> list = byType.get(type);
                 if (list != null) {
                     list.remove(this);
                     if (list.isEmpty()) {
                         byType.remove(type);
+                        Slot slot = slots.get(type);
+                        if (slot != null && slot.installed) {
+                            slot.installed = false;
+                            slotToUninstall = slot;
+                        }
                     }
                 }
+            }
+            if (slotToUninstall != null) {
+                // Native uninstall outside the bus lock: driver tear-down may re-enter.
+                slotToUninstall.runUninstall();
             }
         }
 
