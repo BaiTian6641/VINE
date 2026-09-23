@@ -1,9 +1,13 @@
+import org.gradle.api.publish.maven.MavenPublication
+
 // Shared-module convention (sub-00 Stage A): everything that ships version-free
 // engine code compiles to Java 21 bytecode — the 1.21.1 cell sets the floor
 // (plan §5.0). 26.x drivers may use Java 25 internally, via their own
 // per-driver conventions (stages B/C), never this one.
 plugins {
     id 'java-library'
+    // Local-only publishing (sub-00 Stage E): every module lands in build/repo.
+    id 'maven-publish'
 }
 
 group = 'dev.vineengine'
@@ -11,6 +15,9 @@ version = '0.1.0-SNAPSHOT'
 
 repositories {
     mavenCentral()
+    // DataFixerUpper (the §5.1 DFU carve-out, consumed by vine-api) is
+    // published only to Mojang's maven.
+    maven { url = 'https://libraries.minecraft.net/' }
 }
 
 java {
@@ -24,4 +31,28 @@ tasks.withType(JavaCompile).configureEach {
     options.release.set(21)
     // Parameter names kept for descriptor/Codec introspection at runtime.
     options.compilerArgs += ['-parameters']
+}
+
+tasks.named('jar') {
+    manifest {
+        attributes(
+            'Implementation-Version': project.version.toString(),
+            // Shared modules all align to the vine-api SemVer line (§8).
+            'Vine-Api-Version': project.version.toString()
+        )
+    }
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+        }
+    }
+    repositories {
+        maven {
+            name = 'vineLocal'
+            url = rootProject.layout.buildDirectory.dir('repo').get().asFile.toURI()
+        }
+    }
 }

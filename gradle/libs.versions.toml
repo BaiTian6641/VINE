@@ -26,9 +26,13 @@ mc26Latest = "26.3"
 mc26Previous = "26.2"
 
 [libraries]
+# DFU carve-out (§5.1): the one external type allowed in vine-api signatures.
+# Published only to Mojang's maven (declared in vine.java-shared).
+datafixerupper = { group = "com.mojang", name = "datafixerupper", version = "8.0.16" }
+
 # Driver cells resolve loader/game artifacts directly by catalog version in
 # their build files (loom/MDG configurations are not plain `implementation`
-# deps in the 1.21.1 cell), so no library aliases are needed here yet.
+# deps in the 1.21.1 cell), so no driver library aliases are needed.
 
 [plugins]
 # Toolchain plugins, applied ONLY inside their own driver subproject (sub-00 §4).

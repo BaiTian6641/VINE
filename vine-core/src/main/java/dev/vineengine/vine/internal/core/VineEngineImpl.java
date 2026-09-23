@@ -3,22 +3,34 @@ package dev.vineengine.vine.internal.core;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.ServiceLoader;
 import java.util.function.Consumer;
 
 import dev.vineengine.vine.EnginePhase;
 import dev.vineengine.vine.Subscription;
 import dev.vineengine.vine.VineEngine;
+import dev.vineengine.vine.internal.RegistryBackend;
+import dev.vineengine.vine.internal.registry.DescriptorStore;
 import dev.vineengine.vine.internal.spi.VineDriver;
+import dev.vineengine.vine.registry.DescriptorType;
+import dev.vineengine.vine.registry.Holder;
+import dev.vineengine.vine.registry.VineId;
 
 /**
  * vine-core's {@link VineEngine} implementation: boots the phase machine and binds
- * exactly one {@link VineDriver} via {@code ServiceLoader}.
+ * exactly one {@link VineDriver} via {@code ServiceLoader}. Also the engine's
+ * {@link RegistryBackend} — {@code VineRegistries} resolves this object through
+ * the same boot seam, so registry calls inherit the one-provider rule.
  *
  * <p>Boot order: enter {@link EnginePhase#VINE_BOOT} (first transition line), bind
  * the driver, then {@link VineDriver#bootstrap} — the driver's loader entrypoints
  * advance the remaining four phases. Two or more drivers on the classpath is an
  * explicit boot failure; the engine never guesses between cells.
+ *
+ * <p>The {@link DescriptorStore} freezes when {@link EnginePhase#REGISTRIES_FROZEN}
+ * is entered; the freeze listener is registered before the driver can advance
+ * phases, so the store is frozen before any consumer's phase listener observes it.
  *
  * <p><b>M0 scaffold deviation (sub-01 Stage A, before sub-00 B/C drivers land):</b>
  * ZERO drivers leaves the engine inert instead of failing — it sits in
@@ -26,13 +38,15 @@ import dev.vineengine.vine.internal.spi.VineDriver;
  * Footprint §5.1). §2's "zero or ≥2 ⇒ explicit boot failure" rule is restored when
  * real drivers exist.
  */
-final class VineEngineImpl implements VineEngine {
+final class VineEngineImpl implements VineEngine, RegistryBackend {
 
     private static final System.Logger LOG = System.getLogger(PhaseMachine.LOG_NAME);
 
     private final PhaseMachine machine = new PhaseMachine();
+    private final DescriptorStore registries = new DescriptorStore();
 
     VineEngineImpl() {
+        machine.onPhase(EnginePhase.REGISTRIES_FROZEN, change -> registries.freeze());
         machine.advanceTo(EnginePhase.VINE_BOOT);
         List<VineDriver> drivers = new ArrayList<>();
         for (VineDriver driver : ServiceLoader.load(VineDriver.class)) {
@@ -65,5 +79,20 @@ final class VineEngineImpl implements VineEngine {
     @Override
     public Subscription onPhase(EnginePhase phase, Consumer<PhaseChange> handler) {
         return machine.onPhase(phase, handler);
+    }
+
+    @Override
+    public <D> void defineType(DescriptorType<D> type) {
+        registries.defineType(type);
+    }
+
+    @Override
+    public <D> Holder<D> register(DescriptorType<D> type, VineId id, D data) {
+        return registries.register(type, id, data);
+    }
+
+    @Override
+    public <D> Optional<Holder<D>> get(DescriptorType<D> type, VineId id) {
+        return registries.get(type, id);
     }
 }

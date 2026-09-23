@@ -1,6 +1,6 @@
 # SUB-02 — Registry & descriptors
 
-> **Status:** `planning` — one of `planning | in-progress | blocked(<reason>) | done`
+> **Status:** `in-progress` — one of `planning | in-progress | blocked(<reason>) | done`
 > **Milestone:** M0 minimal → M1 full · **Depends on:** SUB-00, SUB-01 · **Blocks:** SUB-04, SUB-07, SUB-11, SUB-12, SUB-13, SUB-15, SUB-20, SUB-22
 > **Cells:** all · **Loaders:** both
 > **Master plan:** §5.2 (+ §5.3, §5.16) · **Module(s):** vine-api, vine-core, vine-spi, drivers
@@ -80,7 +80,7 @@ retained), `DROP`, `FAIL` (refuse load).
 
 ### Stage A — `VineId` + descriptor core
 
-- [ ] **Do:** `VineId`, `DescriptorType`/`DescriptorClass`/`Holder`,
+- [x] **Do:** `VineId`, `DescriptorType`/`DescriptorClass`/`Holder`,
   `DescriptorStore` + freeze, `VineRegistries` Java path; codec round-trip of
   a trivial record descriptor. No driver work. Touches: vine-api `registry`,
   vine-core `internal.registry`.

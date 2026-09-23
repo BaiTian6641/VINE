@@ -1,3 +1,10 @@
 plugins {
     id 'vine.java-shared'
 }
+
+dependencies {
+    // com.mojang.serialization.Codec — the one external Mojang *library* type
+    // allowed in vine-api signatures (DFU carve-out, §5.1). Pinned to the 1.21.1
+    // cell's DFU as the compile floor; drivers run against the game's own copy.
+    api libs.datafixerupper
+}
