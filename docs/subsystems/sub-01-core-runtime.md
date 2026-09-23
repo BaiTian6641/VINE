@@ -226,6 +226,12 @@ public interface VineDriver {
   + `Vine-Unsafe` manifest-flag consistency check; `ExtensionPoints`/
   `ExtensionPoint` core; `VineConfig` (typed getters,
   `config/vine/engine.toml`, reload event).
+  - **Progress 2026-09-24:** `VineConfig` landed as a static facade (same
+    pattern as `VineData`/`VineCommands`) with vine-core's `ConfigService`
+    (minimal TOML subset, lazy load, reload listeners, malformed-line
+    tolerance) and a 13-check throwaway harness green; the `VineEngine.config()`
+    accessor ships with `ExtensionPoints` so the facade stays the only public
+    surface until Stage E fully lands.
 - **Acceptance:** annotated jar without the flag (and vice versa) triggers the
   boot warning; two independent extension points register/list without
   interference; a config value round-trips across restart on both 1.21.1
