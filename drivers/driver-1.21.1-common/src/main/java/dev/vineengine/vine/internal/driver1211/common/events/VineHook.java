@@ -6,14 +6,16 @@ package dev.vineengine.vine.internal.driver1211.common.events;
  * its native listener lazily on first subscription and uninstalls on last close
  * (Minimal Footprint, §5.1) via {@link HookBus}.
  *
- * <p>Seams pending sibling SPIs (documented, never silently absent): registration
- * materialization waits on sub-02's driver registry SPI (sub-18 Stage D), packet
- * receive on sub-05's payload SPI, and the Fabric rows with no native callback
- * (block place, world save) wait on the quarantined per-driver Mixin config —
- * subscribing to one of these hooks throws instead of misfiring.
+ * <p>Seams pending sibling SPIs (documented, never silently absent): packet
+ * receive waits on sub-05's payload SPI, and the Fabric rows with no native
+ * callback (block place, world save) wait on the quarantined per-driver Mixin
+ * config — subscribing to one of these hooks throws instead of misfiring.
+ * {@link #REGISTRY_REGISTER} is live since sub-02 Stage B: its source is the
+ * engine's own structural materialization (driver-side tap), not a loader
+ * callback.
  */
 public enum VineHook {
-    /** Engine content registration observation. Seam: sub-02 driver registry SPI (Stage D). */
+    /** A structural descriptor was materialized into a vanilla static registry. Source: sub-02 Stage B materialization tap. */
     REGISTRY_REGISTER,
     /** A block was placed in a world. NF: {@code EntityPlaceEvent}; Fabric: †Mixin (deferred). */
     BLOCK_PLACE,

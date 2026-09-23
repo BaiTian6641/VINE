@@ -1,12 +1,16 @@
 package dev.vineengine.vine.internal.registry;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.TreeMap;
 
+import dev.vineengine.vine.internal.spi.StructuralRegistryView;
 import dev.vineengine.vine.registry.DescriptorClass;
 import dev.vineengine.vine.registry.DescriptorType;
 import dev.vineengine.vine.registry.Holder;
@@ -100,6 +104,23 @@ public final class DescriptorStore {
         return Optional.ofNullable(holder);
     }
 
+    /**
+     * Immutable snapshot of the structural slice for driver materialization
+     * (sub-02 Stage B): structural types in {@code registryId} order, entries in
+     * {@code VineId} order — the same iteration order on every cell. Safe to read
+     * after return regardless of later writes or freeze.
+     */
+    public synchronized StructuralRegistryView structuralView() {
+        List<StructuralRegistryView.StructuralType> snapshot = new ArrayList<>();
+        for (TypeEntries<?> entries : types.values()) {
+            if (entries.type.descriptorClass() == DescriptorClass.STRUCTURAL) {
+                snapshot.add(new TypeSnapshot(entries.type, List.copyOf(entries.map.values())));
+            }
+        }
+        snapshot.sort(Comparator.comparing(type -> type.type().registryId()));
+        return new ViewSnapshot(List.copyOf(snapshot));
+    }
+
     /** Null-safe lookup for writes: undefined type or foreign instance both fail explicitly. */
     @SuppressWarnings("unchecked")
     private <D> TypeEntries<D> definedEntries(DescriptorType<D> type) {
@@ -138,5 +159,12 @@ public final class DescriptorStore {
     }
 
     private record StoredHolder<D>(VineId id, D value, int runtimeId) implements Holder<D> {
+    }
+
+    private record ViewSnapshot(List<StructuralType> types) implements StructuralRegistryView {
+    }
+
+    private record TypeSnapshot(DescriptorType<?> type, List<? extends Holder<?>> entries)
+        implements StructuralRegistryView.StructuralType {
     }
 }

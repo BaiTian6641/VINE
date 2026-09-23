@@ -48,8 +48,10 @@ public interface VineDriver {
      * valid for the process lifetime — loader lifecycle events may advance phases
      * long after {@code bootstrap} returns.
      *
-     * <p>Stage A surface is phase advance only; Stage B adds {@code bus()},
+     * <p>Stage A surface is phase advance only; sub-01 Stage B adds {@code bus()},
      * Stage C {@code installHook(...)}, Stage E {@code reportUnsafe(...)} per §2.
+     * sub-02 Stage B adds {@link #structuralRegistries()} for descriptor
+     * materialization.
      */
     interface DriverContext {
 
@@ -59,6 +61,15 @@ public interface VineDriver {
          * once; re-entering the current phase is a no-op; moving backwards throws.
          */
         void advancePhase(EnginePhase next);
+
+        /**
+         * Read-only structural slice of the descriptor store (sub-02 Stage B).
+         * Snapshot per call; valid from {@link EnginePhase#REGISTRIES_OPEN} on.
+         * The driver reads it at its loader's structural-registration moment
+         * (NF {@code RegisterEvent}; Fabric mod init) and hands it to its
+         * {@link RegistryDriver} implementation.
+         */
+        StructuralRegistryView structuralRegistries();
     }
 
     /**

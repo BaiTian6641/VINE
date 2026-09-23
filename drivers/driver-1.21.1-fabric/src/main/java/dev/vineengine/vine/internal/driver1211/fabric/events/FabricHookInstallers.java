@@ -14,14 +14,16 @@ import dev.vineengine.vine.internal.driver1211.common.events.CommandQueue;
 import dev.vineengine.vine.internal.driver1211.common.events.HookBus;
 import dev.vineengine.vine.internal.driver1211.common.events.HookEvent;
 import dev.vineengine.vine.internal.driver1211.common.events.VineHook;
+import dev.vineengine.vine.internal.driver1211.common.registry.RegistryHookTap;
 
 /**
  * Fabric 1.21.1 native sources for the M0 hook set (sub-18 §2 table). Seams (no
  * installer): {@code BLOCK_PLACE} and {@code WORLD_SAVE} have no Fabric callback —
  * they wait on the quarantined per-driver Mixin config († rows, deferred with the
- * Mixin work); {@code REGISTRY_REGISTER} waits on sub-02's driver registry SPI and
- * {@code PACKET_RECEIVE} on sub-05's payload SPI (both sub-18 Stage D).
- * Subscribing to a seam hook throws, never misfires.
+ * Mixin work); {@code PACKET_RECEIVE} waits on sub-05's payload SPI (sub-18
+ * Stage D). {@code REGISTRY_REGISTER} is backed by sub-02 Stage B's structural
+ * materialization tap — the engine's own registration is the source. Subscribing
+ * to a seam hook throws, never misfires.
  *
  * <p>Loader difference absorbed: Fabric API events have no {@code unregister}
  * (unlike the NF bus), so dormancy is a gate — the returned close handle flips the
@@ -36,6 +38,7 @@ public final class FabricHookInstallers {
 
     public static Map<VineHook, HookBus.Installer> create(CommandQueue commands) {
         Map<VineHook, HookBus.Installer> installers = new EnumMap<>(VineHook.class);
+        installers.put(VineHook.REGISTRY_REGISTER, RegistryHookTap::subscribe);
 
         installers.put(VineHook.BLOCK_BREAK, sink -> {
             AtomicBoolean live = new AtomicBoolean(true);

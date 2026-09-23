@@ -22,5 +22,9 @@ public final class VineFabricMod implements ModInitializer {
     public void onInitialize() {
         LOGGER.info("VINE driver 1.21.1-fabric alive");
         DriverBoot.boot(LOGGER);
+        // Structural materialization (sub-02 Stage B): Fabric's moment is mod
+        // init, after boot has run consumer initializers (NF defers to its
+        // RegisterEvent instead — loader difference absorbed in the driver).
+        Fabric1211Driver.materializeStructuralRegistries();
     }
 }

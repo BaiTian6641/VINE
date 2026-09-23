@@ -94,7 +94,7 @@ retained), `DROP`, `FAIL` (refuse load).
 
 ### Stage B — structural registration on both 1.21.1 drivers (NF ∥ Fabric)
 
-- [ ] **Do:** `RegistryDriver` SPI; NF materialization via `RegisterEvent`,
+- [x] **Do:** `RegistryDriver` SPI; NF materialization via `RegisterEvent`,
   Fabric via `Registry.register` at mod init; testmod structural marker type
   (not blocks — sub-07) + one entry; boot log
   `vine: materialized N structural entries`. Touches: vine-spi,

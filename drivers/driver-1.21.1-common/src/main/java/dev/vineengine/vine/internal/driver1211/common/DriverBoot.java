@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 
 import dev.vineengine.vine.EnginePhase;
 import dev.vineengine.vine.VineEngine;
+import dev.vineengine.vine.internal.core.ConsumerInitializers;
 
 /**
  * Driver entrypoint boot helper shared by both 1.21.1 cells: triggers the engine
@@ -21,6 +22,11 @@ import dev.vineengine.vine.VineEngine;
  * line via SLF4J. Replays make the lines appear exactly once and in ordinal order
  * no matter which loader lifecycle moment boot happens at. The JUL fallback is
  * silenced so the transition never double-logs on the raw console.
+ *
+ * <p>After boot returns, consumer {@code VineInitializer}s run (sub-02 Stage B) —
+ * strictly outside {@code EngineAccess.boot}, where the facade is still blocked.
+ * Registration is open ({@code REGISTRIES_OPEN} was entered during bootstrap), so
+ * initializers can define types and register descriptors immediately.
  */
 public final class DriverBoot {
 
@@ -42,5 +48,6 @@ public final class DriverBoot {
         for (EnginePhase phase : EnginePhase.values()) {
             engine.onPhase(phase, change -> log.info("[VINE] phase {}", change.entered()));
         }
+        ConsumerInitializers.run();
     }
 }

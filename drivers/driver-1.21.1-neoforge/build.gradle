@@ -40,6 +40,9 @@ neoForge {
                 additionalRuntimeClasspath project(':vine-api')
                 additionalRuntimeClasspath project(':vine-core')
                 additionalRuntimeClasspath project(':vine-spi')
+                // sub-02 Stage B: the consumer-style testmod must be on the
+                // classpath for VineInitializer discovery (not a loader mod).
+                additionalRuntimeClasspath project(':vine-testmod')
             }
         }
     }

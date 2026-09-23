@@ -13,6 +13,7 @@ import dev.vineengine.vine.internal.driver1211.common.DriverRuntime;
 import dev.vineengine.vine.internal.driver1211.common.events.CommandQueue;
 import dev.vineengine.vine.internal.driver1211.common.events.HookBus;
 import dev.vineengine.vine.internal.driver1211.fabric.events.FabricHookInstallers;
+import dev.vineengine.vine.internal.driver1211.fabric.registry.FabricStructuralMaterializer;
 import dev.vineengine.vine.internal.spi.VineDriver;
 
 /**
@@ -40,6 +41,9 @@ public final class Fabric1211Driver implements VineDriver {
 
     private static final Logger LOG = LoggerFactory.getLogger(Fabric1211Driver.class);
 
+    /** Captured at bootstrap; read by {@link #materializeStructuralRegistries()} after boot. */
+    private static volatile DriverContext driverContext;
+
     /** Public no-arg constructor required by {@code ServiceLoader}. */
     public Fabric1211Driver() {
     }
@@ -58,6 +62,7 @@ public final class Fabric1211Driver implements VineDriver {
     @Override
     public void bootstrap(DriverContext ctx) {
         ctx.advancePhase(EnginePhase.REGISTRIES_OPEN);
+        driverContext = ctx;
         ServerLifecycleEvents.SERVER_STARTING.register(server -> {
             ctx.advancePhase(EnginePhase.REGISTRIES_FROZEN);
             ctx.advancePhase(EnginePhase.WORLD_LOAD);
@@ -67,5 +72,22 @@ public final class Fabric1211Driver implements VineDriver {
         CommandQueue commands = new CommandQueue();
         DriverRuntime.install(new HookBus(FabricHookInstallers.create(commands), commands));
         LOG.debug("[VINE] driver {} bootstrap complete: hook collectors armed (0 native listeners)", DRIVER_ID);
+    }
+
+    /**
+     * Fabric's structural materialization moment (sub-02 Stage B): plain mod init,
+     * via {@code FabricRegistryBuilder} + {@code Registry.register}. Loader
+     * difference absorbed vs. NF (which phases registration through
+     * {@code RegisterEvent}): called by {@code VineFabricMod} right after
+     * {@code DriverBoot.boot} returns, so consumer initializers have already run
+     * and the store snapshot is complete for this session.
+     */
+    public static void materializeStructuralRegistries() {
+        DriverContext ctx = driverContext;
+        if (ctx == null) {
+            throw new IllegalStateException(
+                "Fabric1211Driver.bootstrap has not run — entrypoint wiring broken");
+        }
+        new FabricStructuralMaterializer().materializeStructural(ctx.structuralRegistries());
     }
 }

@@ -8,11 +8,17 @@ import java.util.ServiceLoader;
 import java.util.function.Consumer;
 
 import dev.vineengine.vine.EnginePhase;
+import dev.vineengine.vine.command.VineCommands;
 import dev.vineengine.vine.Subscription;
 import dev.vineengine.vine.VineEngine;
+import dev.vineengine.vine.internal.CommandBackend;
+import dev.vineengine.vine.internal.NetBackend;
 import dev.vineengine.vine.internal.RegistryBackend;
+import dev.vineengine.vine.internal.net.VineNetImpl;
+import dev.vineengine.vine.internal.command.CommandService;
 import dev.vineengine.vine.internal.registry.DescriptorStore;
 import dev.vineengine.vine.internal.spi.VineDriver;
+import dev.vineengine.vine.net.VineNet;
 import dev.vineengine.vine.registry.DescriptorType;
 import dev.vineengine.vine.registry.Holder;
 import dev.vineengine.vine.registry.VineId;
@@ -38,15 +44,21 @@ import dev.vineengine.vine.registry.VineId;
  * Footprint §5.1). §2's "zero or ≥2 ⇒ explicit boot failure" rule is restored when
  * real drivers exist.
  */
-final class VineEngineImpl implements VineEngine, RegistryBackend {
+final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, CommandBackend {
 
     private static final System.Logger LOG = System.getLogger(PhaseMachine.LOG_NAME);
 
     private final PhaseMachine machine = new PhaseMachine();
     private final DescriptorStore registries = new DescriptorStore();
+    private final VineNetImpl net = new VineNetImpl();
+    private final CommandService commands = new CommandService();
 
     VineEngineImpl() {
-        machine.onPhase(EnginePhase.REGISTRIES_FROZEN, change -> registries.freeze());
+        machine.onPhase(EnginePhase.REGISTRIES_FROZEN, change -> {
+            registries.freeze();
+            net.freezeAndSync();
+            commands.freeze();
+        });
         machine.advanceTo(EnginePhase.VINE_BOOT);
         List<VineDriver> drivers = new ArrayList<>();
         for (VineDriver driver : ServiceLoader.load(VineDriver.class)) {
@@ -67,7 +79,7 @@ final class VineEngineImpl implements VineEngine, RegistryBackend {
         LOG.log(System.Logger.Level.INFO,
             "[VINE] driver bound: " + driver.getClass().getName()
                 + " (loader=" + cell.loader() + ", dataVersion=" + cell.dataVersion() + ")");
-        driver.bootstrap(new CoreDriverContext(machine));
+        driver.bootstrap(new CoreDriverContext(machine, registries));
     }
 
     @Override
@@ -94,5 +106,25 @@ final class VineEngineImpl implements VineEngine, RegistryBackend {
     @Override
     public <D> Optional<Holder<D>> get(DescriptorType<D> type, VineId id) {
         return registries.get(type, id);
+    }
+
+    /**
+     * The networking service (sub-05). Eagerly constructed and dormant with
+     * zero consumers; it becomes live when a driver binds its
+     * {@code NetTransport} during bootstrap.
+     */
+    @Override
+    public VineNet net() {
+        return net;
+    }
+
+    /**
+     * The command registration service (sub-06). Dormant with zero consumers —
+     * no driver-side command is attached until a descriptor is registered and a
+     * native dispatcher build pulls the snapshot.
+     */
+    @Override
+    public VineCommands commands() {
+        return commands;
     }
 }

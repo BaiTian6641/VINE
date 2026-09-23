@@ -17,14 +17,16 @@ import dev.vineengine.vine.internal.driver1211.common.events.CommandQueue;
 import dev.vineengine.vine.internal.driver1211.common.events.HookBus;
 import dev.vineengine.vine.internal.driver1211.common.events.HookEvent;
 import dev.vineengine.vine.internal.driver1211.common.events.VineHook;
+import dev.vineengine.vine.internal.driver1211.common.registry.RegistryHookTap;
 
 /**
  * NeoForge 1.21.1 native sources for the M0 hook set (sub-18 §2 table). Every
  * installer registers on the NF game bus and returns an {@code unregister} handle
  * so the last close dorms the hook (Minimal Footprint). Seams (no installer):
- * {@code REGISTRY_REGISTER} waits on sub-02's driver registry SPI,
- * {@code PACKET_RECEIVE} on sub-05's payload SPI (both sub-18 Stage D).
- *
+ * {@code PACKET_RECEIVE} waits on sub-05's payload SPI (sub-18 Stage D).
+ * {@code REGISTRY_REGISTER} is backed by sub-02 Stage B's structural
+ * materialization tap — the engine's own registration is the source, so there is
+ * no native listener to install.
  * <p>Level events fire on both dists; installers filter to {@link ServerLevel} to
  * keep payload parity with Fabric's server-side callbacks.
  */
@@ -85,6 +87,8 @@ public final class NeoForgeHookInstallers {
             NeoForge.EVENT_BUS.addListener(LevelEvent.Save.class, listener);
             return () -> NeoForge.EVENT_BUS.unregister(listener);
         });
+
+        installers.put(VineHook.REGISTRY_REGISTER, RegistryHookTap::subscribe);
 
         installers.put(VineHook.COMMAND_EXECUTE, sink -> {
             Consumer<RegisterCommandsEvent> listener = event -> {

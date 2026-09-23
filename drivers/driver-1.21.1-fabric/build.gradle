@@ -21,6 +21,9 @@ dependencies {
     modImplementation "net.fabricmc.fabric-api:fabric-api:${libs.versions.fabricApi1211.get()}"
     // GeckoLib GL4 render backend — hard dep per §5.14 (declared in fabric.mod.json).
     modImplementation 'software.bernie.geckolib:geckolib-fabric-1.21.1:4.9.3'
+    // sub-02 Stage B: the consumer-style testmod rides the dev-run classpath as
+    // a plain library (no fabric.mod.json) for VineInitializer discovery.
+    runtimeOnly project(':vine-testmod')
 }
 
 loom {
