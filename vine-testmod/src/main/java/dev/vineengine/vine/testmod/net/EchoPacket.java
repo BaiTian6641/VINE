@@ -65,10 +65,16 @@ public final class EchoPacket {
         VineId echoId = VineId.of("vinetest", "echo");
         registered.message(echoId, Payload.class, CODEC, Endpoint.SERVER, (payload, ctx) -> {
             TRACE.add("c2s-received");
+            // Headless TCK observability (sub-21): the scenario runner asserts
+            // these lines in the server log; stdout so every cell's log carries them.
+            System.out.println("[vine-testmod] echo: c2s-received number=" + payload.number());
             registered.send(ctx.sender(), payload);
         });
         registered.message(echoId, Payload.class, CODEC, Endpoint.CLIENT,
-            (payload, ctx) -> TRACE.add("s2c-received"));
+            (payload, ctx) -> {
+                TRACE.add("s2c-received");
+                System.out.println("[vine-testmod] echo: s2c-received number=" + payload.number());
+            });
         channel = registered;
     }
 

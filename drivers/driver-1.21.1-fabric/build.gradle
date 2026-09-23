@@ -40,4 +40,9 @@ loom {
 // unless it asks, so the pipe would otherwise never reach the server.
 tasks.named('runServer') {
     standardInput = System.in
+    // TCK loopback passthrough (sub-21 Stage B): set by the scenario runner's
+    // child invocation so packet echo runs headless without a client.
+    if (providers.gradleProperty('vine.tck.loopback').map { it.toBoolean() }.getOrElse(false)) {
+        jvmArgs '-Dvine.tck.loopback=true'
+    }
 }

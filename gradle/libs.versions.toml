@@ -30,6 +30,9 @@ mc26Previous = "26.2"
 # Published only to Mojang's maven (declared in vine.java-shared).
 datafixerupper = { group = "com.mojang", name = "datafixerupper", version = "8.0.16" }
 
+# TCK scenario JSON parsing (tck-core only; never on consumer classpaths).
+gson = { group = "com.google.code.gson", name = "gson", version = "2.11.0" }
+
 # Driver cells resolve loader/game artifacts directly by catalog version in
 # their build files (loom/MDG configurations are not plain `implementation`
 # deps in the 1.21.1 cell), so no driver library aliases are needed.

@@ -78,3 +78,40 @@ tasks.register('bootSmoke') {
     description = 'Headless boot smoke on the M0 acceptance matrix (both 1.21.1 cells).'
     dependsOn m0Cells.collect { perCellBootTasks[it] }
 }
+
+// ---------------------------------------------------------------------------
+// sub-21 Stage B — headless scenario suite. The runner drives the testmod's
+// scenario JSON data against the cell's dev server over the console; the
+// server JVM gets vine.tck.loopback so packet echo runs without a client.
+// Same port lock as boot smoke: cells never overlap.
+// ---------------------------------------------------------------------------
+
+def tckScenarioTimeoutSeconds = providers.gradleProperty('vine.tck.scenarioTimeoutSeconds').orElse('900')
+def scenariosDir = rootProject.layout.projectDirectory
+        .dir('vine-testmod/src/main/resources/vine-tck/scenarios')
+def perCellScenarioTasks = [:]
+rootProject.project(':drivers').subprojects.each { driver ->
+    def cell = driver.name - 'driver-'
+    def camel = cell.split(/[-.]/).collect { it.capitalize() }.join('')
+    perCellScenarioTasks[cell] = tasks.register("runScenarios${camel}", JavaExec) {
+        group = 'verification'
+        description = "Headless TCK scenario suite on cell ${cell} (sub-21 Stage B)."
+        classpath = sourceSets.main.runtimeClasspath
+        mainClass = 'dev.vineengine.vine.internal.tck.ScenarioRunner'
+        args = [
+                '--cell', cell,
+                '--root-dir', rootProject.layout.projectDirectory.asFile.absolutePath,
+                '--gradle-task', ":drivers:${driver.name}:runServer",
+                '--project-cache-dir', tckBuildDir.dir('project-cache').get().asFile.absolutePath,
+                '--scenarios-dir', scenariosDir.asFile.absolutePath,
+                '--timeout-seconds', tckScenarioTimeoutSeconds.get(),
+        ]
+        usesService(tckServerLock)
+    }
+}
+
+tasks.register('runScenarios') {
+    group = 'verification'
+    description = 'Headless TCK scenario suite on the M0 acceptance matrix (both 1.21.1 cells).'
+    dependsOn m0Cells.collect { perCellScenarioTasks[it] }
+}

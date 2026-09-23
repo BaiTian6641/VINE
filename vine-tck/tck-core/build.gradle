@@ -2,7 +2,9 @@ plugins {
     id 'vine.java-shared'
 }
 
-// tck-core (sub-21 §2): loader-free TCK machinery — boot runner now, scenario
-// DSL / result model / fixture store / differ in Stages B–C. No dependencies:
-// the Stage A runner is pure process management; Stage B adds vine-api only,
-// and the Prime Invariant holds here too (DSL ports to consumers unchanged).
+dependencies {
+    // tck-core (sub-21 §2): loader-free TCK machinery. The scenario runner
+    // parses the testmod's scenario JSON data with Gson — TCK-internal only,
+    // never on a consumer classpath (the Stage A boot smoke stays dep-free).
+    implementation libs.gson
+}

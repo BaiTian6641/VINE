@@ -43,7 +43,7 @@ public final class VineTestmod implements VineInitializer {
         PhaseTrace.subscribe(engine);  // engine-event exemplar (sub-01, M0)
         Testmarkers.register(engine);  // registry exemplar (sub-02, M0): Java path
         EchoPacket.register();       // packet echo exemplar (sub-05 Stage A): vinetest:echo C2S→S2C
-        EchoCommand.register();      // command exemplar (sub-06, M0): /vine_test echo <msg>, op-level 2
+        EchoCommand.register();      // command exemplar (sub-06, M0): /vine_test echo + tck_echo (TCK drive child)
         VoxelExemplar.register();    // voxel-data exemplar (sub-03 Stage C): vine_test:voxel, 1 portable + 1 native field
         TestContent.register(engine);  // block/item exemplars (sub-07, M0 minimal):
                                         //   vine_test:testblock + vine_test:testitem

@@ -54,7 +54,7 @@ public enum Endpoint { SERVER, CLIENT }          // handler side
 
 ### Stage A — M0 minimal: one packet echo
 
-- [ ] **Do:** `VineBuf` core ops + codec primitives; `Channel.message`/`send`/`sendToServer`; both 1.21.1 driver bindings; testmod `vine_test:echo` (int+String record) echoed C2S→S2C.
+- [x] **Do:** `VineBuf` core ops + codec primitives; `Channel.message`/`send`/`sendToServer`; both 1.21.1 driver bindings; testmod `vine_test:echo` (int+String record) echoed C2S→S2C.
 - **Acceptance:** TCK packet-echo scenario (§7) green headless on both 1.21.1 drivers.
 - **Touches:** vine-api `net`, vine-core `internal.net`, vine-spi `NetDriver`, 1.21.1 drivers, testmod.
 - **Bootstrap prompt:**

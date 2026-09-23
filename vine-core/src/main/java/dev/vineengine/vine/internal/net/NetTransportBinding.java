@@ -58,9 +58,14 @@ public final class NetTransportBinding {
             throw new IllegalStateException(
                 "driver bound a NetDriver transport before the engine installed its inbound sink");
         }
-        transport = candidate;
+        // TCK-only loopback (sub-21 Stage B): wraps the real driver when the
+        // JVM flag is explicitly set by the harness, routing sends back through
+        // the inbound sink. Production runs never set the flag (Minimal Footprint).
+        transport = Boolean.getBoolean("vine.tck.loopback")
+                ? new TckLoopbackDriver(candidate, sink)
+                : candidate;
         for (Consumer<NetDriver> listener : listeners) {
-            listener.accept(candidate);
+            listener.accept(transport);
         }
         return sink;
     }

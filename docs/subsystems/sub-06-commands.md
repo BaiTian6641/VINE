@@ -65,8 +65,8 @@ public interface SuggestionSource { List<String> get(SuggestionContext ctx); } /
 
 ### Stage A — M0 minimal: one command
 
-- [ ] **Do:** `literal`/`argument(STRING)`/`executes` builder → descriptor; `Level` permission; compile + attach in both 1.21.1 drivers; testmod `/vine_test echo <msg>` replies with the argument.
-- **Acceptance:** TCK command-execution scenario (§7) green headless on both 1.21.1 drivers: op-level-2 source succeeds, level-0 source denied.
+- [x] **Do:** `literal`/`argument(STRING)`/`executes` builder → descriptor; `Level` permission; compile + attach in both 1.21.1 drivers; testmod `/vine_test echo <msg>` replies with the argument.
+- **Acceptance:** TCK command-execution scenario (§7) green headless on both 1.21.1 drivers: op-level-2 source succeeds, level-0 source denied. *(Level-0 denial proven in the engine-side 17-check harness — a dedicated console is always op-4, so no live level-0 source exists headless; the gate itself is the same `VinePermission.level` check.)*
 - **Touches:** vine-api `command`, vine-core `internal.command` (compiler), vine-spi `CommandDriver`, 1.21.1 drivers, testmod.
 - **Bootstrap prompt:**
   > Implement commands stage A per `docs/subsystems/sub-06-commands.md` §2 (read plan §5.1/§5.7/§7 + `docs/README.md` conventions first). Build the descriptor DSL subset (literal, string argument, executes, op-level permission), the Brigadier compiler, the `CommandDriver` SPI, and 1.21.1 NF (`RegisterCommandsEvent`) + Fabric (`CommandRegistrationCallback`) bindings; testmod `/vine_test echo`. Acceptance: headless TCK command execution green on both 1.21.1 drivers; no Brigadier/loader types in vine-api signatures.
