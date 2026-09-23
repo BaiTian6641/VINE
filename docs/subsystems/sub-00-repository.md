@@ -92,7 +92,7 @@ TCK scenarios (sub-21), testmod content (sub-22), remote publishing (§11.1).
 
 ### Stage D — CI matrix + boot smoke
 
-- [ ] **Do:** `.github/workflows/ci.yml` per §2: matrix compile, per-cell
+- [x] **Do:** `.github/workflows/ci.yml` per §2: matrix compile, per-cell
   headless server boot smoke (timeout + log assertion), Prime Invariant jar
   scan; Gradle/loom/MDG caching.
 - **Acceptance:** workflow green on push; smoke proven to fail with the marker
@@ -107,11 +107,13 @@ TCK scenarios (sub-21), testmod content (sub-22), remote publishing (§11.1).
 
 ### Stage E — artifact stamping & local publishing
 
-- [ ] **Do:** `maven-publish` to `<root>/build/repo` on all modules; driver
+- [x] **Do:** `maven-publish` to `<root>/build/repo` on all modules; driver
   `archivesName` cell stamping; `Implementation-Version` + `Vine-Api-Version`
   manifest entries on shared jars; root `publishAllToLocal` task.
 - **Acceptance:** all 10 artifacts + POMs under `build/repo/dev/vineengine/`;
-  scratch consumer resolves `dev.vineengine:vine-api`.
+  scratch consumer resolves `dev.vineengine:vine-api`. Consumer note: the
+  vine-api POM references DFU (§5.1 carve-out), so consumers must also declare
+  Mojang's maven (`https://libraries.minecraft.net/`) for the transitive.
 - **Touches:** all module build files.
 - **Bootstrap prompt:**
   > Per sub-00 Stage E, add maven-publish (local repo at build/repo) to every

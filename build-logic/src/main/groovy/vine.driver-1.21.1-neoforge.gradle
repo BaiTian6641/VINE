@@ -1,10 +1,12 @@
+import org.gradle.api.publish.maven.MavenPublication
+
 // 1.21.1 NeoForge cell (sub-00 Stage B): Java 21 bytecode; Mojmap + Parchment
 // mappings via ModDevGradle. MDG itself is applied by alias in the subproject —
 // toolchain plugins never enter build-logic's classpath (sub-00 §4).
 plugins {
     id 'java-library'
+    id 'maven-publish'
 }
-
 group = 'dev.vineengine'
 version = '0.1.0-SNAPSHOT'
 
@@ -31,4 +33,24 @@ dependencies {
     implementation project(':vine-api')
     implementation project(':vine-core')
     implementation project(':vine-spi')
+}
+
+// Stage E: cell-stamped driver artifact, published to the local repo.
+base {
+    archivesName = 'vine-driver-1.21.1-neoforge'
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            artifactId = 'vine-driver-1.21.1-neoforge'
+        }
+    }
+    repositories {
+        maven {
+            name = 'vineLocal'
+            url = rootProject.layout.buildDirectory.dir('repo').get().asFile.toURI()
+        }
+    }
 }

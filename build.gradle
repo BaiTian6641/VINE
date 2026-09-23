@@ -1,2 +1,10 @@
 // Root project: container only. All engine code lives in the included modules;
 // toolchain plugins (MDG/loom) are forbidden at root (sub-00 §2/§4).
+
+// sub-00 Stage E: aggregate local publishing. ':drivers' is a path container
+// with no publications of its own.
+tasks.register('publishAllToLocal') {
+    description = 'Publishes all 10 modules to the local repository at build/repo.'
+    group = 'publishing'
+    dependsOn subprojects.findAll { it.path != ':drivers' }.collect { "${it.path}:publish" }
+}
