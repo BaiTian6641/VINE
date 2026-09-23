@@ -3,16 +3,24 @@
     "id": "vine",
     "version": "0.1.0-SNAPSHOT",
     "name": "VINE",
-    "description": "VINE engine driver scaffold (1.21.1 Fabric cell)",
+    "description": "VINE engine driver (1.21.1 Fabric cell)",
+    "authors": [
+        "VINE Engine contributors"
+    ],
+    "license": "MIT",
     "environment": "*",
     "entrypoints": {
         "main": [
-            "dev.vineengine.vine.internal.driver.fabric1211.VineFabricMod"
+            "dev.vineengine.vine.internal.driver1211.fabric.VineFabricMod"
+        ],
+        "client": [
+            "dev.vineengine.vine.internal.driver1211.fabric.VineFabricClient"
         ]
     },
     "depends": {
         "fabricloader": ">=0.19.5",
         "minecraft": "~1.21.1",
-        "fabric-api": "*"
+        "fabric-api": "*",
+        "geckolib": ">=4"
     }
 }

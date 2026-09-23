@@ -1,6 +1,6 @@
 # SUB-00 — Repository & bootstrap
 
-> **Status:** `in-progress` — one of `planning | in-progress | blocked(<reason>) | done`
+> **Status:** `done` — one of `planning | in-progress | blocked(<reason>) | done`
 > **Milestone:** M0 · **Depends on:** — · **Blocks:** SUB-01, SUB-02, SUB-18, SUB-21, SUB-22
 > **Cells:** all · **Loaders:** both
 > **Master plan:** §5.0, §5.10, §6, §7, §10 · **Module(s):** all (build skeleton)
@@ -141,6 +141,15 @@ TCK scenarios (sub-21), testmod content (sub-22), remote publishing (§11.1).
 - **26.x drop-window churn** (~3 drops/year, §9) — contained: a drop bump is a
   two-line catalog edit + CI run; unsupported-runtime boot failure is sub-01's
   driver self-check.
+- **MDG dev-run classpath excludes library deps (1.21.1 only)** — plain
+  `implementation` deps (incl. project deps on vine-api/core/spi) never reach
+  the dev-server runtime on the legacy-classpath path (≤1.21.9):
+  `NoClassDefFoundError` at mod construction. Fix is per-run
+  `runs { server { dependencies { additionalRuntimeClasspath ... } } }` in the
+  driver build file — NOT the global configuration, which MDG creates too late
+  for conventions. On 26.x there is no additional classpath anymore (MDG
+  forbids it); standard configurations reach the runtime as-is.
+  Owner: sub-00 (surfaced by sub-18/TCK boot smoke).
 
 ## 5. Verification
 

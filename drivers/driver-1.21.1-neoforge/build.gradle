@@ -5,6 +5,20 @@ plugins {
     id 'vine.driver-1.21.1-neoforge'
 }
 
+
+// Shared loader-neutral 1.21.1 mechanics compile INTO this jar (sub-18 §2) —
+// same sources as the Fabric cell, never a published artifact.
+sourceSets.main.java.srcDir '../driver-1.21.1-common/src/main/java'
+
+repositories {
+    // GeckoLib releases live on Cloudsmith, not Maven Central.
+    maven { url = 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/' }
+}
+
+dependencies {
+    // GeckoLib GL4 render backend — hard dep per §5.14 (declared in mods.toml).
+    implementation 'software.bernie.geckolib:geckolib-neoforge-1.21.1:4.9.3'
+}
 neoForge {
     version = libs.versions.neoforge1211.get()
 
@@ -19,6 +33,14 @@ neoForge {
         server {
             server()
             programArgument '--nogui'
+            dependencies {
+                // MDG dev runs exclude ordinary library deps from the runtime
+                // classpath; the engine modules must be present when the driver
+                // boots (sub-00 Stage D, per-run RunModel config).
+                additionalRuntimeClasspath project(':vine-api')
+                additionalRuntimeClasspath project(':vine-core')
+                additionalRuntimeClasspath project(':vine-spi')
+            }
         }
     }
 

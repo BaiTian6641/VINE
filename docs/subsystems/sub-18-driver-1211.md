@@ -1,6 +1,6 @@
 # SUB-18 — Driver 1.21.1 (NeoForge + Fabric)
 
-> **Status:** `planning` — one of `planning | in-progress | blocked(<reason>) | done`
+> **Status:** `in-progress` — one of `planning | in-progress | blocked(<reason>) | done`
 > **Milestone:** M0 · **Depends on:** SUB-00, SUB-01 · **Blocks:** SUB-19
 > **Cells:** 1.21.1 · **Loaders:** both
 > **Master plan:** §5.8–§5.10, §10 (M0) · **Module(s):** drivers
@@ -64,8 +64,7 @@ Each bootstrap assumes the agent has read this file, plan §5.8–§5.10, and
 `docs/README.md` conventions.
 
 ### Stage A — Driver foundations on the sub-00 scaffolds
-
-- [ ] **Do:** sub-00 Stage B already scaffolded both subprojects (toolchains,
+- [x] **Do:** sub-00 Stage B already scaffolded both subprojects (toolchains,
   mappings, marker entrypoints, dev run configs). Turn scaffolds into drivers:
   package roots `driver1211.{common,neoforge,fabric}` with a shared
   `driver1211.common` source set wired into both; complete loader metadata
@@ -87,7 +86,7 @@ Each bootstrap assumes the agent has read this file, plan §5.8–§5.10, and
 
 ### Stage B — Core-runtime binding & probes
 
-- [ ] **Do:** implement sub-01's `VineDriver` SPI in both drivers:
+- [x] **Do:** implement sub-01's `VineDriver` SPI in both drivers:
   `bootstrap(DriverContext)` wiring, loader lifecycle →
   `DriverContext.advancePhase` through the full `VINE_BOOT → REGISTRIES_OPEN →
   REGISTRIES_FROZEN → WORLD_LOAD → SERVER_UP` chain; `CellInfo` with
@@ -111,7 +110,7 @@ Each bootstrap assumes the agent has read this file, plan §5.8–§5.10, and
 
 ### Stage C — Event translation layer
 
-- [ ] **Do:** the §2 event table for all §5.8 families: lazy subscription, SPI
+- [x] **Do:** the §2 event table for all §5.8 families: lazy subscription, SPI
   ordering, † rows as Mixins in the single per-driver config.
 - **Acceptance:** TCK event scenario — engine handlers on `block.place` and
   `entity.damage` fire with identical normalized payloads/order on both cells;

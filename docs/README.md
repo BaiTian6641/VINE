@@ -62,7 +62,7 @@ read, follow, track, and build subsystems **independently and in parallel**.
 
 | ID | Subsystem | Milestone | Depends on | Status | File |
 |---|---|---|---|---|---|
-| 00 | Repository & bootstrap | M0 | — | in-progress | [sub-00](subsystems/sub-00-repository.md) |
+| 00 | Repository & bootstrap | M0 | — | done | [sub-00](subsystems/sub-00-repository.md) |
 | 01 | Core runtime (boot, events, probes) | M0→M1 | 00 | planning | [sub-01](subsystems/sub-01-core-runtime.md) |
 | 02 | Registry & descriptors | M0→M1 | 00, 01 | planning | [sub-02](subsystems/sub-02-registry.md) |
 | 03 | VoxelData persistence | M1 | 01, 02 | planning | [sub-03](subsystems/sub-03-voxeldata.md) |

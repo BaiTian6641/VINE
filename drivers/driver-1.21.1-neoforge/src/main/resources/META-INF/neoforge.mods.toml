@@ -6,4 +6,28 @@ license = "MIT"
 modId = "vine"
 version = "0.1.0-SNAPSHOT"
 displayName = "VINE"
-description = "VINE engine driver scaffold (1.21.1 NeoForge cell)"
+authors = "VINE Engine contributors"
+description = "VINE engine driver (1.21.1 NeoForge cell)"
+
+# GeckoLib (GL4 generation on 1.21.1) is the render backend and a hard dependency
+# on cells where it ships (locked §5.14); the dev runtime carries it as a real dep.
+[[dependencies.vine]]
+modId = "geckolib"
+type = "required"
+versionRange = "[4,)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.vine]]
+modId = "neoforge"
+type = "required"
+versionRange = "[21.1,)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.vine]]
+modId = "minecraft"
+type = "required"
+versionRange = "[1.21.1,1.22)"
+ordering = "NONE"
+side = "BOTH"
