@@ -1,0 +1,18 @@
+{
+    "schemaVersion": 1,
+    "id": "vine",
+    "version": "0.1.0-SNAPSHOT",
+    "name": "VINE",
+    "description": "VINE engine driver scaffold (26.x Fabric cell)",
+    "environment": "*",
+    "entrypoints": {
+        "main": [
+            "dev.vineengine.vine.internal.driver.fabric26.VineFabricMod"
+        ]
+    },
+    "depends": {
+        "fabricloader": ">=0.19.5",
+        "minecraft": ">=26.3",
+        "fabric-api": "*"
+    }
+}

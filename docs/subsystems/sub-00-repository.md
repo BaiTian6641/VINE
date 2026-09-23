@@ -61,7 +61,7 @@ TCK scenarios (sub-21), testmod content (sub-22), remote publishing (§11.1).
 
 ### Stage B — 1.21.1 driver scaffolds
 
-- [ ] **Do:** Both 1.21.1 driver subprojects per §2 (MDG/Mojmap+Parchment and
+- [x] **Do:** Both 1.21.1 driver subprojects per §2 (MDG/Mojmap+Parchment and
   remapping-loom/Yarn, Java 21); minimal entrypoints (`@Mod("vine")` /
   `ModInitializer`) logging `VINE driver <cell> alive`; project deps on
   vine-api/core/spi; dev server run configs.
@@ -77,7 +77,7 @@ TCK scenarios (sub-21), testmod content (sub-22), remote publishing (§11.1).
 
 ### Stage C — 26.x driver scaffolds
 
-- [ ] **Do:** Both 26.x driver subprojects per §2 (MDG and non-remapping loom,
+- [x] **Do:** Both 26.x driver subprojects per §2 (MDG and non-remapping loom,
   Java 25, no mappings); game versions via catalog `mc26Latest`/
   `mc26Previous`; entrypoints mirroring B.
 - **Acceptance:** both build on Java 25; headless boot; 26.x Fabric log shows
@@ -130,6 +130,12 @@ TCK scenarios (sub-21), testmod content (sub-22), remote publishing (§11.1).
 - **Configuration-cache compatibility** — loom/MDG have lagged. Mitigation:
   cache mandatory from Stage A; a non-compliant driver is isolated into its
   own included build, never a global disable.
+- **Gradle 9.1.0 too old for 26.x loom (landed deviation, Stage C)** — every
+  fabric-loom supporting the 26.x non-remapping mode (loom ≥ 1.15) declares a
+  Gradle plugin api-version above 9.1.0 (1.15.x → 9.2, 1.17.x → 9.5). Wrapper
+  bumped 9.1.0 → 9.6.0 (Fabric's official pairing with loom 1.17 for 26.3,
+  https://www.fabricmc.net/2026/09/15/263.html); loom pinned 1.17.21.
+  Owner: sub-00.
 - **26.x drop-window churn** (~3 drops/year, §9) — contained: a drop bump is a
   two-line catalog edit + CI run; unsupported-runtime boot failure is sub-01's
   driver self-check.

@@ -1,0 +1,30 @@
+// 26.x Fabric cell (sub-00 Stage C): Java 25 bytecode; non-remapping
+// fabric-loom (net.fabricmc.fabric-loom) — 26.1+ ships unobfuscated, so there
+// is no mappings/remap step and plain `implementation` replaces the mod*
+// configurations (https://www.fabricmc.net/2026/03/14/261.html). Loom is
+// applied by alias in the subproject (sub-00 §4).
+plugins {
+    id 'java-library'
+}
+
+group = 'dev.vineengine'
+version = '0.1.0-SNAPSHOT'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release.set(25)
+    // Parameter names kept for descriptor/Codec introspection at runtime.
+    options.compilerArgs += ['-parameters']
+}
+
+dependencies {
+    implementation project(':vine-api')
+    implementation project(':vine-core')
+    implementation project(':vine-spi')
+}

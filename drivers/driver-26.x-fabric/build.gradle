@@ -1,0 +1,23 @@
+plugins {
+    // Toolchain plugin applied ONLY inside this subproject (sub-00 §4). 26.x
+    // ships unobfuscated, so this is the non-remapping loom: no `mappings`
+    // dependency, plain `implementation` instead of modImplementation, and the
+    // `jar` task is the final artifact (no remapJar).
+    alias(libs.plugins.fabricLoom)
+    id 'vine.driver-26.x-fabric'
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${libs.versions.mc26Latest.get()}"
+    implementation "net.fabricmc:fabric-loader:${libs.versions.fabricLoader.get()}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${libs.versions.fabricApi26x.get()}"
+}
+
+loom {
+    runs {
+        server {
+            server()
+            programArgs '--nogui'
+        }
+    }
+}

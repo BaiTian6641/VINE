@@ -1,0 +1,9 @@
+modLoader = "javafml"
+loaderVersion = "[1,)"
+license = "MIT"
+
+[[mods]]
+modId = "vine"
+version = "0.1.0-SNAPSHOT"
+displayName = "VINE"
+description = "VINE engine driver scaffold (26.x NeoForge cell)"
