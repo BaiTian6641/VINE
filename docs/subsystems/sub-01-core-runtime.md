@@ -1,6 +1,6 @@
 # SUB-01 — Core runtime (boot, events, probes)
 
-> **Status:** `planning` — one of `planning | in-progress | blocked(<reason>) | done`
+> **Status:** `in-progress` — one of `planning | in-progress | blocked(<reason>) | done`
 > **Milestone:** M0 skeleton → M1 full · **Depends on:** SUB-00 · **Blocks:** SUB-02, SUB-03, SUB-05, SUB-06, SUB-16, SUB-18
 > **Cells:** all · **Loaders:** both
 > **Master plan:** §5.1, §5.8, §5.9, §5.12, §8, §11.4 · **Module(s):** vine-api · vine-core · vine-spi · drivers
@@ -146,7 +146,7 @@ public interface VineDriver {
 
 ### Stage A — phase machine + engine facade + driver loading (M0)
 
-- [ ] **Do:** `EnginePhase`, `VineEngine` facade (ServiceLoader singleton),
+- [x] **Do:** `EnginePhase`, `VineEngine` facade (ServiceLoader singleton),
   replaying `PhaseMachine`, `VineDriver` SPI + `CellInfo`, `SharedConstants`
   data-version self-check with explicit unsupported-cell boot failure; 1.21.1
   NF + Fabric entrypoints advancing to `SERVER_UP`.
