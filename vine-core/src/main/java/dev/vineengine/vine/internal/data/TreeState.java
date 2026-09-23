@@ -1,7 +1,9 @@
 package dev.vineengine.vine.internal.data;
 
 import java.util.HashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
+import dev.vineengine.vine.data.VoxelSyncListener;
 import dev.vineengine.vine.registry.VineId;
 
 /**
@@ -31,6 +33,13 @@ final class TreeState {
      */
     boolean readOnly;
 
+    /**
+     * Registered sync listeners (sub-03 Stage C registration; dispatch is
+     * Stage E). Copy-on-write: registration is boot-time-rare, and the Stage-E
+     * dispatch will iterate this on tick threads.
+     */
+    private final CopyOnWriteArrayList<VoxelSyncListener> syncListeners = new CopyOnWriteArrayList<>();
+
     private final HashMap<String, String> segmentInterner = new HashMap<>();
 
     TreeState(VineId schemaId, int version) {
@@ -46,5 +55,10 @@ final class TreeState {
     /** Canonical instance for one child-key segment, allocating only on first sight. */
     String intern(String segment) {
         return segmentInterner.computeIfAbsent(segment, s -> s);
+    }
+
+    /** Stage-C registration seam; dispatch activates with Stage E sync-delta. */
+    void addListener(VoxelSyncListener listener) {
+        syncListeners.addIfAbsent(listener);
     }
 }

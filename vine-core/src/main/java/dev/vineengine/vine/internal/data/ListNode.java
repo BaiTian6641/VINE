@@ -4,6 +4,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
+import dev.vineengine.vine.data.VoxelData;
+import dev.vineengine.vine.data.VoxelList;
+import dev.vineengine.vine.data.VoxelType;
+
 /**
  * Homogeneous list node (sub-03 §2). The element type is fixed by the first
  * add and every later add must match — homogeneity is what makes lists

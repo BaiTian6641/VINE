@@ -1,4 +1,4 @@
-package dev.vineengine.vine.internal.data;
+package dev.vineengine.vine.data;
 
 /**
  * A homogeneous ordered list node of the {@code VoxelData} tree (sub-03 §2).

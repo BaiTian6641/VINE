@@ -5,6 +5,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+import dev.vineengine.vine.data.VoxelData;
+import dev.vineengine.vine.data.VoxelList;
+import dev.vineengine.vine.data.VoxelSyncListener;
+import dev.vineengine.vine.data.VoxelType;
+import dev.vineengine.vine.data.VoxelView;
+
 /**
  * Compound node — the only kind of node that can be a tree root, and the
  * whole mutable surface of {@link VoxelData} (sub-03 §2 internals:
@@ -158,6 +164,17 @@ final class VoxelDataImpl extends VoxelNode implements VoxelData {
     @Override
     public VoxelView snapshot() {
         return new VoxelViewImpl(this);
+    }
+
+    /**
+     * Registration only — dirty-path dispatch activates with sub-03 Stage E;
+     * until then listeners are dormant (Minimal Footprint). Tree-scoped: the
+     * set lives on the shared tree state, so live children registering reach
+     * the same dispatch point.
+     */
+    @Override
+    public void addChangeListener(VoxelSyncListener listener) {
+        tree.addListener(Objects.requireNonNull(listener, "listener"));
     }
 
     @Override

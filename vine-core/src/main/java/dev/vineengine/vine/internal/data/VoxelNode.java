@@ -1,5 +1,7 @@
 package dev.vineengine.vine.internal.data;
 
+import dev.vineengine.vine.data.VoxelType;
+
 /**
  * Sealed node model behind the {@code VoxelData} tree (sub-03 §2): exactly a
  * scalar value, a homogeneous list, or a compound — the exhaustive switch in

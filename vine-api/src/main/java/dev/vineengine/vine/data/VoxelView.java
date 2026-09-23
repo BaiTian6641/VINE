@@ -1,4 +1,4 @@
-package dev.vineengine.vine.internal.data;
+package dev.vineengine.vine.data;
 
 /**
  * Zero-copy read view over a {@link VoxelData} tree (sub-03 §2): the perf

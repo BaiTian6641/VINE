@@ -1,4 +1,4 @@
-package dev.vineengine.vine.internal.data;
+package dev.vineengine.vine.data;
 
 /**
  * One engine-side datafix step: upgrades a tree from {@code fromVersion} to

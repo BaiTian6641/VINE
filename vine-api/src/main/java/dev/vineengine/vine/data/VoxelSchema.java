@@ -1,4 +1,4 @@
-package dev.vineengine.vine.internal.data;
+package dev.vineengine.vine.data;
 
 import java.util.Objects;
 
@@ -12,10 +12,10 @@ import dev.vineengine.vine.registry.VineId;
  * {@link #version()}; that pair is what routes fix-on-load.
  *
  * <p>{@link #codec()} is the consumer's DFU payload codec for authoring and
- * the Stage-C facade surface (the §5.1 DFU carve-out allows
+ * dynamic-ops surfaces (the §5.1 DFU carve-out allows
  * {@code com.mojang.serialization} here). Engine versioning never invokes it
- * — fixing is the fixer chain's job, so Mojang data versions can churn
- * without touching consumer schemas.
+ * — fixing is the {@link VoxelDataFixer} chain's job, so Mojang data versions
+ * can churn without touching consumer schemas.
  */
 public record VoxelSchema(VineId id, int version, Codec<VoxelData> codec) {
 

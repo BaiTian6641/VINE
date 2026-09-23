@@ -1,4 +1,4 @@
-package dev.vineengine.vine.internal.data;
+package dev.vineengine.vine.data;
 
 /**
  * The closed value-type system of the {@code VoxelData} tree (sub-03 §2):
@@ -37,7 +37,7 @@ public enum VoxelType {
     }
 
     /** Inverse of {@link #nbtId()}; unknown ids fail explicitly, never guess. */
-    static VoxelType byNbtId(int nbtId) {
+    public static VoxelType byNbtId(int nbtId) {
         for (VoxelType type : values()) {
             if (type.nbtId == nbtId) {
                 return type;

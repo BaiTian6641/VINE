@@ -3,6 +3,8 @@ package dev.vineengine.vine.internal.data;
 import java.util.Arrays;
 import java.util.Objects;
 
+import dev.vineengine.vine.data.VoxelType;
+
 /**
  * Immutable scalar leaf: one boxed value per {@link VoxelType} (arrays carry
  * defensive copies made at construction). Immutability is what makes

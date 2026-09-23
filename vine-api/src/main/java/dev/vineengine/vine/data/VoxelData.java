@@ -1,10 +1,11 @@
-package dev.vineengine.vine.internal.data;
+package dev.vineengine.vine.data;
 
 /**
  * The engine-owned, self-describing data tree — the single portable carrier
  * for consumer state on every cell (sub-03 §2, README shared vocabulary).
- * This interface is the version-free engine shape; Stage C publishes it to
- * {@code dev.vineengine.vine.data} verbatim.
+ * Portable-strategy fields ride one engine-owned Data Component
+ * ({@code vine:voxel_data}) with identical semantics on every cell;
+ * native-strategy fields map per {@link FieldStrategy}.
  *
  * <p><b>Paths:</b> dot-paths ({@code "stats.mana"}) address nested compound
  * keys; every segment must be non-empty. <b>Missing vs wrong:</b> a missing
@@ -91,6 +92,14 @@ public interface VoxelData {
 
     /** Engine schema version this tree currently holds (fix-on-load bumps it). */
     int schemaVersion();
+
+    /**
+     * Registers {@code listener} for dirty-path change dispatch. Registration
+     * is accepted from this stage; dispatch activates with sub-03 Stage E
+     * (sync-delta: mutation marks the path plus its ancestors, deltas ride
+     * sub-05 transport) — listeners are dormant until then by design.
+     */
+    void addChangeListener(VoxelSyncListener listener);
 
     /** Detached deep copy; later edits to either side never affect the other. */
     VoxelData copy();

@@ -125,7 +125,7 @@ public interface VoxelStorageDriver {
 
 ### Stage C — API surface + SPI
 
-- [ ] **Do:** public API per §2 into vine-api; `VoxelStorageDriver` SPI into
+- [x] **Do:** public API per §2 into vine-api; `VoxelStorageDriver` SPI into
   vine-spi; testmod schema with one portable + one native field.
 - **Acceptance:** compiles (Java 21); testmod (sub-22) registers a schema and
   creates a tree in-memory.

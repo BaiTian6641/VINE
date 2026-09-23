@@ -1,5 +1,9 @@
 package dev.vineengine.vine.internal.data;
 
+import dev.vineengine.vine.data.VoxelList;
+import dev.vineengine.vine.data.VoxelType;
+import dev.vineengine.vine.data.VoxelView;
+
 /**
  * Zero-copy live read view (sub-03 §2): wraps one compound node, no traversal
  * on creation, no defensive copies on read. Delegates straight to

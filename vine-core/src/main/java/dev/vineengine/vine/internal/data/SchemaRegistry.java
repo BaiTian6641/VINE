@@ -6,6 +6,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
+import dev.vineengine.vine.data.VoxelData;
+import dev.vineengine.vine.data.VoxelDataFixer;
+import dev.vineengine.vine.data.VoxelSchema;
 import dev.vineengine.vine.registry.VineId;
 
 /**

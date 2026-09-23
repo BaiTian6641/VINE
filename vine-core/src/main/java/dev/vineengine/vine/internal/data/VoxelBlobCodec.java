@@ -9,6 +9,9 @@ import java.io.UncheckedIOException;
 import java.util.Map;
 import java.util.Objects;
 
+import dev.vineengine.vine.data.VoxelData;
+import dev.vineengine.vine.data.VoxelDataFixer;
+import dev.vineengine.vine.data.VoxelType;
 import dev.vineengine.vine.registry.VineId;
 
 /**
