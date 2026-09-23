@@ -1,0 +1,100 @@
+// sub-22 Stage A purity gate (sub-22 §2) — applied to vine-testmod and to each
+// versions/* cell project. Three checks, all fail-the-build:
+//
+//  1. Classpath isolation: the compile classpath resolves to vine-api +
+//     vine-client-api (+ the §5.1 DFU carve-out library they carry) and
+//     nothing else. Drivers enter at runtime only, so this check cannot be
+//     gamed the way a text grep can.
+//  2. Forbidden-pattern grep across src/main (the exact list in sub-22 §2).
+//  3. No source duplication: no .java file may live outside the declared main
+//     java srcDirs — versions/* cells point their srcDirs at the shared root,
+//     so any per-cell source file trips this.
+
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+import org.gradle.api.artifacts.component.ProjectComponentIdentifier
+import org.gradle.api.artifacts.result.ResolvedDependencyResult
+
+def forbiddenPatterns = [
+    'net\\.minecraft',
+    'net\\.neoforged',
+    'net\\.fabricmc',
+    'Mixin',
+    '//\\?',
+    '@VineUnsafe',
+].collect { java.util.regex.Pattern.compile(it) }
+
+def allowedProjects = [':vine-api', ':vine-client-api'] as Set
+
+// Configuration-cache-safe capture: everything the execution closure touches is
+// resolved to providers/values at configuration time (no script objects, no
+// project lookups at execution).
+def mainTree = fileTree(layout.projectDirectory.dir('src/main'))
+def compileRoot = configurations.compileClasspath.incoming.resolutionResult.rootComponent
+def javaRoots = sourceSets.main.java.srcDirs.collect { it.absoluteFile.toPath().normalize().toString() }
+def projectJavaTree = fileTree(projectDir) {
+    include '**/*.java'
+    // Build output and Gradle metadata are not sources — at any depth, so the
+    // parent project does not sweep versions/*/build into its tree.
+    exclude 'build/**', '**/build/**', '.gradle/**', '**/.gradle/**'
+}
+def gateProjectPath = project.path
+
+tasks.register('purityGate') {
+    group = 'verification'
+    description = 'sub-22 purity gate: classpath isolation + forbidden-pattern grep + no-duplication.'
+
+    inputs.files(mainTree)
+    inputs.files(projectJavaTree)
+    inputs.files(configurations.named('compileClasspath'))
+
+    doLast {
+        def failures = []
+
+        // 1 — classpath isolation: the project's own (first-level) compile
+        // dependencies must be exactly the two API projects. Everything below
+        // them (the §5.1 DFU carve-out and its library closure) is vine-api's
+        // own contract, gated separately by ci/prime-invariant.sh.
+        compileRoot.get().dependencies.each { dep ->
+            if (!(dep instanceof ResolvedDependencyResult)) {
+                return
+            }
+            def id = dep.selected.id
+            if (!(id instanceof ProjectComponentIdentifier) || !(id.projectPath in allowedProjects)) {
+                failures << "classpath-isolation: ${id.displayName} is a direct compile dependency of" +
+                    " ${gateProjectPath} (allowed: vine-api, vine-client-api)"
+            }
+        }
+
+        // 2 — forbidden-pattern grep over every file under src/main.
+        mainTree.files.each { f ->
+            f.eachLine('UTF-8') { line, n ->
+                forbiddenPatterns.each { p ->
+                    if (p.matcher(line).find()) {
+                        failures << "forbidden-pattern: ${f.absolutePath}:${n} matches /${p.pattern()}/ — ${line.trim()}"
+                    }
+                }
+            }
+        }
+
+        // 3 — no source duplication: every .java under the project dir must be
+        // inside a declared main java srcDir (cells srcDir the shared root, so
+        // any file physically under a cell dir is duplication).
+        projectJavaTree.files.each { f ->
+            def path = f.absoluteFile.toPath().normalize().toString()
+            if (!javaRoots.any { path.startsWith(it) }) {
+                failures << "no-duplication: ${f.absolutePath} lives outside the shared main java srcDirs"
+            }
+        }
+
+        if (!failures.isEmpty()) {
+            throw new GradleException(
+                "purity gate FAILED for ${gateProjectPath} (${failures.size()} violation(s)):\n  " +
+                failures.join('\n  '))
+        }
+        logger.lifecycle("purity gate OK for ${gateProjectPath}")
+    }
+}
+
+tasks.named('check') {
+    dependsOn 'purityGate'
+}

@@ -2,9 +2,17 @@ plugins {
     id 'vine.java-shared'
 }
 
+// sub-22 Stage A: the Prime Invariant's testmod-side enforcement — classpath
+// isolation + forbidden-pattern grep + no per-cell source duplication.
+// `check` (hence CI's :vine-testmod:build) runs it.
+apply from: 'purity-gate.gradle'
+
 dependencies {
     // Consumer-style mod (sub-22): compiles against the API ONLY — this
     // dependency edge is the Prime Invariant's build-level enforcement.
     api project(':vine-api')
     api project(':vine-client-api')
 }
+
+// Per-cell jars compile the same sources; the gate covers their classpaths and
+// duplication from their own projects (each cell applies purity-gate.gradle).

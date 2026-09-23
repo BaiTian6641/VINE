@@ -26,6 +26,10 @@ include 'vine-tck'
 // (sub-21 §2): vine-tck hosts the Gradle wiring, tck-core the code.
 include 'vine-tck:tck-core'
 include 'vine-testmod'
+// sub-22 §6 per-cell consumer jars: same src/main/java as vine-testmod,
+// re-linked driver dependencies (runtime-only), no source copying.
+include 'vine-testmod:versions:1.21.1-neoforge'
+include 'vine-testmod:versions:1.21.1-fabric'
 
 // Driver subprojects (sub-00 stages B/C): one per cell. Their toolchain plugins
 // (ModDevGradle / fabric-loom) apply only inside their own subproject, never at

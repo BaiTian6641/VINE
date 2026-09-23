@@ -1,0 +1,8 @@
+{
+  "id": "vine_test:packet_echo",
+  "tags": ["SMOKE", "NETWORK"],
+  "steps": [
+    { "type": "SendPacket", "channel": "vine_test:echo", "payload": { "number": 7, "text": "ping" } },
+    { "type": "AssertTrace", "trace": "echo", "expect": ["c2s-received", "s2c-received"] }
+  ]
+}

@@ -1,6 +1,6 @@
 # SUB-22 — Testmod
 
-> **Status:** `planning` — one of `planning | in-progress | blocked(<reason>) | done`
+> **Status:** `in-progress` — one of `planning | in-progress | blocked(<reason>) | done`
 > **Milestone:** M0 + continuous · **Depends on:** SUB-00, SUB-02 · **Blocks:** the M0 acceptance gate jointly with SUB-18 + SUB-21; M4 thesis gate with SUB-19
 > **Cells:** all (M0: 1.21.1 only; 26.x joins at M4) · **Loaders:** both
 > **Master plan:** §5.0, §5.1, §6, §7, §10 (M0, M4) · **Module(s):** vine-testmod
@@ -71,7 +71,7 @@ vine-testmod/
 
 ### Stage A — Skeleton + purity gate + M0 content
 
-- [ ] **Do:** §6 layout with `versions/1.21.1-{neoforge,fabric}`; purity gate
+- [x] **Do:** §6 layout with `versions/1.21.1-{neoforge,fabric}`; purity gate
   CI steps (classpath isolation + forbidden greps); M0 exemplars: one block,
   one item, one engine event, one packet echo, one command — the minimal
   engine command per sub-06 Stage A (the full consumer command exemplar is

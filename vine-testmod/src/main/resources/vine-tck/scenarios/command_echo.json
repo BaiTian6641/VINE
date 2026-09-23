@@ -1,0 +1,8 @@
+{
+  "id": "vine_test:command_echo",
+  "tags": ["SMOKE"],
+  "steps": [
+    { "type": "RunCommand", "command": "vine_test echo hello" },
+    { "type": "AssertTrace", "trace": "command", "expect": ["echo: hello"] }
+  ]
+}

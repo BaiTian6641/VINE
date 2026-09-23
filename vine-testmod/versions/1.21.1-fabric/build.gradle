@@ -1,0 +1,49 @@
+// §6 per-cell consumer jar (sub-22 Stage A): re-links dependencies and
+// repackages resources, compiling the SAME src/main/java as the parent —
+// no preprocessor plugin, no source copying.
+
+plugins {
+    id 'java-library'
+}
+
+group = 'dev.vineengine'
+version = '0.1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+    // DataFixerUpper (the §5.1 DFU carve-out, carried by vine-api).
+    maven { url = 'https://libraries.minecraft.net/' }
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release.set(21)
+    options.compilerArgs += ['-parameters']
+}
+
+sourceSets {
+    main {
+        java.srcDir '../../src/main/java'
+        resources.srcDir '../../src/main/resources'
+    }
+}
+
+dependencies {
+    api project(':vine-api')
+    api project(':vine-client-api')
+    // Drivers enter at runtime only (sub-22 §2): this edge must never leak
+    // onto the compile classpath — the purity gate fails the build if it does.
+    runtimeOnly(project(':drivers:driver-1.21.1-fabric')) {
+        // The driver jar only: its loader/game dependencies are provisioned by
+        // the cell's runtime (dev run or install), never by the consumer.
+        transitive = false
+    }
+}
+
+apply from: '../../purity-gate.gradle'

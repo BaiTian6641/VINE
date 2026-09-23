@@ -1,0 +1,9 @@
+{
+  "id": "vine_test:block_place_break",
+  "tags": ["SMOKE"],
+  "steps": [
+    { "type": "PlaceBlock", "block": "vine_test:testblock", "pos": [0, 0, 0] },
+    { "type": "AssertData", "surface": "world", "ref": "vine_test:testblock", "expect": "present" },
+    { "type": "AssertData", "surface": "world", "ref": "vine_test:testblock", "expect": "absent-after-break" }
+  ]
+}
