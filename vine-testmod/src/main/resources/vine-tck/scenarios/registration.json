@@ -1,8 +1,28 @@
 {
   "id": "vine_test:registration",
-  "tags": ["SMOKE"],
+  "tags": [
+    "SMOKE"
+  ],
   "steps": [
-    { "type": "AssertData", "surface": "registry-java", "ref": "vinetest:example", "expect": "present" },
-    { "type": "AssertData", "surface": "registry-json", "ref": "vinetest:example", "expect": "identical-id" }
+    {
+      "type": "AssertData",
+      "surface": "registry-java",
+      "ref": "vinetest:example",
+      "expect": "present"
+    },
+    {
+      "type": "AssertData",
+      "surface": "registry-json",
+      "ref": "vinetest:example",
+      "expect": "identical-id"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "json",
+      "expect": [
+        "structural JSON: registered 1, identical 1",
+        "structural json json_only present=true weight=7"
+      ]
+    }
   ]
 }

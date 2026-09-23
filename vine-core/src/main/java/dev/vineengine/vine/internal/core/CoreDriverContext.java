@@ -62,8 +62,8 @@ final class CoreDriverContext implements VineDriver.DriverContext {
     public void mountWorldStore(WorldStoreSpi spi) {
         WorldStoreSpi store = Objects.requireNonNull(spi, "spi");
         idMap.mount(store);
-        // Complete the map in registration order (sub-02 Stage D): the world's
-        // numbering must not depend on which entries a consumer reads first.
+        // Complete the map in key order (sub-02 Stage D): a world's numbering must
+        // not depend on read order, registration order, or which cell runs it.
         idMap.assignMissing(registries.structuralKeys());
         sessions.mount(store);
     }

@@ -19,6 +19,7 @@ import dev.vineengine.vine.VineInitializer;
 public final class ConsumerInitializers {
 
     private static boolean ran;
+    private static final java.util.List<VineInitializer> LOADED = new java.util.ArrayList<>();
 
     private ConsumerInitializers() {
     }
@@ -30,7 +31,40 @@ public final class ConsumerInitializers {
         }
         ran = true;
         for (VineInitializer initializer : ServiceLoader.load(VineInitializer.class)) {
+            LOADED.add(initializer);
             initializer.init();
         }
+    }
+
+    /**
+     * Filesystem locations of the consumer jars/class dirs that provide
+     * initializers, plus their dev-mode resources siblings — the roots the
+     * structural JSON scan can read even when a mod loader (FML's secure jars)
+     * hides mod resources from {@code ClassLoader#getResources}.
+     */
+    public static synchronized java.util.List<java.nio.file.Path> codeSources() {
+        java.util.List<java.nio.file.Path> out = new java.util.ArrayList<>();
+        for (VineInitializer initializer : LOADED) {
+            var source = initializer.getClass().getProtectionDomain().getCodeSource();
+            if (source == null || source.getLocation() == null) {
+                continue;
+            }
+            try {
+                java.nio.file.Path path = java.nio.file.Path.of(source.getLocation().toURI());
+                out.add(path);
+                // Dev classpaths split classes and resources into siblings.
+                if (path.endsWith(java.nio.file.Path.of("classes", "java", "main"))) {
+                    java.nio.file.Path module = path.getParent().getParent().getParent().getParent();
+                    java.nio.file.Path resources =
+                        module.resolve(java.nio.file.Path.of("build", "resources", "main"));
+                    if (java.nio.file.Files.isDirectory(resources)) {
+                        out.add(resources);
+                    }
+                }
+            } catch (Exception e) {
+                // unlocatable consumer: skip
+            }
+        }
+        return out;
     }
 }

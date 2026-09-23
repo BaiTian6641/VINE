@@ -50,12 +50,33 @@ public final class DescriptorStore {
     }
 
     /**
-     * Structural id-map keys in registration order (sub-02 Stage D): after the
-     * world map mounts, the engine assigns ids for these in exactly this order,
-     * so a world's numbering never depends on read order.
+     * Every structural id-map key, sorted (sub-02 Stage D): after the world map
+     * mounts, the engine assigns ids in this order, so a world's numbering never
+     * depends on read order, registration order, or the loader cell.
      */
     public synchronized java.util.List<String> structuralKeys() {
-        return List.copyOf(structuralRegistrationOrder);
+        java.util.List<String> sorted = new ArrayList<>(structuralRegistrationOrder);
+        java.util.Collections.sort(sorted);
+        return List.copyOf(sorted);
+    }
+
+    /** Registry ids of every defined structural type (JSON discovery filter). */
+    public synchronized java.util.Set<VineId> structuralRegistryIds() {
+        java.util.Set<VineId> ids = new java.util.LinkedHashSet<>();
+        for (TypeEntries<?> entries : types.values()) {
+            if (entries.type.descriptorClass() == DescriptorClass.STRUCTURAL) {
+                ids.add(entries.type.registryId());
+            }
+        }
+        return ids;
+    }
+
+    /** The defined structural type for {@code registryId}, or null. */
+    public synchronized DescriptorType<?> structuralType(VineId registryId) {
+        TypeEntries<?> entries = types.get(registryId);
+        return entries != null && entries.type.descriptorClass() == DescriptorClass.STRUCTURAL
+            ? entries.type
+            : null;
     }
 
     /** Sets a namespace's missing-content policy. */

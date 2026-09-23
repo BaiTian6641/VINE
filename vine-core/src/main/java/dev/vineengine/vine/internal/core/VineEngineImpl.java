@@ -37,6 +37,7 @@ import dev.vineengine.vine.internal.data.SchemaRegistry;
 import dev.vineengine.vine.internal.data.VoxelBlobCodec;
 import dev.vineengine.vine.internal.data.VoxelStorageBinding;
 import dev.vineengine.vine.internal.registry.IdMapStore;
+import dev.vineengine.vine.internal.registry.StructuralJsonLoader;
 import dev.vineengine.vine.internal.net.VineNetImpl;
 import dev.vineengine.vine.internal.registry.DescriptorStore;
 import dev.vineengine.vine.internal.session.SessionService;
@@ -101,6 +102,19 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
         registries.defineType(VineContent.BLOCK_TYPE);
         registries.defineType(VineContent.ITEM_TYPE);
         machine.onPhase(EnginePhase.REGISTRIES_FROZEN, change -> {
+            // Structural JSON authoring (sub-02 Stage F) lands before the freeze:
+            // consumer types are defined, and JSON entries become ordinary
+            // registrations — read once, never hot-reloadable.
+            StructuralJsonLoader.Result jsonResult = StructuralJsonLoader.load(registries,
+                Thread.currentThread().getContextClassLoader() != null
+                    ? Thread.currentThread().getContextClassLoader()
+                    : VineEngineImpl.class.getClassLoader(),
+                ConsumerInitializers.codeSources());
+            // Logged for the TCK's cross-loader parity check; zero-work boots stay silent.
+            if (jsonResult.registered() + jsonResult.identicalTwins() > 0) {
+                LOG.log(System.Logger.Level.INFO, "[VINE] structural JSON: registered "
+                    + jsonResult.registered() + ", identical " + jsonResult.identicalTwins());
+            }
             registries.freeze();
             net.freezeAndSync();
             commands.freeze();

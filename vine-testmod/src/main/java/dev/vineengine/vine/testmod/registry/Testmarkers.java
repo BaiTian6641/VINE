@@ -29,6 +29,8 @@ public final class Testmarkers {
      * scenario can make content appear and disappear across reboots and watch
      * the persistent id map's missing-content policy.
      */
+    /** JSON-only entry (sub-02 Stage F): no Java registration, shipped as data/. */
+    public static final VineId JSON_ONLY_ID = VineId.of("vinetest", "json_only");
     public static final VineId OPTIONAL_ID = VineId.of("vinetest", "optional");
     public static final VineId OPTIONAL2_ID = VineId.of("vinetest", "optional2");
     private static final java.nio.file.Path OPTIONAL_FLAG =
@@ -90,6 +92,12 @@ public final class Testmarkers {
                     "testmod marker vanished at freeze — structural registration broken"));
             System.out.println("vine-testmod: marker holder resolved post-freeze id="
                 + holder.id() + " runtimeId=" + holder.runtimeId());
+            // Stage F: a JSON-only entry must resolve through the same path.
+            var jsonOnly = VineRegistries.get(TestmarkerType.INSTANCE, JSON_ONLY_ID)
+                .orElseThrow(() -> new IllegalStateException(
+                    "JSON-only marker missing at freeze — structural JSON loading broken"));
+            System.out.println("vine-testmod: structural json json_only present=true weight="
+                + jsonOnly.value().weight());
         });
     }
 }

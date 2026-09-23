@@ -164,7 +164,9 @@ retained), `DROP`, `FAIL` (refuse load).
     world load) — the stored blob is now authoritative (restore clears first)
     and ids resolve through the map; (2) a world's numbering must not depend on
     which entry a consumer reads first — after mount the engine assigns ids for
-    every registered structural entry in *registration order*.
+    every remaining structural entry in *key order*, so a world's numbering is
+    stable across cells and runs (entries read before mount keep the ids those
+    reads assigned, which the engine's own freeze-time reads fix deterministically).
   - **Evidence:** `build/sub02d` harness — 10 checks green (stable assignment,
     snapshot/restore, KEEP retains the slot, DROP releases it, FAIL refuses with
     an explicit message); new `vine_test:id_map_policy` TCK scenario drives
@@ -193,10 +195,32 @@ retained), `DROP`, `FAIL` (refuse load).
 
 ### Stage F — JSON authoring for structural + extension-point hardening
 
-- [ ] **Do:** startup JSON load for structural descriptors (jar + datapack
+- [x] **Do:** startup JSON load for structural descriptors (jar + datapack
   locations, read before freeze); consumer-defined `DescriptorType` proven
   end-to-end (Java + JSON + design sync). Touches: vine-api, vine-core,
   drivers, vine-testmod.
+  - **Landed 2026-09-24:** `StructuralJsonLoader` reads every classpath resource
+    shaped `data/<entry-ns>/<registry-ns>/<registry-path>/<entry>.json` whose
+    registry is a defined structural type, decodes it with that type's `Codec`,
+    and registers it in the `REGISTRIES_FROZEN` hook *before* the freeze —
+    JSON and Java authoring are one path, read exactly once, never
+    hot-reloadable. A JSON entry whose id is Java-registered must decode to the
+    identical value (verified twin, skipped, no duplicate registration);
+    divergent twins fail the boot loudly. Discovery is sorted, so registration
+    order is cell-identical.
+  - **Discovery, as found by two live failures:** `java.class.path` is nearly
+    empty under Loom/MDG launchers, and FML's secure jars hide mod resources
+    from `ClassLoader#getResources` in MDG dev runs (only union Neoforge-jar
+    roots appear). The loader therefore scans classloader `data` roots *plus*
+    each consumer's code source (jar) — including the dev-mode
+    `build/resources/main` sibling of a `build/classes/java/main` dir, located
+    through the discovered initializers' protection domains.
+  - **Evidence:** the testmod ships a JSON-only marker
+    (`data/vinetest/vinetest/marker/json_only.json`) and the Java twin
+    (`example.json` ≡ `Testmarker("example", 1)`); the `registration` scenario
+    asserts `structural JSON: registered 1, identical 1` and the post-freeze
+    resolution `structural json json_only present=true weight=7`.
+    **13/13 scenarios PASS on both 1.21.1 cells.**
 - **Acceptance:** TCK: external-style design type loads from a datapack and
   syncs; structural JSON entry ≡ its Java-registered twin. Both 1.21.1 drivers.
 - **Bootstrap prompt:**
