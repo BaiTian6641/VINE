@@ -34,6 +34,15 @@ final class PhaseMachine {
 
     private final EnumMap<EnginePhase, List<PhaseSubscription>> pending = new EnumMap<>(EnginePhase.class);
     private EnginePhase current;
+    private Consumer<EnginePhase> transitionListener;
+
+    /**
+     * Installs the transition listener fired on every phase entry (the engine
+     * routes {@code PhaseChange} onto the event bus through it, sub-01 Stage B).
+     */
+    synchronized void onTransition(Consumer<EnginePhase> listener) {
+        this.transitionListener = listener;
+    }
 
     /** Current phase, or {@code null} before {@link EnginePhase#VINE_BOOT} is entered. */
     synchronized EnginePhase current() {
@@ -85,6 +94,10 @@ final class PhaseMachine {
     /** Caller holds the lock. */
     private void enter(EnginePhase phase) {
         LOG.log(System.Logger.Level.INFO, "[VINE] phase " + phase.name());
+        Consumer<EnginePhase> listener = transitionListener;
+        if (listener != null) {
+            listener.accept(phase);
+        }
         List<PhaseSubscription> subs = pending.remove(phase);
         if (subs != null) {
             for (PhaseSubscription sub : subs) {

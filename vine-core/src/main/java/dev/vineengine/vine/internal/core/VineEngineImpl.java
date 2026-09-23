@@ -8,6 +8,7 @@ import java.util.ServiceLoader;
 import java.util.function.Consumer;
 
 import dev.vineengine.vine.EnginePhase;
+import dev.vineengine.vine.EventBus;
 import dev.vineengine.vine.Subscription;
 import dev.vineengine.vine.VineEngine;
 import dev.vineengine.vine.capability.CapabilityProvider;
@@ -72,6 +73,7 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
     private static final System.Logger LOG = System.getLogger(PhaseMachine.LOG_NAME);
 
     private final PhaseMachine machine = new PhaseMachine();
+    private final EngineEventBus bus = new EngineEventBus();
     private final DescriptorStore registries = new DescriptorStore();
     private final VineNetImpl net = new VineNetImpl();
     private final CommandService commands = new CommandService();
@@ -82,6 +84,9 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
     private final ConfigService config = new ConfigService();
 
     VineEngineImpl() {
+        // Phase changes are engine events too (sub-01 Stage B): every entry is
+        // posted to the bus, then the replaying one-shot subscribers fire.
+        machine.onTransition(entered -> bus.post(new PhaseChange(entered)));
         // Engine-owned content kinds (sub-07): defined before the driver boots
         // and before any consumer initializer runs, so registration under
         // VineContent tokens is legal from the first REGISTRIES_OPEN moment and
@@ -130,6 +135,11 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
     @Override
     public Subscription onPhase(EnginePhase phase, Consumer<PhaseChange> handler) {
         return machine.onPhase(phase, handler);
+    }
+
+    @Override
+    public EventBus events() {
+        return bus;
     }
 
     @Override

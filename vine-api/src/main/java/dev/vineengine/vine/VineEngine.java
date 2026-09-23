@@ -41,8 +41,16 @@ public interface VineEngine {
     Subscription onPhase(EnginePhase phase, Consumer<PhaseChange> handler);
 
     /**
-     * Fired when the engine enters a phase. Routed through the engine's phase
-     * machine (and, from Stage B on, the event bus).
+     * The engine event bus (sub-01 Stage B). Every engine signal — phase changes
+     * included — is delivered through it; handlers are typed, priority-ordered,
+     * error-isolated, and cancellable per {@link EventBus}.
+     */
+    EventBus events();
+
+    /**
+     * Fired when the engine enters a phase. Delivered both to the replaying
+     * phase machine's {@link #onPhase} subscribers and, as an ordinary event,
+     * to {@link #events()} handlers.
      */
     record PhaseChange(EnginePhase entered) implements VineEvent {
     }
