@@ -100,7 +100,7 @@ persist, world SavedData) — drivers never hand-write cap NBT.
 
 ### Stage A — type registry + fallback store core
 
-- [ ] **Do:** `CapabilityType` registry, built-in energy/fluid/inventory
+- [x] **Do:** `CapabilityType` registry, built-in energy/fluid/inventory
   interfaces, fallback store on VoxelData, instance cache. Pure JVM, zero MC
   imports.
 - **Acceptance:** vine-core unit: register a custom stateful type, attach to a
@@ -114,7 +114,7 @@ persist, world SavedData) — drivers never hand-write cap NBT.
 
 ### Stage B — API surface + SPI
 
-- [ ] **Do:** public API per §2 into vine-api (`CapabilityScope`,
+- [x] **Do:** public API per §2 into vine-api (`CapabilityScope`,
   `ClonePolicy`, sealed targets); `CapabilityDriver` SPI into vine-spi;
   testmod registers one custom capability type.
 - **Acceptance:** compiles (Java 21); testmod custom type registers on both

@@ -10,16 +10,22 @@ import java.util.function.Consumer;
 import dev.vineengine.vine.EnginePhase;
 import dev.vineengine.vine.Subscription;
 import dev.vineengine.vine.VineEngine;
+import dev.vineengine.vine.capability.CapabilityProvider;
+import dev.vineengine.vine.capability.CapabilityScope;
+import dev.vineengine.vine.capability.CapabilityTarget;
+import dev.vineengine.vine.capability.CapabilityType;
 import dev.vineengine.vine.command.VineCommands;
 import dev.vineengine.vine.content.VineContent;
 import dev.vineengine.vine.data.VoxelData;
 import dev.vineengine.vine.data.VoxelDataFixer;
 import dev.vineengine.vine.data.VoxelSchema;
 import dev.vineengine.vine.data.VoxelTarget;
+import dev.vineengine.vine.internal.CapabilityBackend;
 import dev.vineengine.vine.internal.CommandBackend;
 import dev.vineengine.vine.internal.NetBackend;
 import dev.vineengine.vine.internal.RegistryBackend;
 import dev.vineengine.vine.internal.VoxelBackend;
+import dev.vineengine.vine.internal.capability.CapabilityStore;
 import dev.vineengine.vine.internal.command.CommandService;
 import dev.vineengine.vine.internal.data.SchemaRegistry;
 import dev.vineengine.vine.internal.data.VoxelStorageBinding;
@@ -53,7 +59,8 @@ import dev.vineengine.vine.registry.VineId;
  * Footprint §5.1). §2's "zero or ≥2 ⇒ explicit boot failure" rule is restored when
  * real drivers exist.
  */
-final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, CommandBackend, VoxelBackend {
+final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, CommandBackend,
+        VoxelBackend, CapabilityBackend {
 
     private static final System.Logger LOG = System.getLogger(PhaseMachine.LOG_NAME);
 
@@ -63,6 +70,7 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
     private final CommandService commands = new CommandService();
 
     private final SchemaRegistry schemas = new SchemaRegistry();
+    private final CapabilityStore capabilities = new CapabilityStore();
 
     VineEngineImpl() {
         // Engine-owned content kinds (sub-07): defined before the driver boots
@@ -76,6 +84,7 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
             net.freezeAndSync();
             commands.freeze();
             schemas.freeze();
+            capabilities.freeze();
         });
         // Engine state install before any driver can bind (net-seam ordering rule)
         VoxelStorageBinding.engineRegistry(schemas);
@@ -181,5 +190,42 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
                 "no VoxelStorageDriver bound — attach-point access needs a cell driver (headless runtimes use VineData.create)");
         }
         return storage.open(target, schemaId);
+    }
+
+    // ------------------------------------------------------------------
+    // CapabilityBackend (sub-04): delegate to the engine capability store.
+    // ------------------------------------------------------------------
+
+    @Override
+    public <T> CapabilityType<T> register(CapabilityType<T> type) {
+        return capabilities.register(type);
+    }
+
+    @Override
+    public <T> void attach(CapabilityType<T> type, CapabilityScope scope,
+            CapabilityProvider<T> provider) {
+        capabilities.attach(type, scope, provider);
+    }
+
+    @Override
+    public <T> Optional<T> find(CapabilityType<T> type, CapabilityTarget target) {
+        return capabilities.find(type, target);
+    }
+
+    @Override
+    public <T> Optional<T> findForeign(VineId nativeId, Class<T> apiClass,
+            CapabilityTarget target) {
+        return capabilities.findForeign(nativeId, apiClass, target);
+    }
+
+    @Override
+    public void invalidate(CapabilityTarget target) {
+        capabilities.invalidate(target);
+    }
+
+    @Override
+    public <T> void applyClone(CapabilityType<T> type, CapabilityTarget oldTarget,
+            CapabilityTarget newTarget) {
+        capabilities.applyClone(type, oldTarget, newTarget);
     }
 }

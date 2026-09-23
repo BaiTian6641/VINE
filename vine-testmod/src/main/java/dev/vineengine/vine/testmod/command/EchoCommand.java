@@ -45,6 +45,11 @@ public final class EchoCommand {
                             ctx.feedback("tck: sent echo number=" + number + " text=" + text);
                             return 1;
                         }))))
+            .then(VineCommand.literal("tck_caps")
+                .executes(ctx -> {
+                    dev.vineengine.vine.testmod.capability.CapabilityExemplar.runProof();
+                    return 1;
+                }))
             .build(VineId.of("vinetest", MOD_ID)));
     }
 }

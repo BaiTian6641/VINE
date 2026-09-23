@@ -257,24 +257,40 @@ public final class ScenarioRunner {
         var pos = step.getAsJsonArray("pos");
         lastPlacePos = new int[] {pos.get(0).getAsInt(), pos.get(1).getAsInt(), pos.get(2).getAsInt()};
         lastPlaceBlock = step.get("block").getAsString();
-        // A fresh world keeps no chunks loaded at console time — vanilla
-        // rejects the setblock with "That position is not loaded". Force-load
-        // the target chunk first (the sub-07 wave's console proof did exactly
-        // this), then place. Re-adding an already-forced chunk prints nothing,
-        // so the forceload is issued (and awaited) once per boot per chunk.
-        long chunkKey = (lastPlacePos[0] & 0xFFFFFFFFL) | (lastPlacePos[2] & 0xFFFFFFFFL) << 32;
-        if (forceloaded.add(chunkKey)) {
-            int fl = mark();
-            send("forceload add " + lastPlacePos[0] + " " + lastPlacePos[2]);
-            String loaded = await(fl, line -> line.contains("Marked chunk"), "forceload confirmation");
-            if (loaded != null) {
-                return loaded;
+        return probeSetblock(lastPlacePos, lastPlaceBlock, true, "setblock change confirmation");
+    }
+
+    /**
+     * One setblock probe with forceload and a single unloaded-chunk retry.
+     *
+     * <p>A fresh (or freshly rebooted) world keeps no chunks loaded at console
+     * time — vanilla rejects the setblock with "That position is not loaded".
+     * The target chunk is force-loaded first; re-adding an already-forced chunk
+     * prints nothing, so forceload runs once per boot per chunk (deduped), and
+     * on an unloaded-chunk outcome the dedup entry is dropped and both steps
+     * re-issued once.
+     */
+    private String probeSetblock(int[] pos, String block, boolean passOnChanged, String what)
+            throws IOException {
+        long chunkKey = (pos[0] & 0xFFFFFFFFL) | (pos[2] & 0xFFFFFFFFL) << 32;
+        for (int attempt = 0; attempt < 2; attempt++) {
+            if (forceloaded.add(chunkKey)) {
+                int fl = mark();
+                send("forceload add " + pos[0] + " " + pos[2]);
+                String loaded = await(fl, line -> line.contains("Marked chunk"), "forceload confirmation");
+                if (loaded != null) {
+                    return loaded;
+                }
             }
+            int from = mark();
+            send("setblock " + pos[0] + " " + pos[1] + " " + pos[2] + " " + block);
+            String outcome = awaitSetblock(from, passOnChanged, what);
+            if (outcome == null || !outcome.startsWith("RETRY:")) {
+                return outcome;
+            }
+            forceloaded.remove(chunkKey);
         }
-        int from = mark();
-        send("setblock " + lastPlacePos[0] + " " + lastPlacePos[1] + " " + lastPlacePos[2]
-                + " " + lastPlaceBlock);
-        return await(from, line -> line.contains("Changed the block at"), "setblock change confirmation");
+        return "timed out awaiting " + what + " (chunk stayed unloaded across retry)";
     }
 
     private String assertData(JsonObject step) throws IOException {
@@ -283,20 +299,17 @@ public final class ScenarioRunner {
         String expect = step.get("expect").getAsString();
         switch (surface) {
             case "world" -> {
-                String p = lastPlacePos[0] + " " + lastPlacePos[1] + " " + lastPlacePos[2];
                 // Console-safe probes: `execute if block` NPEs fatally from the
                 // dedicated console (level-less source), so presence is proven
                 // by setblock outcomes instead. Every scenario ends slot-empty:
                 // present removes via "Changed"; absence is air→air "Could not set".
                 if ("present".equals(expect)) {
-                    int from = mark();
-                    send("setblock " + p + " air");
-                    return awaitSetblock(from, true, "block present (removal changed the slot)");
+                    return probeSetblock(lastPlacePos, "air", true,
+                            "block present (removal changed the slot)");
                 }
                 if ("absent-after-break".equals(expect)) {
-                    int from = mark();
-                    send("setblock " + p + " air");
-                    return awaitSetblock(from, false, "slot absent (air→air rejected)");
+                    return probeSetblock(lastPlacePos, "air", false,
+                            "slot absent (air→air rejected)");
                 }
                 return "unknown world expect: " + expect;
             }
@@ -401,6 +414,12 @@ public final class ScenarioRunner {
                         return passOnChanged
                                 ? what + ": setblock reported 'Could not set the block'"
                                 : null;
+                    }
+                    if (line.contains("That position is not loaded")) {
+                        // Retryable: a post-reboot world may not have the chunk
+                        // loaded yet even after forceload. Callers re-forceload
+                        // and re-send once (see probeSetblock).
+                        return "RETRY:" + what;
                     }
                 }
                 if (!server.isAlive()) {
