@@ -1,0 +1,22 @@
+plugins {
+    // Toolchain plugin applied ONLY inside this subproject (sub-00 §4). 1.21.1
+    // is obfuscated, so this is the remapping loom (Yarn + intermediary).
+    alias(libs.plugins.fabricLoomRemap)
+    id 'vine.driver-1.21.1-fabric'
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${libs.versions.mc1211.get()}"
+    mappings "net.fabricmc:yarn:${libs.versions.yarn1211.get()}:v2"
+    modImplementation "net.fabricmc:fabric-loader:${libs.versions.fabricLoader.get()}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${libs.versions.fabricApi1211.get()}"
+}
+
+loom {
+    runs {
+        server {
+            server()
+            programArgs '--nogui'
+        }
+    }
+}

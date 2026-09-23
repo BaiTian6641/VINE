@@ -1,0 +1,30 @@
+plugins {
+    // Toolchain plugin applied ONLY inside this subproject (sub-00 §4); shared
+    // java/dependency wiring lives in the per-cell convention below.
+    alias(libs.plugins.moddevgradle)
+    id 'vine.driver-1.21.1-neoforge'
+}
+
+neoForge {
+    version = libs.versions.neoforge1211.get()
+
+    // Mojmap + Parchment parameter names/javadoc (1.21.1 is still obfuscated,
+    // unlike the 26.x cells).
+    parchment {
+        minecraftVersion = libs.versions.mc1211.get()
+        mappingsVersion = libs.versions.parchment1211.get()
+    }
+
+    runs {
+        server {
+            server()
+            programArgument '--nogui'
+        }
+    }
+
+    mods {
+        vine {
+            sourceSet sourceSets.main
+        }
+    }
+}

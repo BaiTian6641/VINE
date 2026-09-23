@@ -2,13 +2,16 @@ pluginManagement {
     repositories {
         gradlePluginPortal()
         mavenCentral()
+        // Loom plugin markers live on Fabric's maven, not the plugin portal.
+        maven { url = 'https://maven.fabricmc.net/' }
     }
 }
-
 plugins {
     // Auto-provision JDK toolchains (21 for shared/1.21.1, 25 for 26.x drivers).
-    id 'org.gradle.toolchains.foojay-resolver-convention' version '0.10.0'
+    // 1.0.0: 0.10.0 references JvmVendorSpec.IBM_SEMERU, removed in Gradle 9.
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
 }
+
 
 rootProject.name = 'vine'
 
@@ -21,8 +24,12 @@ include 'vine-spi'
 include 'vine-tck'
 include 'vine-testmod'
 
-// Driver subprojects land in drivers/ at sub-00 stages B/C; their toolchain
-// plugins (ModDevGradle / fabric-loom) apply only inside their own subproject,
-// never at root (loom + MDG must never share a classpath, sub-00 §4).
+// Driver subprojects (sub-00 stages B/C): one per cell. Their toolchain plugins
+// (ModDevGradle / fabric-loom) apply only inside their own subproject, never at
+// root; loom and MDG never share a project classpath (sub-00 §4).
+include 'drivers:driver-1.21.1-neoforge'
+include 'drivers:driver-1.21.1-fabric'
+include 'drivers:driver-26.x-neoforge'
+include 'drivers:driver-26.x-fabric'
 
 includeBuild 'build-logic'

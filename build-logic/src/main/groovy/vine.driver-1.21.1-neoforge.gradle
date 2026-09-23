@@ -1,0 +1,34 @@
+// 1.21.1 NeoForge cell (sub-00 Stage B): Java 21 bytecode; Mojmap + Parchment
+// mappings via ModDevGradle. MDG itself is applied by alias in the subproject —
+// toolchain plugins never enter build-logic's classpath (sub-00 §4).
+plugins {
+    id 'java-library'
+}
+
+group = 'dev.vineengine'
+version = '0.1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://maven.neoforged.net/releases' }
+    maven { url = 'https://maven.parchmentmc.org' }
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release.set(21)
+    // Parameter names kept for descriptor/Codec introspection at runtime.
+    options.compilerArgs += ['-parameters']
+}
+
+dependencies {
+    implementation project(':vine-api')
+    implementation project(':vine-core')
+    implementation project(':vine-spi')
+}
