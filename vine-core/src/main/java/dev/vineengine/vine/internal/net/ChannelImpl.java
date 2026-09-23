@@ -13,6 +13,7 @@ import dev.vineengine.vine.net.ChannelSpec;
 import dev.vineengine.vine.net.Endpoint;
 import dev.vineengine.vine.net.MessageHandler;
 import dev.vineengine.vine.net.PayloadCodec;
+import dev.vineengine.vine.net.Validator;
 import dev.vineengine.vine.registry.VineId;
 
 /**
@@ -51,6 +52,14 @@ final class ChannelImpl implements Channel {
     public <P> void message(VineId id, Class<P> type, PayloadCodec<P> codec,
                             Endpoint endpoint, MessageHandler<P> handler) {
         registry.registerMessage(this, id, type, codec, endpoint, handler);
+        net.syncChannel(this);
+    }
+
+    @Override
+    public <P> void message(VineId id, Class<P> type, PayloadCodec<P> codec,
+                            Endpoint endpoint, java.util.List<Validator<P>> validators,
+                            MessageHandler<P> handler) {
+        registry.registerMessage(this, id, type, codec, endpoint, validators, handler);
         net.syncChannel(this);
     }
 

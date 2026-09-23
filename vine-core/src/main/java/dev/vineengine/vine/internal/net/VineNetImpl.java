@@ -8,6 +8,7 @@ import dev.vineengine.vine.internal.spi.NetDriver;
 import dev.vineengine.vine.net.Channel;
 import dev.vineengine.vine.net.ChannelSpec;
 import dev.vineengine.vine.net.CodecException;
+import dev.vineengine.vine.net.Validator;
 import dev.vineengine.vine.EventBus;
 import dev.vineengine.vine.hook.HookEvents;
 import dev.vineengine.vine.net.Endpoint;
@@ -120,6 +121,31 @@ public final class VineNetImpl implements VineNet {
         }
         NetContextImpl context = new NetContextImpl(from, mainThread);
         mainThread.execute(() -> {
+            // Validation runs on the server thread with the handler (sub-05
+            // Stage D): a hostile payload can never make a validator race the
+            // world, and a rejection can never leave a half-executed handler.
+            for (Validator<Object> validator : entry.validators()) {
+                Validator.Verdict verdict;
+                try {
+                    verdict = validator.validate(decoded, from);
+                } catch (RuntimeException e) {
+                    LOG.log(System.Logger.Level.WARNING, "[VINE] validator threw for " + wireId
+                        + " — payload dropped: " + e);
+                    return;
+                }
+                if (verdict != Validator.Verdict.ACCEPT) {
+                    if (verdict == Validator.Verdict.KICK) {
+                        // Kick request: reported with its own marker; the player
+                        // facade owns actual disconnection (documented seam).
+                        LOG.log(System.Logger.Level.WARNING, "[VINE] inbound " + wireId
+                            + " rejected (KICK requested) from " + from.name());
+                    } else {
+                        LOG.log(System.Logger.Level.WARNING, "[VINE] inbound " + wireId
+                            + " rejected by validator (dropped) from " + from.name());
+                    }
+                    return;
+                }
+            }
             try {
                 handler.handle(decoded, context);
             } catch (RuntimeException e) {

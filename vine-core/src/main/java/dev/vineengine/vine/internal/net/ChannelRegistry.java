@@ -12,6 +12,7 @@ import dev.vineengine.vine.net.ChannelSpec;
 import dev.vineengine.vine.net.Endpoint;
 import dev.vineengine.vine.net.MessageHandler;
 import dev.vineengine.vine.net.PayloadCodec;
+import dev.vineengine.vine.net.Validator;
 import dev.vineengine.vine.registry.VineId;
 
 /**
@@ -67,11 +68,23 @@ final class ChannelRegistry {
     synchronized <P> void registerMessage(ChannelImpl channel, VineId id, Class<P> type,
                                           PayloadCodec<P> codec, Endpoint endpoint,
                                           MessageHandler<P> handler) {
+        registerMessage(channel, id, type, codec, endpoint, List.of(), handler);
+    }
+
+    /** Validator-chain overload (sub-05 Stage D); validators are C2S-only. */
+    synchronized <P> void registerMessage(ChannelImpl channel, VineId id, Class<P> type,
+                                          PayloadCodec<P> codec, Endpoint endpoint,
+                                          List<Validator<P>> validators, MessageHandler<P> handler) {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(type, "type");
         Objects.requireNonNull(codec, "codec");
         Objects.requireNonNull(endpoint, "endpoint");
         Objects.requireNonNull(handler, "handler");
+        Objects.requireNonNull(validators, "validators");
+        if (!validators.isEmpty() && endpoint != Endpoint.SERVER) {
+            throw new IllegalStateException("validators guard inbound client payloads; message " + id
+                + " declares them for " + endpoint + " (a local payload needs no untrusted-input policy)");
+        }
         checkWritable("register message " + id);
         VineId wireId = wireId(channel.spec().id(), id);
         MessageEntry entry = byWireId.get(wireId);
@@ -82,6 +95,9 @@ final class ChannelRegistry {
         } else if (!entry.type.equals(type) || entry.codec != codec) {
             throw new IllegalStateException("message " + id + " on channel " + channel.spec().id()
                 + " re-registered with a different type or codec");
+        }
+        if (!validators.isEmpty()) {
+            entry.addValidators(validators);
         }
         entry.addHandler(endpoint, handler);
     }

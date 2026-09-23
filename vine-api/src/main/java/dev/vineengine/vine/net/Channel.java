@@ -38,6 +38,16 @@ public interface Channel {
                      Endpoint endpoint, MessageHandler<P> handler);
 
     /**
+     * Registers a C2S message with a validation chain (sub-05 Stage D): inbound
+     * payloads run codec bounds → validators (in order) → handler, all on the
+     * server thread. Validators are C2S-only; declaring one for an S2C message is
+     * a registration error, not a silent no-op.
+     */
+    <P> void message(VineId id, Class<P> type, PayloadCodec<P> codec,
+                     Endpoint endpoint, java.util.List<Validator<P>> validators,
+                     MessageHandler<P> handler);
+
+    /**
      * Sends a payload to one player (S2C). No-op with one log line if the
      * channel is not ready for that connection.
      *

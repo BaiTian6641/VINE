@@ -1,0 +1,27 @@
+{
+  "id": "vine_test:hostile_payload",
+  "tags": [
+    "SMOKE"
+  ],
+  "steps": [
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_flood 6"
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_fuzz"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "validation",
+      "expect": [
+        "validation handled seq=1 thread=Server thread",
+        "rejected by validator (dropped)",
+        "validation flood sent=6",
+        "dropping malformed inbound",
+        "validation fuzz sent=true"
+      ]
+    }
+  ]
+}

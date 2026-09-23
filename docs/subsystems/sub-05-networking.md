@@ -94,7 +94,28 @@ public enum Endpoint { SERVER, CLIENT }          // handler side
 
 ### Stage D — validation pipeline & hardening
 
-- [ ] **Do:** `Validator<P>` chain on C2S messages; `Validators.rateLimit` (per-player, per-message token bucket; engine-config defaults); reject = drop + structured log + optional kick; `enqueue` marshaling verified.
+- [x] **Do:** `Validator<P>` chain on C2S messages; `Validators.rateLimit` (per-player, per-message token bucket; engine-config defaults); reject = drop + structured log + optional kick; `enqueue` marshaling verified.
+  - **Landed 2026-09-24:** `Validator<P>` with `Verdict {ACCEPT, REJECT, KICK}`
+    and `Validators.rateLimit(perSecond, burst)` / `rateLimit()` (defaults from
+    `VineConfig` keys `net.rateLimit.perSecond`/`burst`; one fixed-size bucket
+    per player, so a flood cannot grow engine memory). The
+    `Channel.message(...)` overload takes the chain; declaring validators for an
+    S2C endpoint is a registration error, not a silent no-op. Dispatch order is
+    codec bounds → validators → handler, **all inside the server-thread
+    enqueue**, so a validator can never race the world and a rejection can never
+    leave a half-executed handler; a throwing validator drops the payload with
+    its own log line. `KICK` carries a distinct structured marker and degrades to
+    a drop until the player facade exposes disconnection (documented seam).
+  - **Evidence:** `vine_test:hostile_payload` TCK scenario — a 6-message flood
+    against a 2/sec-burst-2 limiter is accepted exactly twice on the **Server
+    thread** (`validation handled seq=1 … thread=Server thread`) and rejected four
+    times (`rejected by validator (dropped)`); a deliberately malformed frame
+    (encoder writes a list prefix its own decoder rejects) is dropped by the
+    bounds check with `dropping malformed inbound … list size 99 outside [0, 8]`
+    and its handler never runs. **17/17 scenarios PASS on both 1.21.1 cells.**
+  - **Fuzz coverage note:** frame-level fuzzing goes through the real dispatch
+    path with a hostile encoder; arbitrary byte-level fuzzing of the drivers'
+    own transport remains a sub-21 harness concern (loopback sink injection).
 - **Acceptance:** TCK hostile-payload scenario — fuzzed bytes + C2S flood: server stays up, limiter trips at budget, handlers never run off-thread.
 - **Touches:** vine-core validation dispatch, vine-api validator types, TCK.
 - **Bootstrap prompt:**

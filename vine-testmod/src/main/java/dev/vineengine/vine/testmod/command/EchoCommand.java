@@ -85,6 +85,18 @@ public final class EchoCommand {
                     dev.vineengine.vine.testmod.design.DesignProbeExemplar.report();
                     return 1;
                 }))
+            .then(VineCommand.literal("tck_flood")
+                .then(VineCommand.argument("count", VineArgumentTypes.STRING)
+                    .executes(ctx -> {
+                        dev.vineengine.vine.testmod.net.ValidationExemplar.flood(
+                            Integer.parseInt(ctx.argument("count", String.class)));
+                        return 1;
+                    })))
+            .then(VineCommand.literal("tck_fuzz")
+                .executes(ctx -> {
+                    dev.vineengine.vine.testmod.net.ValidationExemplar.fuzz();
+                    return 1;
+                }))
             .then(VineCommand.literal("tck_codecs")
                 .executes(ctx -> {
                     dev.vineengine.vine.testmod.net.CodecExemplar.runProof();
