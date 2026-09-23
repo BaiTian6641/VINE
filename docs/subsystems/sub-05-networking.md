@@ -1,6 +1,6 @@
 # SUB-05 — Networking
 
-> **Status:** `planning` — one of `planning | in-progress | blocked(<reason>) | done`
+> **Status:** `in-progress` — one of `planning | in-progress | blocked(<reason>) | done`
 > **Milestone:** M0 minimal → M1 full · **Depends on:** SUB-01, SUB-02, SUB-03 · **Blocks:** SUB-08, SUB-10, SUB-14, SUB-16
 > **Cells:** all (M0 stages land on 1.21.1 first) · **Loaders:** both
 > **Master plan:** §5.6 · **Module(s):** vine-api, vine-core, vine-spi, drivers
