@@ -146,6 +146,12 @@ Each bootstrap assumes the agent has read this file, plan §5.8–§5.10, and
 - **Acceptance:** **M0 pass — identical testmod source (one block, one item,
   one engine event, one packet, one command) compiles and runs on both
   loaders** (§10); CI green both cells, JDK 21.
+  - **M0-pass clause green 2026-09-24:** the same testmod source (block, item,
+    registry marker, engine packet via the loopback, engine commands, hook
+    events) runs on both 1.21.1 loaders — 10/10 TCK scenarios on each cell plus
+    boot smoke. Remaining Stage E items: Mixin configs/refmaps against the
+    remapped Fabric jar and per-loader GameTest smoke; the CI workflow rides
+    sub-00's pending CI stage.
 - **Touches:** Mixin configs, `vine-tck` cell wiring.
 - **Bootstrap prompt:**
   > Execute Stage E of `docs/subsystems/sub-18-driver-1211.md`: finalize Mixin

@@ -277,10 +277,26 @@ public interface VineDriver {
 
 ### Stage E — `@VineUnsafe`, extension points, engine config (M1)
 
-- [ ] **Do:** `@VineUnsafe` (per §2) + boot-time bytecode scan of consumer jars
+- [x] **Do:** `@VineUnsafe` (per §2) + boot-time bytecode scan of consumer jars
   + `Vine-Unsafe` manifest-flag consistency check; `ExtensionPoints`/
   `ExtensionPoint` core; `VineConfig` (typed getters,
   `config/vine/engine.toml`, reload event).
+  - **Landed 2026-09-24:** all three parts. `@VineUnsafe` (CLASS retention,
+    TYPE/METHOD/CONSTRUCTOR/FIELD, `reason()`), `UnsafeScan` — constant-pool
+    bytecode scan (never classloading) + `Vine-Unsafe: true` manifest check of
+    consumer classpath entries, reporting mismatches both ways, best-effort
+    (unreadable entries counted, never fatal); VINE's own artifacts are skipped
+    (§5.1 audits consumer jars — the scanner's own descriptor constant was the
+    first false positive, caught on a live cell). `ExtensionPoints`/
+    `ExtensionPoint` + `VineEngine.extensions()`: named typed points,
+    create/get idempotent with explicit type-skew failure, registration open
+    until `REGISTRIES_FROZEN`. `VineConfig` + `ConfigService` (TOML subset,
+    lazy load, reload listeners) from the earlier wave.
+  - **Evidence:** `build/sub01e2` harness — 16 checks green (extension
+    create/get/freeze/isolation/stream; scan: annotated-jar-without-flag,
+    flag-without-annotation, matching pairs clean, dev directory violation);
+    live boot scan reports `70`/`108` entries clean, 0 mismatches, and both
+    cells pass boot smoke + the full TCK suite (10/10 each).
   - **Progress 2026-09-24:** `VineConfig` landed as a static facade (same
     pattern as `VineData`/`VineCommands`) with vine-core's `ConfigService`
     (minimal TOML subset, lazy load, reload listeners, malformed-line
