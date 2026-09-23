@@ -1,6 +1,6 @@
 # SUB-06 — Commands
 
-> **Status:** `planning` — one of `planning | in-progress | blocked(<reason>) | done`
+> **Status:** `in-progress` — one of `planning | in-progress | blocked(<reason>) | done`
 > **Milestone:** M0 minimal → M1 full · **Depends on:** SUB-01, SUB-02, SUB-03 · **Blocks:** —
 > **Cells:** all · **Loaders:** both
 > **Master plan:** §5.7 · **Module(s):** vine-api, vine-client-api, vine-core, vine-spi, drivers
@@ -109,6 +109,7 @@ public interface SuggestionSource { List<String> get(SuggestionContext ctx); } /
 - **Custom argument types on vanilla clients:** unknown argument types break the synced command tree for unmodded clients. Decision (owner: this file): engine argument types are server-parsed only and mapped to nearest vanilla types in the synced tree (§2) — no client mod ever required.
 - **Merge conflicts between consumers:** two mods competing for the same literal. Decision: deterministic first-registered-wins with a conflict report naming both IDs (§2); namespaced root literals recommended in consumer docs.
 - **Permission-plugin diversity:** no common permission API across the matrix. Mitigation: probe-based optional bridges with op-level fallback; never a hard dependency (stage D).
+- **Stage A driver attach (in flight):** engine side landed — vine-api `dev.vineengine.vine.command` (descriptor DSL subset, `VineCommands`/`CommandBackend` via the EngineAccess seam), vine-core `dev.vineengine.vine.internal.command` (`CommandService` freeze-aware store + `CommandCompiler` + `CommandBridge` driver seam: `commandsForNativePass()` pull + `execute(...)` with error isolation). Remaining: the 1.21.1 drivers' native registration pass must pull the snapshot and attach nodes (`RegisterCommandsEvent` / `CommandRegistrationCallback`, eager-but-dormant listener) — exact spec handed to Main; `CommandQueue` stays sub-18's bare-literal hook mechanism and does NOT carry engine descriptors (no children/permission/feedback channel, and vine-core cannot push into a driver-side queue).
 - **`PLAYER_IN_SESSION` ordering:** needs sub-14 session state. Mitigation: probe-gated registration, degrades to a plain player selector when sessions are absent (stage C).
 
 ## 5. Verification
