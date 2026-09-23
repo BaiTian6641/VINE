@@ -123,7 +123,27 @@ public enum Endpoint { SERVER, CLIENT }          // handler side
 
 ### Stage E — late-join sync & chunking (may run parallel to D)
 
-- [ ] **Do:** `Channel.sync` join-time snapshot delivery; `vine:chunk` transport with 8 MiB per-player reassembly cap and timeout; size-budget enforcement (256 KiB direct / 4 MiB chunked).
+- [x] **Do:** `Channel.sync` join-time snapshot delivery; `vine:chunk` transport with 8 MiB per-player reassembly cap and timeout; size-budget enforcement (256 KiB direct / 4 MiB chunked).
+  - **Landed 2026-09-24:** `Channel.sync(id, type, codec, source)` registers the
+    snapshot as an ordinary S2C message (reusing a receiver the consumer already
+    registered — receivers first, then the source) and records the source in one
+    global registration-ordered list; `VineNet.onPlayerJoin/onPlayerLeave` are
+    the drivers' (and the TCK's) entry points, and join delivery walks that list
+    in order. `NetBudget` fixes the numbers (256 KiB direct, 16 KiB frames, 4 MiB
+    chunked cap, 8 MiB reassembly cap, 30 s timeout). Chunking is engine-owned:
+    an engine channel `vine:chunk` with a real `frame` message (so every cell's
+    driver moves frames unchanged), frames cut in `sendPayload`, reassembled in
+    the inbound path with the cap/timeout enforced *while* waiting, then
+    dispatched as the original message. Over-cap payloads throw at encode —
+    nothing oversized ever reaches the wire.
+  - **Evidence:** `vine_test:net_sync_chunk` TCK scenario — two syncs deliver in
+    registration order (`produced a → received a → produced b → received b`)
+    before any consumer traffic, a 64 KiB payload travels directly, a **3 MiB
+    payload is chunked (188 frames) and arrives intact** (`bulk received
+    bytes=3072000`), and a 5 MiB payload is rejected at encode
+    (`bulk oversized rejected=true`). **18/18 scenarios PASS on both 1.21.1 cells.**
+  - **Seams (documented):** S2C chunking needs the client-side reassembly
+    handler (sub-21's client runner); this suite proves the server inbound path.
 - **Acceptance:** TCK late-join scenario — joining player receives two sync snapshots in registration order before any consumer message; chunk scenario — 3 MiB payload intact, 5 MiB rejected at encode.
 - **Touches:** vine-core sync orchestration + chunk transport, drivers, TCK.
 - **Bootstrap prompt:**

@@ -12,6 +12,7 @@ import dev.vineengine.vine.net.ChannelSpec;
 import dev.vineengine.vine.net.Endpoint;
 import dev.vineengine.vine.net.MessageHandler;
 import dev.vineengine.vine.net.PayloadCodec;
+import dev.vineengine.vine.net.SyncSource;
 import dev.vineengine.vine.net.Validator;
 import dev.vineengine.vine.registry.VineId;
 
@@ -102,9 +103,36 @@ final class ChannelRegistry {
         entry.addHandler(endpoint, handler);
     }
 
+    /** One registered join-time sync (sub-05 Stage E), in global registration order. */
+    record SyncEntry(VineId wireId, PayloadCodec<Object> codec, SyncSource<Object> source) {
+    }
+
+    private final List<SyncEntry> syncOrder = new ArrayList<>();
+
+    /** Registers a join-time sync; ids are global, so a duplicate is a bug. */
+    @SuppressWarnings("unchecked")
+    synchronized <P> void registerSync(VineId wireId, PayloadCodec<P> codec, SyncSource<P> source) {
+        for (SyncEntry existing : syncOrder) {
+            if (existing.wireId().equals(wireId)) {
+                throw new IllegalStateException("sync " + wireId + " already registered");
+            }
+        }
+        syncOrder.add(new SyncEntry(wireId, (PayloadCodec<Object>) codec, (SyncSource<Object>) source));
+    }
+
+    /** Every sync, in registration order — the join delivery order. */
+    synchronized List<SyncEntry> syncsInOrder() {
+        return List.copyOf(syncOrder);
+    }
+
     /** The message behind {@code wireId}, or {@code null} — unknown wire ids are dropped, not errors. */
     synchronized MessageEntry byWireId(VineId wireId) {
         return byWireId.get(wireId);
+    }
+
+    /** Wire identity for a message on {@code channel} — the id syncs and chunk frames address. */
+    synchronized VineId wireIdOf(ChannelImpl channel, VineId messageId) {
+        return wireId(channel.spec().id(), messageId);
     }
 
     /** Wire identity: {@code <channel-ns>:<channel-path>/<message-path>}. */

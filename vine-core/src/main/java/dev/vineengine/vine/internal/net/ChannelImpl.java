@@ -13,6 +13,7 @@ import dev.vineengine.vine.net.ChannelSpec;
 import dev.vineengine.vine.net.Endpoint;
 import dev.vineengine.vine.net.MessageHandler;
 import dev.vineengine.vine.net.PayloadCodec;
+import dev.vineengine.vine.net.SyncSource;
 import dev.vineengine.vine.net.Validator;
 import dev.vineengine.vine.registry.VineId;
 
@@ -64,6 +65,21 @@ final class ChannelImpl implements Channel {
     }
 
     @Override
+    public <P> void sync(VineId id, Class<P> type, PayloadCodec<P> codec, SyncSource<P> source) {
+        Objects.requireNonNull(source, "source");
+        // The snapshot is an ordinary S2C message. If the consumer already
+        // registered its receiver for this id (the usual case — it wants a say in
+        // what happens on arrival), the sync only adds the source; otherwise the
+        // engine installs a no-op client receiver so the message is complete.
+        VineId wireId = registry.wireIdOf(this, id);
+        if (registry.byWireId(wireId) == null) {
+            message(id, type, codec, Endpoint.CLIENT, (payload, context) -> { });
+        }
+        registry.registerSync(wireId, codec, source);
+        net.syncChannel(this);
+    }
+
+    @Override
     public <P> void send(VinePlayer to, P payload) {
         Objects.requireNonNull(to, "to");
         MessageEntry entry = entryFor(payload);
@@ -72,7 +88,7 @@ final class ChannelImpl implements Channel {
             logNotReady();
             return;
         }
-        transport.send(to, entry.wireId, encode(entry, payload));
+        net.sendPayload(transport, to, entry.wireId, encode(entry, payload));
     }
 
     @Override
@@ -83,7 +99,7 @@ final class ChannelImpl implements Channel {
             logNotReady();
             return;
         }
-        transport.sendToServer(entry.wireId, encode(entry, payload));
+        net.sendPayload(transport, null, entry.wireId, encode(entry, payload));
     }
 
     void add(MessageEntry entry) {

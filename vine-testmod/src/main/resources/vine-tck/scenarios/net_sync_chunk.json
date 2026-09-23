@@ -1,0 +1,28 @@
+{
+  "id": "vine_test:net_sync_chunk",
+  "tags": ["SMOKE"],
+  "steps": [
+    { "type": "RunCommand", "command": "vine_test tck_join" },
+    { "type": "AssertTrace", "trace": "sync", "expect": [
+      "sync produced a seq=1",
+      "sync received name=a seq=1",
+      "sync produced b seq=2",
+      "sync received name=b seq=2",
+      "join delivered syncs=true"
+    ] },
+    { "type": "RunCommand", "command": "vine_test tck_bulk 64" },
+    { "type": "AssertTrace", "trace": "bulk", "expect": [
+      "bulk received bytes=65536",
+      "bulk sent bytes=65536"
+    ] },
+    { "type": "RunCommand", "command": "vine_test tck_bulk 3000" },
+    { "type": "AssertTrace", "trace": "bulk", "expect": [
+      "bulk received bytes=3072000",
+      "bulk sent bytes=3072000"
+    ] },
+    { "type": "RunCommand", "command": "vine_test tck_bulk 5120" },
+    { "type": "AssertTrace", "trace": "bulk", "expect": [
+      "bulk oversized rejected=true"
+    ] }
+  ]
+}

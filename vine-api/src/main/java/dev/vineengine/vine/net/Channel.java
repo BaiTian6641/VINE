@@ -48,6 +48,14 @@ public interface Channel {
                      MessageHandler<P> handler);
 
     /**
+     * Registers a join-time sync (sub-05 Stage E): the message is an S2C payload
+     * whose snapshot is produced for every joining player — after the handshake,
+     * before any consumer traffic — in registration order across all channels.
+     * Re-registering a sync for the same id is a conflicting registration.
+     */
+    <P> void sync(VineId id, Class<P> type, PayloadCodec<P> codec, SyncSource<P> source);
+
+    /**
      * Sends a payload to one player (S2C). No-op with one log line if the
      * channel is not ready for that connection.
      *

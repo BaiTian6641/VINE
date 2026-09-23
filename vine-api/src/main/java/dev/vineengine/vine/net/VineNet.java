@@ -21,6 +21,17 @@ public interface VineNet {
      * Returns the networking facade, booting the engine on first call (same
      * seam and failure semantics as {@code VineEngine.get()}).
      */
+    /**
+     * Reports a player join (sub-05 Stage E): the engine delivers every
+     * registered {@link Channel#sync} snapshot to {@code player} in registration
+     * order. Drivers call this from their join hooks; the TCK drives it directly
+     * on the loopback transport.
+     */
+    void onPlayerJoin(dev.vineengine.vine.VinePlayer player);
+
+    /** Reports a player leave: drops that player's partial reassembly state. */
+    void onPlayerLeave(dev.vineengine.vine.VinePlayer player);
+
     static VineNet get() {
         if (EngineAccess.get() instanceof NetBackend backend) {
             return backend.net();

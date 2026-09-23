@@ -1,5 +1,6 @@
 package dev.vineengine.vine.internal.net;
 
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.Executor;
 
@@ -13,6 +14,10 @@ import dev.vineengine.vine.EventBus;
 import dev.vineengine.vine.hook.HookEvents;
 import dev.vineengine.vine.net.Endpoint;
 import dev.vineengine.vine.net.MessageHandler;
+import dev.vineengine.vine.net.NetBudget;
+import dev.vineengine.vine.net.PayloadCodec;
+import dev.vineengine.vine.net.VersionPolicy;
+import dev.vineengine.vine.net.VineCodecs;
 import dev.vineengine.vine.net.VineNet;
 import dev.vineengine.vine.registry.VineId;
 
@@ -42,10 +47,181 @@ public final class VineNetImpl implements VineNet {
     public VineNetImpl(EventBus bus) {
         this.bus = java.util.Objects.requireNonNull(bus, "bus");
         NetTransportBinding.engineSink(this::onInbound);
+        // Engine-owned chunk transport (sub-05 Stage E): frames are ordinary
+        // registered messages, so every cell's driver moves them unchanged.
+        channel(CHUNK_SPEC).message(VineId.of("chunk", "frame"), ChunkFrame.class, CHUNK_CODEC,
+            Endpoint.SERVER, (frame, context) -> reassemble(frame, context.sender()));
         NetTransportBinding.onBind(bound -> {
             transport = bound;
             registry.pushTo(bound);
         });
+    }
+
+    // ------------------------------------------------------------------
+    // Chunk transport (sub-05 Stage E)
+    // ------------------------------------------------------------------
+
+    private static final ChannelSpec CHUNK_SPEC =
+        new ChannelSpec(VineId.of("vine", "chunk"), 1, VersionPolicy.REQUIRE_MATCH);
+
+    /** One chunk frame: which message it belongs to, its index, and 16 KiB of bytes. */
+    public record ChunkFrame(String target, int index, int count, byte[] data) {
+    }
+
+    private static final PayloadCodec<ChunkFrame> CHUNK_CODEC = VineCodecs.<ChunkFrame>record()
+        .field("target", VineCodecs.UTF, ChunkFrame::target)
+        .field("index", VineCodecs.VAR_INT, ChunkFrame::index)
+        .field("count", VineCodecs.VAR_INT, ChunkFrame::count)
+        .field("data", VineCodecs.BYTES, ChunkFrame::data)
+        .build(values -> new ChunkFrame((String) values[0], (Integer) values[1],
+            (Integer) values[2], (byte[]) values[3]));
+
+    /** Per-player reassembly state, capped and time-boxed (§4). */
+    private static final class Reassembly {
+
+        final byte[][] frames;
+        final long startedNanos = System.nanoTime();
+        int received;
+
+        Reassembly(int count) {
+            this.frames = new byte[count][];
+        }
+    }
+
+    private final Map<String, Reassembly> reassemblies = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * Sends one payload, applying the size budget: at or below
+     * {@link NetBudget#MAX_DIRECT_BYTES} it travels as a single frame; above it
+     * (up to {@link NetBudget#MAX_CHUNKED_BYTES}) as {@code vine:chunk/frame}
+     * messages; above the chunked cap it is rejected here — never on the wire.
+     *
+     * @param to {@code null} sends client-to-server (the loopback/transport
+     *        knows the connection); otherwise the payload goes to that player
+     */
+    void sendPayload(NetDriver transport, VinePlayer to, VineId wireId, byte[] payload) {
+        if (payload.length > NetBudget.MAX_CHUNKED_BYTES) {
+            throw new CodecException("payload for " + wireId + " is " + payload.length
+                + " bytes, over the " + NetBudget.MAX_CHUNKED_BYTES + "-byte chunked cap");
+        }
+        if (payload.length <= NetBudget.MAX_DIRECT_BYTES) {
+            if (to == null) {
+                transport.sendToServer(wireId, payload);
+            } else {
+                transport.send(to, wireId, payload);
+            }
+            return;
+        }
+        int count = (payload.length + NetBudget.CHUNK_FRAME_BYTES - 1) / NetBudget.CHUNK_FRAME_BYTES;
+        MessageEntry chunkEntry = registry.byWireId(VineId.of("vine", "chunk/frame"));
+        if (chunkEntry == null) {
+            throw new CodecException("chunk transport is not registered — engine state corrupted");
+        }
+        for (int index = 0; index < count; index++) {
+            int from = index * NetBudget.CHUNK_FRAME_BYTES;
+            int toByte = Math.min(payload.length, from + NetBudget.CHUNK_FRAME_BYTES);
+            byte[] slice = java.util.Arrays.copyOfRange(payload, from, toByte);
+            byte[] framed = encodeEntry(chunkEntry,
+                new ChunkFrame(wireId.toString(), index, count, slice));
+            if (to == null) {
+                transport.sendToServer(chunkEntry.wireId, framed);
+            } else {
+                transport.send(to, chunkEntry.wireId, framed);
+            }
+        }
+    }
+
+    private byte[] encodeEntry(MessageEntry entry, Object payload) {
+        ByteArrayVineBuf buf = ByteArrayVineBuf.writable();
+        entry.codec.encode(buf, payload);
+        return buf.toByteArray();
+    }
+
+    /** Accumulates frames until a payload is complete, then dispatches it for real. */
+    private void reassemble(ChunkFrame frame, VinePlayer sender) {
+        String key = sender.uniqueId() + " " + frame.target();
+        Reassembly state = reassemblies.computeIfAbsent(key, ignored -> new Reassembly(frame.count()));
+        if (state.frames.length != frame.count()) {
+            reassemblies.remove(key);
+            LOG.log(System.Logger.Level.WARNING, "[VINE] chunk frame count changed for " + frame.target()
+                + " — partial reassembly dropped");
+            return;
+        }
+        if (System.nanoTime() - state.startedNanos
+                > java.util.concurrent.TimeUnit.SECONDS.toNanos(NetBudget.REASSEMBLY_TIMEOUT_SECONDS)) {
+            reassemblies.remove(key);
+            LOG.log(System.Logger.Level.WARNING, "[VINE] chunk reassembly for " + frame.target()
+                + " timed out — dropped");
+            return;
+        }
+        if (state.frames[frame.index()] == null) {
+            state.frames[frame.index()] = frame.data();
+            state.received++;
+        }
+        int total = 0;
+        for (byte[] slice : state.frames) {
+            if (slice == null) {
+                // Still incomplete: enforce the reassembly cap while waiting.
+                if (total > NetBudget.MAX_REASSEMBLY_BYTES) {
+                    reassemblies.remove(key);
+                    LOG.log(System.Logger.Level.WARNING, "[VINE] chunk reassembly for " + frame.target()
+                        + " exceeds the " + NetBudget.MAX_REASSEMBLY_BYTES + "-byte cap — dropped");
+                }
+                return;
+            }
+            total += slice.length;
+        }
+        reassemblies.remove(key);
+        if (total > NetBudget.MAX_REASSEMBLY_BYTES) {
+            LOG.log(System.Logger.Level.WARNING, "[VINE] reassembled " + frame.target() + " is " + total
+                + " bytes, over the " + NetBudget.MAX_REASSEMBLY_BYTES + "-byte cap — dropped");
+            return;
+        }
+        java.io.ByteArrayOutputStream joined = new java.io.ByteArrayOutputStream(total);
+        for (byte[] slice : state.frames) {
+            joined.write(slice, 0, slice.length);
+        }
+        try {
+            onInbound(VineId.parse(frame.target()), Endpoint.SERVER, sender, joined.toByteArray(),
+                Runnable::run);
+        } catch (RuntimeException e) {
+            LOG.log(System.Logger.Level.WARNING, "[VINE] chunked dispatch failed for "
+                + frame.target() + ": " + e);
+        }
+    }
+
+    @Override
+    public void onPlayerJoin(VinePlayer player) {
+        NetDriver bound = transport;
+        if (bound == null) {
+            LOG.log(System.Logger.Level.WARNING, "[VINE] player join before a transport bound — syncs skipped");
+            return;
+        }
+        // Registration order is the delivery order (sub-05 Stage E): a consumer's
+        // dependent snapshots arrive in the order it declared them.
+        for (ChannelRegistry.SyncEntry sync : registry.syncsInOrder()) {
+            Object snapshot;
+            try {
+                snapshot = sync.source().snapshot(player);
+            } catch (RuntimeException e) {
+                LOG.log(System.Logger.Level.WARNING,
+                    "[VINE] sync source for " + sync.wireId() + " threw — snapshot skipped: " + e);
+                continue;
+            }
+            try {
+                sendPayload(bound, player, sync.wireId(), encodeEntry(
+                    registry.byWireId(sync.wireId()), snapshot));
+            } catch (RuntimeException e) {
+                LOG.log(System.Logger.Level.WARNING,
+                    "[VINE] sync delivery for " + sync.wireId() + " failed: " + e);
+            }
+        }
+    }
+
+    @Override
+    public void onPlayerLeave(VinePlayer player) {
+        String prefix = player.uniqueId() + " ";
+        reassemblies.keySet().removeIf(key -> key.startsWith(prefix));
     }
 
     @Override
