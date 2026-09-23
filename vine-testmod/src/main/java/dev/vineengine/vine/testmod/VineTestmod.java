@@ -8,6 +8,7 @@ import dev.vineengine.vine.testmod.registry.Testmarkers;
 import dev.vineengine.vine.testmod.command.EchoCommand;
 import dev.vineengine.vine.testmod.data.VoxelExemplar;
 import dev.vineengine.vine.testmod.capability.CapabilityExemplar;
+import dev.vineengine.vine.testmod.session.SessionExemplar;
 import dev.vineengine.vine.testmod.content.TestContent;
 
 /**
@@ -47,6 +48,7 @@ public final class VineTestmod implements VineInitializer {
         EchoCommand.register();      // command exemplar (sub-06, M0): /vine_test echo + tck_echo (TCK drive child)
         VoxelExemplar.register();    // voxel-data exemplar (sub-03 Stage C): vine_test:voxel, 1 portable + 1 native field
         CapabilityExemplar.register();  // capability exemplar (sub-04): vine_test:mana stateful type + ITEM-scope provider
+        SessionExemplar.register();  // session exemplar (sub-14): vine_test:hunt type + consumer rules
         TestContent.register(engine);  // block/item exemplars (sub-07, M0 minimal):
                                         //   vine_test:testblock + vine_test:testitem
     }

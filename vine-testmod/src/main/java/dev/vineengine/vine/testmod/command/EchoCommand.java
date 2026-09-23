@@ -50,6 +50,11 @@ public final class EchoCommand {
                     dev.vineengine.vine.testmod.capability.CapabilityExemplar.runProof();
                     return 1;
                 }))
+            .then(VineCommand.literal("tck_sessions")
+                .executes(ctx -> {
+                    dev.vineengine.vine.testmod.session.SessionExemplar.runProof();
+                    return 1;
+                }))
             .build(VineId.of("vinetest", MOD_ID)));
     }
 }

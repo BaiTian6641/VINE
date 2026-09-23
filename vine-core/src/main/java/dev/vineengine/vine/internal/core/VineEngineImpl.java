@@ -24,6 +24,7 @@ import dev.vineengine.vine.internal.CapabilityBackend;
 import dev.vineengine.vine.internal.CommandBackend;
 import dev.vineengine.vine.internal.NetBackend;
 import dev.vineengine.vine.internal.RegistryBackend;
+import dev.vineengine.vine.internal.SessionBackend;
 import dev.vineengine.vine.internal.VoxelBackend;
 import dev.vineengine.vine.internal.capability.CapabilityStore;
 import dev.vineengine.vine.internal.command.CommandService;
@@ -31,12 +32,15 @@ import dev.vineengine.vine.internal.data.SchemaRegistry;
 import dev.vineengine.vine.internal.data.VoxelStorageBinding;
 import dev.vineengine.vine.internal.net.VineNetImpl;
 import dev.vineengine.vine.internal.registry.DescriptorStore;
+import dev.vineengine.vine.internal.session.SessionService;
 import dev.vineengine.vine.internal.spi.VineDriver;
 import dev.vineengine.vine.internal.spi.VoxelStorageDriver;
 import dev.vineengine.vine.net.VineNet;
 import dev.vineengine.vine.registry.DescriptorType;
 import dev.vineengine.vine.registry.Holder;
 import dev.vineengine.vine.registry.VineId;
+import dev.vineengine.vine.session.SessionFactory;
+import dev.vineengine.vine.session.SessionManager;
 
 /**
  * vine-core's {@link VineEngine} implementation: boots the phase machine and binds
@@ -60,7 +64,7 @@ import dev.vineengine.vine.registry.VineId;
  * real drivers exist.
  */
 final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, CommandBackend,
-        VoxelBackend, CapabilityBackend {
+        VoxelBackend, CapabilityBackend, SessionBackend {
 
     private static final System.Logger LOG = System.getLogger(PhaseMachine.LOG_NAME);
 
@@ -71,6 +75,7 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
 
     private final SchemaRegistry schemas = new SchemaRegistry();
     private final CapabilityStore capabilities = new CapabilityStore();
+    private final SessionService sessions = new SessionService();
 
     VineEngineImpl() {
         // Engine-owned content kinds (sub-07): defined before the driver boots
@@ -85,6 +90,7 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
             commands.freeze();
             schemas.freeze();
             capabilities.freeze();
+            sessions.freeze();
         });
         // Engine state install before any driver can bind (net-seam ordering rule)
         VoxelStorageBinding.engineRegistry(schemas);
@@ -227,5 +233,19 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
     public <T> void applyClone(CapabilityType<T> type, CapabilityTarget oldTarget,
             CapabilityTarget newTarget) {
         capabilities.applyClone(type, oldTarget, newTarget);
+    }
+
+    // ------------------------------------------------------------------
+    // SessionBackend (sub-14): the service is the manager.
+    // ------------------------------------------------------------------
+
+    @Override
+    public void registerFactory(SessionFactory factory) {
+        sessions.registerFactory(factory);
+    }
+
+    @Override
+    public SessionManager manager() {
+        return sessions;
     }
 }

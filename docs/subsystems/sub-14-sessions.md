@@ -102,7 +102,7 @@ sub-01 normalized hooks. No per-cell API-shape difference.
 
 ### Stage A — Session model & server lifecycle (M1)
 
-- [ ] **Do:** `vine-api` session types per §2; in-memory `SessionService` in
+- [x] **Do:** `vine-api` session types per §2; in-memory `SessionService` in
   `vine-core`; transitions only via `SessionRules`; action→verdict round-trip.
 - **Acceptance:** headless scenario: create, invalid action rejected, valid
   action advances phase; transition log lines.

@@ -70,6 +70,7 @@ public final class ScenarioRunner {
     private int[] lastPlacePos = {0, 0, 0};
     private String lastPlaceBlock = "minecraft:stone";
     private final java.util.Set<Long> forceloaded = new java.util.HashSet<>();
+    private boolean firstBoot = true;
 
     private ScenarioRunner(String cell, Path rootDir, String gradleTask,
             Path projectCacheDir, Path scenariosDir, Duration timeout) {
@@ -277,10 +278,13 @@ public final class ScenarioRunner {
             if (forceloaded.add(chunkKey)) {
                 int fl = mark();
                 send("forceload add " + pos[0] + " " + pos[2]);
-                String loaded = await(fl, line -> line.contains("Marked chunk"), "forceload confirmation");
-                if (loaded != null) {
-                    return loaded;
-                }
+                // Non-fatal, short wait: forceload state persists in the world
+                // across reboots, so an already-forced chunk prints nothing.
+                // The setblock outcome below is the real discriminator; an
+                // actually-unloaded chunk returns "That position is not loaded"
+                // and takes the retry path.
+                await(fl, line -> line.contains("Marked chunk"), "forceload confirmation",
+                    java.time.Duration.ofSeconds(15));
             }
             int from = mark();
             send("setblock " + pos[0] + " " + pos[1] + " " + pos[2] + " " + block);
@@ -365,7 +369,12 @@ public final class ScenarioRunner {
 
     /** @return null when a matching line appears after {@code from} in time. */
     private String await(int from, Predicate<String> match, String what) {
-        Instant deadline = Instant.now().plus(ASSERT_TIMEOUT);
+        return await(from, match, what, ASSERT_TIMEOUT);
+    }
+
+    /** Timed variant of {@link #await} for best-effort waits. */
+    private String await(int from, Predicate<String> match, String what, java.time.Duration window) {
+        Instant deadline = Instant.now().plus(window);
         synchronized (log) {
             while (true) {
                 for (int i = Math.max(from, 0); i < log.size(); i++) {
@@ -451,22 +460,25 @@ public final class ScenarioRunner {
         }
         forceloaded.clear();
         // Deterministic state: wipe the dev server's saved world so a crashed
-        // prior run can never leak block state into this one (the first M0
-        // gate run failed exactly this way — a persisted testblock turned the
-        // scenario's own PlaceBlock into a same-state no-op).
-        String projectPath = gradleTask.substring(1, gradleTask.lastIndexOf(':')).replace(':', '/');
-        Path world = rootDir.resolve(projectPath).resolve("run").resolve("world");
-        if (Files.exists(world)) {
-            try (Stream<Path> w = Files.walk(world)) {
-                w.sorted(Comparator.reverseOrder()).forEach(p -> {
-                    try {
-                        Files.delete(p);
-                    } catch (IOException e) {
-                        // best-effort; a locked file fails the PlaceBlock probe loudly
-                    }
-                });
-            } catch (IOException e) {
-                // best-effort wipe
+        // prior run can never leak block state into this one — but ONLY on the
+        // first boot of this runner instance. save_reload's deliberate relaunch
+        // must observe the saved world, never a wiped one.
+        if (firstBoot) {
+            firstBoot = false;
+            String projectPath = gradleTask.substring(1, gradleTask.lastIndexOf(':')).replace(':', '/');
+            Path world = rootDir.resolve(projectPath).resolve("run").resolve("world");
+            if (Files.exists(world)) {
+                try (Stream<Path> w = Files.walk(world)) {
+                    w.sorted(Comparator.reverseOrder()).forEach(p -> {
+                        try {
+                            Files.delete(p);
+                        } catch (IOException e) {
+                            // best-effort; a locked file fails the PlaceBlock probe loudly
+                        }
+                    });
+                } catch (IOException e) {
+                    // best-effort wipe
+                }
             }
         }
         List<String> cmd = new ArrayList<>();
