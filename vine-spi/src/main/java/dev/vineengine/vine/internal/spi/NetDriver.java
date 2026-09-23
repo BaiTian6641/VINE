@@ -14,12 +14,12 @@ import dev.vineengine.vine.registry.VineId;
  * implemented only by VINE's own driver jars — the codec DSL never crosses this
  * boundary; drivers move opaque encoded bytes.
  *
- * <p>Exact mirror of vine-core's {@code NetTransport} seam minus
- * {@code openControlChannel} (stage-C handshake): {@code register} ↔
- * {@code registerChannel}, {@code send} ↔ {@code sendToClient}, sinks are
- * signature-identical. Until vine-core bridges this SPI to
- * {@code NetTransportBinding}, drivers implement both interfaces and bind
- * directly (documented seam, sub-05 Stage A).
+ * <p>vine-core consumes this SPI directly via {@code NetTransportBinding.bind} —
+ * drivers implement only {@code NetDriver} and receive the engine's
+ * {@link InboundSink} in return. Registration semantics follow the documented
+ * {@code register} contract: {@code ChannelSpec.protocol} maps to the loader's
+ * registrar/payload version where one exists (NF registrar version; Fabric has
+ * none — the stage-C handshake carries it there).
  *
  * <p><b>Invariants:</b> {@link InboundSink#accept} may be invoked on any thread
  * (loader network threads differ per cell) — vine-core decodes there and

@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import dev.vineengine.vine.VinePlayer;
+import dev.vineengine.vine.internal.spi.NetDriver;
 import dev.vineengine.vine.net.Channel;
 import dev.vineengine.vine.net.ChannelSpec;
 import dev.vineengine.vine.net.Endpoint;
@@ -57,18 +58,18 @@ final class ChannelImpl implements Channel {
     public <P> void send(VinePlayer to, P payload) {
         Objects.requireNonNull(to, "to");
         MessageEntry entry = entryFor(payload);
-        NetTransport transport = net.transport();
+        NetDriver transport = net.transport();
         if (transport == null || !transport.isReady(to)) {
             logNotReady();
             return;
         }
-        transport.sendToClient(to, entry.wireId, encode(entry, payload));
+        transport.send(to, entry.wireId, encode(entry, payload));
     }
 
     @Override
     public <P> void sendToServer(P payload) {
         MessageEntry entry = entryFor(payload);
-        NetTransport transport = net.transport();
+        NetDriver transport = net.transport();
         if (transport == null) {
             logNotReady();
             return;

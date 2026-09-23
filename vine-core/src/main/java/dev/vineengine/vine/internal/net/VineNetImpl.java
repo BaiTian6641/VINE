@@ -4,6 +4,7 @@ import java.util.Objects;
 import java.util.concurrent.Executor;
 
 import dev.vineengine.vine.VinePlayer;
+import dev.vineengine.vine.internal.spi.NetDriver;
 import dev.vineengine.vine.net.Channel;
 import dev.vineengine.vine.net.ChannelSpec;
 import dev.vineengine.vine.net.CodecException;
@@ -14,7 +15,7 @@ import dev.vineengine.vine.registry.VineId;
 
 /**
  * vine-core's {@link VineNet}: channel registration over {@link ChannelRegistry}
- * and inbound dispatch off the bound {@link NetTransport}.
+ * and inbound dispatch off the bound {@link NetDriver}.
  *
  * <p><b>Inbound pipeline (§2/§4):</b> bytes arrive from the driver on an
  * arbitrary loader network thread; the payload is decoded there (codec bounds
@@ -32,7 +33,7 @@ public final class VineNetImpl implements VineNet {
     private static final System.Logger LOG = System.getLogger("vine.net");
 
     private final ChannelRegistry registry = new ChannelRegistry();
-    private volatile NetTransport transport;
+    private volatile NetDriver transport;
 
     public VineNetImpl() {
         NetTransportBinding.engineSink(this::onInbound);
@@ -53,14 +54,14 @@ public final class VineNetImpl implements VineNet {
     @Override
     public boolean isReady(VinePlayer player) {
         Objects.requireNonNull(player, "player");
-        NetTransport bound = transport;
+        NetDriver bound = transport;
         return bound != null && bound.isReady(player);
     }
 
     /** Called when the engine enters {@code REGISTRIES_FROZEN}: close registration, push the final table. */
     public void freezeAndSync() {
         registry.freeze();
-        NetTransport bound = transport;
+        NetDriver bound = transport;
         if (bound != null) {
             registry.pushTo(bound);
         }
@@ -69,17 +70,17 @@ public final class VineNetImpl implements VineNet {
     /**
      * Pushes one channel's current table to the bound transport. Called on
      * channel creation and every message registration; idempotent for the
-     * driver ({@link NetTransport#registerChannel} contract).
+     * driver ({@link NetDriver#register} contract).
      */
     void syncChannel(ChannelImpl channel) {
-        NetTransport bound = transport;
+        NetDriver bound = transport;
         if (bound != null) {
-            bound.registerChannel(channel.spec(), registry.messageSpecs(channel));
+            bound.register(channel.spec(), registry.messageSpecs(channel));
         }
     }
 
     /** The bound transport, or {@code null} while dormant (no driver / pre-bind). */
-    NetTransport transport() {
+    NetDriver transport() {
         return transport;
     }
 

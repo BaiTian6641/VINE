@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import dev.vineengine.vine.internal.spi.NetDriver;
 import dev.vineengine.vine.net.ChannelSpec;
 import dev.vineengine.vine.net.Endpoint;
 import dev.vineengine.vine.net.MessageHandler;
@@ -101,20 +102,20 @@ final class ChannelRegistry {
     }
 
     /** One {@code MessageSpec} per (message, handler-endpoint) direction on {@code channel}. */
-    synchronized List<NetTransport.MessageSpec> messageSpecs(ChannelImpl channel) {
-        List<NetTransport.MessageSpec> messages = new ArrayList<>();
+    synchronized List<NetDriver.MessageSpec> messageSpecs(ChannelImpl channel) {
+        List<NetDriver.MessageSpec> messages = new ArrayList<>();
         for (MessageEntry entry : channel.messages()) {
             for (Map.Entry<Endpoint, MessageHandler<Object>> direction : entry.directions()) {
-                messages.add(new NetTransport.MessageSpec(entry.wireId, direction.getKey()));
+                messages.add(new NetDriver.MessageSpec(entry.wireId, direction.getKey()));
             }
         }
         return List.copyOf(messages);
     }
 
     /** Pushes every channel's full registration table to {@code transport}. */
-    synchronized void pushTo(NetTransport transport) {
+    synchronized void pushTo(NetDriver transport) {
         for (ChannelImpl channel : channels.values()) {
-            transport.registerChannel(channel.spec(), messageSpecs(channel));
+            transport.register(channel.spec(), messageSpecs(channel));
         }
     }
 

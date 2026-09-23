@@ -5,16 +5,13 @@ import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
+import dev.vineengine.vine.internal.spi.NetDriver;
+
 /**
- * The core-side binding point for the process's single {@link NetTransport}
- * (sub-05 §2). A driver binds its transport once, after its loader networking
- * hooks are wired, and receives the engine's {@link NetTransport.InboundSink}
- * in return — the only path inbound payload bytes take into vine-core.
- *
- * <p><b>Seam status (sub-05 Stage A):</b> pending the vine-spi {@code NetDriver}
- * addition, drivers (and the loopback harness) call {@link #bind} directly.
- * Once {@code NetDriver} lands, vine-core bridges the SPI to this binding and
- * the direct call disappears from drivers.
+ * The core-side binding point for the process's single {@link NetDriver}
+ * transport (sub-05 §2). A driver binds once, after its loader networking hooks
+ * are wired, and receives the engine's {@link NetDriver.InboundSink} in return —
+ * the only path inbound payload bytes take into vine-core.
  *
  * <p><b>Invariants:</b> exactly one transport per process — a second bind is a
  * conflicting-driver bug and throws. Binding replays to late listeners (same
@@ -23,9 +20,9 @@ import java.util.function.Consumer;
  */
 public final class NetTransportBinding {
 
-    private static volatile NetTransport transport;
-    private static volatile NetTransport.InboundSink engineSink;
-    private static final List<Consumer<NetTransport>> listeners = new CopyOnWriteArrayList<>();
+    private static volatile NetDriver transport;
+    private static volatile NetDriver.InboundSink engineSink;
+    private static final List<Consumer<NetDriver>> listeners = new CopyOnWriteArrayList<>();
 
     private NetTransportBinding() {
     }
@@ -34,7 +31,7 @@ public final class NetTransportBinding {
      * Installs the engine's inbound sink. Called once by vine-core's networking
      * service at construction — before any driver can bind.
      */
-    public static void engineSink(NetTransport.InboundSink sink) {
+    public static void engineSink(NetDriver.InboundSink sink) {
         if (engineSink != null) {
             throw new IllegalStateException("engine inbound sink already installed");
         }
@@ -49,19 +46,20 @@ public final class NetTransportBinding {
      *         networking service has not installed its sink (driver binding
      *         before engine boot — a driver bug, reported explicitly)
      */
-    public static synchronized NetTransport.InboundSink bind(NetTransport candidate) {
+    public static synchronized NetDriver.InboundSink bind(NetDriver candidate) {
         Objects.requireNonNull(candidate, "candidate");
         if (transport != null) {
-            throw new IllegalStateException("NetTransport already bound: " + transport.getClass().getName()
+            throw new IllegalStateException("NetDriver transport already bound: "
+                + transport.getClass().getName()
                 + " (conflicting second: " + candidate.getClass().getName() + ")");
         }
-        NetTransport.InboundSink sink = engineSink;
+        NetDriver.InboundSink sink = engineSink;
         if (sink == null) {
             throw new IllegalStateException(
-                "driver bound a NetTransport before the engine installed its inbound sink");
+                "driver bound a NetDriver transport before the engine installed its inbound sink");
         }
         transport = candidate;
-        for (Consumer<NetTransport> listener : listeners) {
+        for (Consumer<NetDriver> listener : listeners) {
             listener.accept(candidate);
         }
         return sink;
@@ -71,8 +69,8 @@ public final class NetTransportBinding {
      * Registers {@code listener} for the transport binding; replays immediately
      * if a transport is already bound.
      */
-    public static void onBind(Consumer<NetTransport> listener) {
-        NetTransport current = transport;
+    public static void onBind(Consumer<NetDriver> listener) {
+        NetDriver current = transport;
         if (current != null) {
             listener.accept(current);
             return;
