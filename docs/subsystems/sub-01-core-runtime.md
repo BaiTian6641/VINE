@@ -166,9 +166,21 @@ public interface VineDriver {
 
 ### Stage B — event bus (M0)
 
-- [ ] **Do:** §2 event API + `EngineEventBus` (priority-then-registration
+- [x] **Do:** §2 event API + `EngineEventBus` (priority-then-registration
   ordering, error isolation with owner-tagged logging, cancel semantics);
   `PhaseChange` routed through the bus.
+  - **Landed 2026-09-24:** `EventPriority`/`Cancellable`/`EventBus` +
+    `VineEngine.events()`; `EngineEventBus` (insertion-sorted per type,
+    snapshot per post, owner derived from the first non-engine stack frame,
+    RuntimeException isolation); `PhaseMachine.onTransition` posts every
+    `PhaseChange` to the bus before the replaying one-shot subscribers.
+  - **Evidence:** build/sub01b harness — 9 checks green (FIRST→LAST + stable
+    within priority, throwing handler doesn't stop later handlers, cancel
+    gates only remaining, close idempotent + immediate, post snapshot,
+    exact-type routing); `:vine-tck:bootSmoke` PASS on both 1.21.1 cells.
+    The harness (not a JUnit source set) is the acceptance proxy: the repo has
+    no test infrastructure yet; it is deterministic and exits non-zero on any
+    failed check.
 - **Acceptance:** vine-core unit tests prove FIRST→LAST ordering (stable
   within priority), a throwing handler doesn't stop later handlers,
   `cancel()` gates only remaining handlers; both drivers still boot.
@@ -200,10 +212,26 @@ public interface VineDriver {
 
 ### Stage D — feature probes + `supports()` (M1)
 
-- [ ] **Do:** `Feature` + `FeatureMatrix`; drivers populate ids via runtime
+- [x] **Do:** `Feature` + `FeatureMatrix`; drivers populate ids via runtime
   probes (class/method presence, data-version ranges); seed ids
   `hasDataComponents`, `dataDrivenRegistries`, `unobfuscatedRuntime`,
   `vulkanRenderer` (+ client placeholders, §5.11); out-of-window boot failure.
+  - **Landed 2026-09-24:** `Feature.of(id)` + `VineEngine.supports(Feature)`;
+    vine-core `FeatureMatrix` filled once from the driver-bound
+    `CellInfo.features()` (inert engine supports nothing; ids, never version
+    strings). Driver probes were already in place
+    (`driver-1.21.1-common/CellProbes`: data components, Brigadier, data-driven
+    registries true; unobfuscatedRuntime, vulkanRenderer false) with
+    `CellWindow` owning the data-version window and the explicit
+    `UnsupportedCellException` boot failure.
+  - **Evidence:** `build/sub01d` harness — 10 checks green (id-based matching,
+    1.21.1 acceptance pair, empty matrix, forced out-of-window failure message
+    naming driver + probe + window); new `vine_test:features` TCK scenario
+    asserts the live pair on both 1.21.1 cells — 9/9 scenarios PASS on
+    NeoForge and Fabric.
+  - **Deviation:** the probe matrix's seed values are compile-time cell
+    constants today (documented in `CellProbes`); cells whose values can vary
+    replace them with class/method-presence probes when they land.
 - **Acceptance:** on 1.21.1: `supports(unobfuscatedRuntime)` false,
   `supports(hasDataComponents)` true; `hasDataComponents` asserts TRUE on
   every cell including 26.x when it lands (Data Components exist everywhere,
