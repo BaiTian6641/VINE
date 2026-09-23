@@ -21,7 +21,10 @@ import dev.vineengine.vine.hook.HookEvents;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.storage.LevelResource;
 import net.neoforged.neoforge.event.level.LevelEvent;
+import dev.vineengine.vine.internal.data.VoxelStorageBinding;
+import dev.vineengine.vine.internal.driver1211.common.data.VoxelProbe;
 import dev.vineengine.vine.internal.driver1211.common.persistence.FileWorldStore;
+import dev.vineengine.vine.internal.driver1211.neoforge.data.NeoForgeVoxelStorage;
 import dev.vineengine.vine.internal.driver1211.common.DriverRuntime;
 import dev.vineengine.vine.internal.driver1211.common.command.EngineCommands;
 import dev.vineengine.vine.internal.driver1211.neoforge.command.NeoForgeCommandFactory;
@@ -84,8 +87,11 @@ public final class NeoForge1211Driver implements VineDriver {
             throw new IllegalStateException(
                 "VineMod did not hand off the mod event bus before engine boot — entrypoint wiring broken");
         }
-        modBus.addListener(FMLCommonSetupEvent.class,
-            event -> ctx.advancePhase(EnginePhase.REGISTRIES_FROZEN));
+        modBus.addListener(FMLCommonSetupEvent.class, event -> {
+            // Schemas land after engine boot and before the store freezes.
+            VoxelProbe.registerSchemas();
+            ctx.advancePhase(EnginePhase.REGISTRIES_FROZEN);
+        });
         // Structural descriptor materialization (sub-02 Stage B): wires itself to
         // NewRegistryEvent/RegisterEvent on the same mod bus.
         new NeoForgeStructuralMaterializer(modBus, ctx);
@@ -93,9 +99,22 @@ public final class NeoForge1211Driver implements VineDriver {
         new NeoForgeDesignMaterializer(modBus, ctx);
         NeoForge.EVENT_BUS.addListener(ServerAboutToStartEvent.class,
             event -> ctx.advancePhase(EnginePhase.WORLD_LOAD));
-        NeoForge.EVENT_BUS.addListener(ServerStartedEvent.class,
-            event -> ctx.advancePhase(EnginePhase.SERVER_UP));
+        NeoForge.EVENT_BUS.addListener(ServerStartedEvent.class, event -> {
+            ctx.advancePhase(EnginePhase.SERVER_UP);
+            VoxelProbe.run(NeoForgeVoxelStorage::probeStack, NeoForgeVoxelStorage.probeAccess(), "1.21.1-neoforge");
+        });
 
+        // Voxel storage (sub-03 Stage D): item-stack attach point + acceptance probe.
+        if (!CellProbes.supportedFeatures().contains(CellProbes.HAS_DATA_COMPONENTS)) {
+            // §5.12: the engine's attach points ride data components — a cell
+            // without them cannot carry engine data, and that is a boot failure,
+            // never a silent degradation.
+            throw new IllegalStateException(
+                "cell lacks data components (hasDataComponents probe false) — VINE cannot store engine data here");
+        }
+        NeoForgeVoxelStorage.registerComponent(modBus);
+        NeoForgeVoxelStorage voxelStorage = new NeoForgeVoxelStorage();
+        voxelStorage.engine(VoxelStorageBinding.bind(voxelStorage));
         // Session persistence (sub-14 Stage B): mount on the first world load,
         // flush on every level save (NF has a real save event).
         java.util.concurrent.atomic.AtomicBoolean mounted = new java.util.concurrent.atomic.AtomicBoolean();

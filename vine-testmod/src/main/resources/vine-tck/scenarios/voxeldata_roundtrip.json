@@ -1,0 +1,12 @@
+{
+  "id": "vine_test:voxeldata_roundtrip",
+  "tags": ["SMOKE"],
+  "steps": [
+    { "type": "AssertTrace", "trace": "voxeldata", "expect": [
+      "voxeldata roundtrip cell=",
+      "voxeldata roundtrip values mana=42 kills=3",
+      "voxeldata native cell=",
+      "voxeldata native value damage=7"
+    ] }
+  ]
+}

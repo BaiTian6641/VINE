@@ -17,7 +17,10 @@ import dev.vineengine.vine.hook.HookEvents;
 import dev.vineengine.vine.internal.driver1211.common.DriverRuntime;
 import dev.vineengine.vine.internal.driver1211.common.command.EngineCommands;
 import dev.vineengine.vine.internal.driver1211.fabric.command.FabricCommandFactory;
+import dev.vineengine.vine.internal.data.VoxelStorageBinding;
+import dev.vineengine.vine.internal.driver1211.common.data.VoxelProbe;
 import dev.vineengine.vine.internal.driver1211.common.persistence.FileWorldStore;
+import dev.vineengine.vine.internal.driver1211.fabric.data.FabricVoxelStorage;
 import dev.vineengine.vine.internal.driver1211.fabric.events.FabricHookInstallers;
 import dev.vineengine.vine.internal.driver1211.fabric.net.FabricNetDriver;
 import dev.vineengine.vine.internal.driver1211.fabric.registry.FabricDesignMaterializer;
@@ -72,6 +75,10 @@ public final class Fabric1211Driver implements VineDriver {
         ctx.advancePhase(EnginePhase.REGISTRIES_OPEN);
         driverContext = ctx;
         ServerLifecycleEvents.SERVER_STARTING.register(server -> {
+            // Schemas must be registered by consumers/drivers *after* engine boot
+            // (bootstrap runs inside it, where the facade is deliberately blocked)
+            // and before the store freezes — this anchor is exactly that window.
+            VoxelProbe.registerSchemas();
             ctx.advancePhase(EnginePhase.REGISTRIES_FROZEN);
             ctx.advancePhase(EnginePhase.WORLD_LOAD);
         });
@@ -85,6 +92,7 @@ public final class Fabric1211Driver implements VineDriver {
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             net.server(server);
             ctx.advancePhase(EnginePhase.SERVER_UP);
+            VoxelProbe.run(FabricVoxelStorage::probeStack, FabricVoxelStorage.probeAccess(), "1.21.1-fabric");
         });
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> net.server(null));
 
@@ -92,6 +100,19 @@ public final class Fabric1211Driver implements VineDriver {
         // flush at stop. Fabric has no per-save callback (documented seam) — the
         // stop flush is the durable point on this loader.
         java.util.concurrent.atomic.AtomicBoolean mounted = new java.util.concurrent.atomic.AtomicBoolean();
+        // Voxel storage (sub-03 Stage D): the item-stack attach point plus the
+        // acceptance probe. Component registration happens here — mod init is
+        // this cell's registration moment, before any item stack exists.
+        if (!CellProbes.supportedFeatures().contains(CellProbes.HAS_DATA_COMPONENTS)) {
+            // §5.12: the engine's attach points ride data components — a cell
+            // without them cannot carry engine data, and that is a boot failure,
+            // never a silent degradation.
+            throw new IllegalStateException(
+                "cell lacks data components (hasDataComponents probe false) — VINE cannot store engine data here");
+        }
+        FabricVoxelStorage.registerComponent();
+        FabricVoxelStorage voxelStorage = new FabricVoxelStorage();
+        voxelStorage.engine(VoxelStorageBinding.bind(voxelStorage));
         ServerWorldEvents.LOAD.register((server, world) -> {
             if (mounted.compareAndSet(false, true)) {
                 // Working directory = the run/module dir in dev and the server

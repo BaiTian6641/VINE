@@ -34,4 +34,7 @@ public interface VoxelBackend {
 
     /** See {@code VineData#decode} — blob deserialization through the schema registry. */
     VoxelData decode(byte[] blob);
+
+    /** See {@code VineData#registerNativeField}. */
+    void registerNativeField(VineId schemaId, String path, String nativeComponentId);
 }

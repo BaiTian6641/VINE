@@ -54,13 +54,22 @@ public final class FabricContentMaterializer {
         }
     }
 
+    /** Materialized items by descriptor id — the voxel probe's attach targets. */
+    private static final java.util.Map<VineId, Item> ITEMS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** The item materialized for {@code id}, or null when none was. */
+    public static Item itemFor(VineId id) {
+        return ITEMS.get(id);
+    }
+
     /** Registers every {@code vine:item} entry into the vanilla item registry. */
     public static void registerItems(StructuralRegistryView.StructuralType type) {
         for (Holder<?> holder : type.entries()) {
             ItemDescriptor descriptor = (ItemDescriptor) holder.value();
             requireMatchingIds(holder, descriptor.id());
-            Registry.register(Registries.ITEM, identifier(descriptor.id()), new Item(new Item.Settings()
-                .maxCount(descriptor.tuning().stackSize())));
+            Item item = new Item(new Item.Settings().maxCount(descriptor.tuning().stackSize()));
+            Registry.register(Registries.ITEM, identifier(descriptor.id()), item);
+            ITEMS.put(holder.id(), item);
             RegistryHookTap.dispatch(type.type().registryId().toString(), descriptor.id().toString());
             LOG.info("vine: materialized item {} (model={})", descriptor.id(), descriptor.model().kind());
         }

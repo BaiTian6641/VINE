@@ -138,8 +138,34 @@ public interface VoxelStorageDriver {
 
 ### Stage D — 1.21.1 drivers (NF ∥ Fabric — the two cells may run in parallel)
 
-- [ ] **Do:** component registration at `REGISTRIES_OPEN`; item-stack +
+- [x] **Do:** component registration at `REGISTRIES_OPEN`; item-stack +
   world attach; full `VoxelStorageDriver` per cell; `hasDataComponents` assert.
+  - **Landed 2026-09-24 (item-stack + native legs):** the engine's
+    `vine:voxel_data` data component is registered per cell (Fabric
+    `Registry.register` in mod init; NF `DeferredRegister` on the mod bus), and
+    `AbstractItemStackVoxelStorage` implements `open`/`flushDirty` for both:
+    blobs go through the engine's load/save handle (fix-on-load, read-only
+    guard), native-mapped fields (`VineData.registerNativeField`, resolved via
+    `NativeFields`) copy the vanilla component in at open and out at flush.
+    Both cells assert the `hasDataComponents` probe at bootstrap and fail the
+    boot when it is false (§5.12). The attach point is `VoxelStorageDriver`,
+    bound once per process through `VoxelStorageBinding`.
+  - **Bugs the runs caught:** (1) registering the probe schemas inside driver
+    bootstrap is illegal — bootstrap runs *inside* engine boot, where the
+    facade is deliberately blocked — so driver-owned schemas now register at
+    the cell's `REGISTRIES_FROZEN` anchor, before the store freezes; (2) NF
+    rejects `byte[]` component payloads outright ("Data components must
+    implement equals and hashCode"), so the payload is Base64 text on both
+    cells (also keeps the two cells' stored form identical).
+  - **Evidence:** `VoxelProbe` runs at `SERVER_UP` on each cell through the
+    public `VineData.of` path — real item-stack round-trip
+    (`vine_test:voxeldata_roundtrip`: `mana=42 kills=3` after flush + reopen on
+    a copy) and the native leg (`damage=7` visible in the vanilla DAMAGE
+    component). **14/14 scenarios PASS on both 1.21.1 cells.**
+  - **Seams (documented):** block-entity, entity and player attach points need
+    loader hooks (BE save-tag sub-compound; NF data attachments / Fabric custom
+    data) and land with the Mixin wave (sub-18 Stage E) — the SPI does not
+    change when they do. World attach (`SavedData`) rides the same wave.
 - **Acceptance:** TCK `voxeldata.roundtrip` + `voxeldata.native_strategy`
   green on both 1.21.1 cells (§8: one per loader family).
 - **Touches:** driver-1.21.1-neoforge, driver-1.21.1-fabric.

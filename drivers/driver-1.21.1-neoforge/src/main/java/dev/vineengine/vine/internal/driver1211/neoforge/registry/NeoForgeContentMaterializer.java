@@ -57,14 +57,24 @@ public final class NeoForgeContentMaterializer {
         });
     }
 
+    /** Materialized items by descriptor id — the voxel probe's attach targets. */
+    private static final java.util.Map<VineId, Item> ITEMS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** The item materialized for {@code id}, or null when none was. */
+    public static Item itemFor(VineId id) {
+        return ITEMS.get(id);
+    }
+
     /** Registers every {@code vine:item} entry into the vanilla item registry. */
     public static void registerItems(RegisterEvent event, StructuralRegistryView.StructuralType type) {
         event.register(Registries.ITEM, helper -> {
             for (Holder<?> holder : type.entries()) {
                 ItemDescriptor descriptor = (ItemDescriptor) holder.value();
                 requireMatchingIds(holder, descriptor.id());
-                helper.register(location(descriptor.id()), new Item(new Item.Properties()
-                    .stacksTo(descriptor.tuning().stackSize())));
+                Item item = new Item(new Item.Properties()
+                    .stacksTo(descriptor.tuning().stackSize()));
+                helper.register(location(descriptor.id()), item);
+                ITEMS.put(holder.id(), item);
                 RegistryHookTap.dispatch(type.type().registryId().toString(), descriptor.id().toString());
                 LOG.info("vine: materialized item {} (model={})", descriptor.id(), descriptor.model().kind());
             }

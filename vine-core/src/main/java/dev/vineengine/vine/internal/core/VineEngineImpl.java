@@ -33,6 +33,7 @@ import dev.vineengine.vine.internal.VoxelBackend;
 import dev.vineengine.vine.internal.capability.CapabilityStore;
 import dev.vineengine.vine.internal.command.CommandService;
 import dev.vineengine.vine.internal.config.ConfigService;
+import dev.vineengine.vine.internal.data.NativeFields;
 import dev.vineengine.vine.internal.data.SchemaRegistry;
 import dev.vineengine.vine.internal.data.VoxelBlobCodec;
 import dev.vineengine.vine.internal.data.VoxelStorageBinding;
@@ -255,6 +256,11 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
     @Override
     public VoxelData decode(byte[] blob) {
         return VoxelBlobCodec.load(blob, schemas);
+    }
+
+    @Override
+    public void registerNativeField(VineId schemaId, String path, String nativeComponentId) {
+        NativeFields.register(schemaId, path, nativeComponentId);
     }
 
     // ------------------------------------------------------------------

@@ -3,6 +3,7 @@ package dev.vineengine.vine.internal.data;
 import java.util.Objects;
 
 import dev.vineengine.vine.data.VoxelData;
+import dev.vineengine.vine.registry.VineId;
 
 import dev.vineengine.vine.internal.spi.VoxelStorageDriver;
 
@@ -86,6 +87,16 @@ public final class VoxelStorageBinding {
         /** See {@link VoxelBlobCodec#save}. */
         public byte[] save(VoxelData data) {
             return VoxelBlobCodec.save(data);
+        }
+
+        /** Fresh tree for {@code schemaId} — the engine-side create drivers use on attach. */
+        public VoxelData create(VineId schemaId) {
+            return schemas.create(schemaId);
+        }
+
+        /** Native-mapped paths for {@code schemaId} ({@code path -> component id}). */
+        public java.util.Map<String, String> nativeFields(VineId schemaId) {
+            return NativeFields.fieldsFor(schemaId);
         }
     }
 }

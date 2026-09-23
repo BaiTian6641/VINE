@@ -82,6 +82,18 @@ public final class VineData {
         return backend().decode(blob);
     }
 
+    /**
+     * Declares that {@code path} of {@code schemaId}'s trees mirrors the vanilla
+     * data component {@code nativeComponentId} ({@link FieldStrategy.Native},
+     * sub-03 §2): drivers copy that component's value into the tree on open and
+     * back on flush, so vanilla systems and engine code agree without either
+     * side reading the other's payload. Unknown component ids are skipped with a
+     * driver warning — the mapping never breaks a boot.
+     */
+    public static void registerNativeField(VineId schemaId, String path, String nativeComponentId) {
+        backend().registerNativeField(schemaId, path, nativeComponentId);
+    }
+
     private static VoxelBackend backend() {
         if (EngineAccess.get() instanceof VoxelBackend backend) {
             return backend;
