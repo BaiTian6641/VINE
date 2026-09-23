@@ -149,9 +149,28 @@ retained), `DROP`, `FAIL` (refuse load).
 
 ### Stage D — persistent ID map + missing-content policy
 
-- [ ] **Do:** per-world `VineId`↔int map in level data; stable assignment;
+- [x] **Do:** per-world `VineId`↔int map in level data; stable assignment;
   `KEEP`/`DROP`/`FAIL` policy (default KEEP); placeholders retain unknown-ID
   data; remap logging. Touches: vine-core, vine-spi, drivers, vine-tck.
+  - **Landed 2026-09-24:** `IdMapStore` (schema `vine:id_map`, engine-owned and
+    loader-neutral) with append-only assignment, `MissingContentPolicy`
+    (`VineRegistries.setMissingContentPolicy(namespace, …)`, default KEEP), and
+    policy logging. The world store SPI generalized to `WorldStoreSpi`
+    (`load/save(key)`) so sessions and the id map share one per-world file
+    store (`FileWorldStore`, atomic temp+move); both drivers mount/flush it at
+    their world-save/stop hooks.
+  - **Two real bugs the runs caught:** (1) assigning ids at *registration* time
+    collided with the world's restored numbering (registration happens before
+    world load) — the stored blob is now authoritative (restore clears first)
+    and ids resolve through the map; (2) a world's numbering must not depend on
+    which entry a consumer reads first — after mount the engine assigns ids for
+    every registered structural entry in *registration order*.
+  - **Evidence:** `build/sub02d` harness — 10 checks green (stable assignment,
+    snapshot/restore, KEEP retains the slot, DROP releases it, FAIL refuses with
+    an explicit message); new `vine_test:id_map_policy` TCK scenario drives
+    markers on/off across reboots — KEEP keeps `optional=3` while the content is
+    absent, DROP makes the re-added content take a fresh id (`optional=5`).
+    **13/13 scenarios PASS on both 1.21.1 cells.**
 - **Acceptance:** TCK save → remove entry → load: KEEP keeps placeholder+data,
   DROP strips, FAIL refuses; re-adding restores the original ID. Both 1.21.1
   drivers.

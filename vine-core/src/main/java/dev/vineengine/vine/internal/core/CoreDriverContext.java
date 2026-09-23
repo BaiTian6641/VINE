@@ -7,8 +7,9 @@ import dev.vineengine.vine.EventBus;
 import dev.vineengine.vine.hook.HookSlot;
 import dev.vineengine.vine.registry.VineId;
 import dev.vineengine.vine.internal.registry.DescriptorStore;
+import dev.vineengine.vine.internal.registry.IdMapStore;
 import dev.vineengine.vine.internal.session.SessionService;
-import dev.vineengine.vine.internal.spi.SessionPersistenceSpi;
+import dev.vineengine.vine.internal.spi.WorldStoreSpi;
 import dev.vineengine.vine.internal.spi.DesignRegistryView;
 import dev.vineengine.vine.internal.spi.StructuralRegistryView;
 import dev.vineengine.vine.internal.spi.VineDriver;
@@ -24,13 +25,15 @@ final class CoreDriverContext implements VineDriver.DriverContext {
     private final DescriptorStore registries;
     private final EngineEventBus bus;
     private final SessionService sessions;
+    private final IdMapStore idMap;
 
     CoreDriverContext(PhaseMachine machine, DescriptorStore registries, EngineEventBus bus,
-            SessionService sessions) {
+            SessionService sessions, IdMapStore idMap) {
         this.machine = machine;
         this.registries = registries;
         this.bus = bus;
         this.sessions = sessions;
+        this.idMap = idMap;
     }
 
     @Override
@@ -56,12 +59,18 @@ final class CoreDriverContext implements VineDriver.DriverContext {
     }
 
     @Override
-    public void mountSessionPersistence(SessionPersistenceSpi spi) {
-        sessions.mount(Objects.requireNonNull(spi, "spi"));
+    public void mountWorldStore(WorldStoreSpi spi) {
+        WorldStoreSpi store = Objects.requireNonNull(spi, "spi");
+        idMap.mount(store);
+        // Complete the map in registration order (sub-02 Stage D): the world's
+        // numbering must not depend on which entries a consumer reads first.
+        idMap.assignMissing(registries.structuralKeys());
+        sessions.mount(store);
     }
 
     @Override
-    public void flushSessionPersistence() {
+    public void flushWorldStore() {
+        idMap.flush();
         sessions.flush();
     }
 

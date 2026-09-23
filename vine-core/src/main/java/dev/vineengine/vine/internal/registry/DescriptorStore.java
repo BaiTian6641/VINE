@@ -15,6 +15,7 @@ import dev.vineengine.vine.internal.spi.StructuralRegistryView;
 import dev.vineengine.vine.registry.DescriptorClass;
 import dev.vineengine.vine.registry.DescriptorType;
 import dev.vineengine.vine.registry.Holder;
+import dev.vineengine.vine.registry.MissingContentPolicy;
 import dev.vineengine.vine.registry.VineId;
 
 /**
@@ -37,7 +38,59 @@ public final class DescriptorStore {
 
     private final Map<VineId, TypeEntries<?>> types = new LinkedHashMap<>();
     private final Map<VineId, DesignEntries> designEntries = new LinkedHashMap<>();
+    private final Map<String, MissingContentPolicy> policies = new LinkedHashMap<>();
+    /** Structural entries in registration order — the map's deterministic assignment order. */
+    private final java.util.List<String> structuralRegistrationOrder = new ArrayList<>();
+    private IdMapStore idMap;
     private boolean frozen;
+
+    /** Installs the persistent id map backing structural runtime ids (sub-02 Stage D). */
+    public void idMap(IdMapStore map) {
+        this.idMap = map;
+    }
+
+    /**
+     * Structural id-map keys in registration order (sub-02 Stage D): after the
+     * world map mounts, the engine assigns ids for these in exactly this order,
+     * so a world's numbering never depends on read order.
+     */
+    public synchronized java.util.List<String> structuralKeys() {
+        return List.copyOf(structuralRegistrationOrder);
+    }
+
+    /** Sets a namespace's missing-content policy. */
+    public synchronized void setMissingContentPolicy(String namespace, MissingContentPolicy policy) {
+        policies.put(Objects.requireNonNull(namespace, "namespace"),
+            Objects.requireNonNull(policy, "policy"));
+    }
+
+    /** A namespace's policy; {@code KEEP} when unset (the documented default). */
+    public synchronized MissingContentPolicy missingContentPolicyFor(String namespace) {
+        return policies.getOrDefault(namespace, MissingContentPolicy.KEEP);
+    }
+
+    /**
+     * Whether an id-map key ({@code registryId entryId}) resolves to content
+     * that exists right now: structural registrations and datapack-loaded design
+     * entries.
+     */
+    public synchronized boolean isRegistered(String key) {
+        int split = key.indexOf(' ');
+        if (split <= 0) {
+            return false;
+        }
+        VineId registryId = VineId.parse(key.substring(0, split));
+        VineId entryId = VineId.parse(key.substring(split + 1));
+        TypeEntries<?> entries = types.get(registryId);
+        if (entries == null) {
+            return false;
+        }
+        if (entries.map.containsKey(entryId)) {
+            return true;
+        }
+        DesignEntries slot = designEntries.get(registryId);
+        return slot != null && slot.byId.containsKey(entryId);
+    }
 
     /** Whether {@link #freeze()} has run (engine entered {@code REGISTRIES_FROZEN}). */
     public synchronized boolean frozen() {
@@ -84,8 +137,19 @@ public final class DescriptorStore {
             throw new IllegalStateException(
                 "duplicate descriptor id " + id + " in type " + type.registryId());
         }
-        StoredHolder<D> holder = new StoredHolder<>(id, data, entries.nextRuntimeId++);
+        // Structural runtime ids are resolved from the persistent per-world map
+        // (sub-02 Stage D) at READ time — registration happens before the world
+        // (and therefore the map) is mounted, so assigning here would collide with
+        // restored ids. The stored holder carries a provisional value; design
+        // entries keep load-order ids (they are per-world data, not persisted).
+        int runtimeId = entries.type.descriptorClass() == DescriptorClass.STRUCTURAL && idMap != null
+            ? -1
+            : entries.nextRuntimeId++;
+        StoredHolder<D> holder = new StoredHolder<>(id, data, runtimeId);
         entries.map.put(id, holder);
+        if (entries.type.descriptorClass() == DescriptorClass.STRUCTURAL) {
+            structuralRegistrationOrder.add(entries.type.registryId() + " " + id);
+        }
         return holder;
     }
 
@@ -104,6 +168,12 @@ public final class DescriptorStore {
         @SuppressWarnings("unchecked")
         Holder<D> holder = (Holder<D>) entries.map.get(id);
         if (holder != null) {
+            if (entries.type.descriptorClass() == DescriptorClass.STRUCTURAL && idMap != null) {
+                // Authoritative id: the map assigns on first read and keeps it
+                // stable for the world's lifetime, independent of read order.
+                int runtimeId = idMap.assign(entries.type.registryId(), id);
+                return Optional.of(new StoredHolder<>(id, holder.value(), runtimeId));
+            }
             return Optional.of(holder);
         }
         // DESIGN entries come from the loader's datapack registry (sub-02 Stage C),

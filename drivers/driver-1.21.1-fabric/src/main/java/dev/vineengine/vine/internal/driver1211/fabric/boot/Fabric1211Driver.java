@@ -17,7 +17,7 @@ import dev.vineengine.vine.hook.HookEvents;
 import dev.vineengine.vine.internal.driver1211.common.DriverRuntime;
 import dev.vineengine.vine.internal.driver1211.common.command.EngineCommands;
 import dev.vineengine.vine.internal.driver1211.fabric.command.FabricCommandFactory;
-import dev.vineengine.vine.internal.driver1211.common.persistence.FileSessionStore;
+import dev.vineengine.vine.internal.driver1211.common.persistence.FileWorldStore;
 import dev.vineengine.vine.internal.driver1211.fabric.events.FabricHookInstallers;
 import dev.vineengine.vine.internal.driver1211.fabric.net.FabricNetDriver;
 import dev.vineengine.vine.internal.driver1211.fabric.registry.FabricDesignMaterializer;
@@ -98,11 +98,11 @@ public final class Fabric1211Driver implements VineDriver {
                 // root in production; the default level lives at <cwd>/world
                 // (documented assumption — a renamed level-name would need the
                 // server-properties read).
-                ctx.mountSessionPersistence(new FileSessionStore(
-                    java.nio.file.Path.of("world", "vine", "sessions.vbl").toAbsolutePath()));
+                ctx.mountWorldStore(new FileWorldStore(
+                    java.nio.file.Path.of("world", "vine").toAbsolutePath()));
             }
         });
-        ServerLifecycleEvents.SERVER_STOPPING.register(server -> ctx.flushSessionPersistence());
+        ServerLifecycleEvents.SERVER_STOPPING.register(server -> ctx.flushWorldStore());
 
         // Commands (sub-06 Stage A): Fabric's command callback fires at dispatcher
         // construction — before SERVER_STARTING on this cell, but the descriptor

@@ -25,4 +25,17 @@ public interface RegistryBackend {
 
     /** See {@code VineRegistries#get}. */
     <D> Optional<Holder<D>> get(DescriptorType<D> type, VineId id);
+
+    /** See {@code VineRegistries#setMissingContentPolicy}. */
+    void setMissingContentPolicy(String namespace,
+        dev.vineengine.vine.registry.MissingContentPolicy policy);
+
+    /** See {@code VineRegistries#missingContentPolicyFor}. */
+    dev.vineengine.vine.registry.MissingContentPolicy missingContentPolicyFor(String namespace);
+
+    /** See {@code VineRegistries#isRegistered}. */
+    boolean isRegistered(String key);
+
+    /** See {@code VineRegistries#idMap}. */
+    java.util.Map<String, Integer> idMap();
 }

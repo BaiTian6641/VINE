@@ -23,7 +23,41 @@ public final class Testmarkers {
     /** The single marker entry; the JSON twin uses this exact id. */
     public static final VineId EXAMPLE_ID = VineId.of("vinetest", "example");
 
+    /**
+     * Optional markers (sub-02 Stage D acceptance): registered only while their
+     * flag file holds {@code on} in the server working directory, so a TCK
+     * scenario can make content appear and disappear across reboots and watch
+     * the persistent id map's missing-content policy.
+     */
+    public static final VineId OPTIONAL_ID = VineId.of("vinetest", "optional");
+    public static final VineId OPTIONAL2_ID = VineId.of("vinetest", "optional2");
+    private static final java.nio.file.Path OPTIONAL_FLAG =
+        java.nio.file.Path.of("vine_tck_optional.enabled");
+    private static final java.nio.file.Path OPTIONAL2_FLAG =
+        java.nio.file.Path.of("vine_tck_optional2.enabled");
+
     private Testmarkers() {
+    }
+
+    /** A file's trimmed content, or empty when absent/unreadable. */
+    private static String flagContent(java.nio.file.Path path) {
+        try {
+            return java.nio.file.Files.exists(path)
+                ? java.nio.file.Files.readString(path).trim()
+                : "";
+        } catch (java.io.IOException e) {
+            return "";
+        }
+    }
+
+    /** A flag file whose trimmed content is {@code on} enables the marker. */
+    private static boolean flagOn(java.nio.file.Path path) {
+        try {
+            return java.nio.file.Files.exists(path)
+                && "on".equals(java.nio.file.Files.readString(path).trim());
+        } catch (java.io.IOException e) {
+            return false;
+        }
     }
 
     /**
@@ -34,8 +68,22 @@ public final class Testmarkers {
      * regardless of the cell's logging setup.
      */
     public static void register(VineEngine engine) {
+        // Missing-content policy (sub-02 Stage D): file-driven so a TCK scenario
+        // can change it between reboots and watch the id map react at restore.
+        String policy = flagContent(java.nio.file.Path.of("vine_tck_policy.txt"));
+        if (!policy.isEmpty()) {
+            VineRegistries.setMissingContentPolicy("vinetest",
+                dev.vineengine.vine.registry.MissingContentPolicy.valueOf(
+                    policy.toUpperCase(java.util.Locale.ROOT)));
+        }
         VineRegistries.defineType(TestmarkerType.INSTANCE);
         VineRegistries.register(TestmarkerType.INSTANCE, EXAMPLE_ID, new Testmarker("example", 1));
+        if (flagOn(OPTIONAL_FLAG)) {
+            VineRegistries.register(TestmarkerType.INSTANCE, OPTIONAL_ID, new Testmarker("optional", 2));
+        }
+        if (flagOn(OPTIONAL2_FLAG)) {
+            VineRegistries.register(TestmarkerType.INSTANCE, OPTIONAL2_ID, new Testmarker("optional2", 3));
+        }
         engine.onPhase(EnginePhase.REGISTRIES_FROZEN, change -> {
             var holder = VineRegistries.get(TestmarkerType.INSTANCE, EXAMPLE_ID)
                 .orElseThrow(() -> new IllegalStateException(

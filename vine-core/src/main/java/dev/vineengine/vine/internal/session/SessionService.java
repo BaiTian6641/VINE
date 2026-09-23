@@ -12,7 +12,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import com.mojang.serialization.Codec;
 
 import dev.vineengine.vine.data.VineData;
-import dev.vineengine.vine.internal.spi.SessionPersistenceSpi;
+import dev.vineengine.vine.internal.spi.WorldStoreSpi;
 import dev.vineengine.vine.data.VoxelData;
 import dev.vineengine.vine.data.VoxelSchema;
 import dev.vineengine.vine.registry.VineId;
@@ -52,7 +52,7 @@ public final class SessionService implements SessionManager {
     private final Map<VineId, SessionFactory> factories = new LinkedHashMap<>();
     private final Map<VineId, EngineSession> live = new LinkedHashMap<>();
     private final AtomicLong sessionCounter = new AtomicLong();
-    private volatile SessionPersistenceSpi store;
+    private volatile WorldStoreSpi store;
     private boolean frozen;
 
     /** Engine schema id backing a session type's state trees. */
@@ -211,24 +211,26 @@ public final class SessionService implements SessionManager {
 
     @Override
     public void flush() {
-        SessionPersistenceSpi current = store;
+        WorldStoreSpi current = store;
         if (current == null) {
             return;
         }
         try {
             synchronized (this) {
-                current.save(snapshot());
+                current.save(STORE_KEY, snapshot());
             }
         } catch (RuntimeException e) {
             LOG.log(System.Logger.Level.WARNING, "[VINE] session flush failed (world save continues): " + e);
         }
     }
 
-    /** Mounts the driver's store and restores whatever it holds (world load). */
-    public void mount(SessionPersistenceSpi spi) {
+    /** Mounts the driver's world store and restores whatever it holds (world load). */
+    public void mount(WorldStoreSpi spi) {
         this.store = java.util.Objects.requireNonNull(spi, "spi");
-        restore(spi.load());
+        restore(spi.load(STORE_KEY));
     }
+
+    private static final String STORE_KEY = "sessions";
 
     private static String scopeId(SessionScope scope) {
         return switch (scope) {

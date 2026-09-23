@@ -93,17 +93,18 @@ public interface VineDriver {
         void installHook(HookSlot slot, Runnable install, Runnable uninstall);
 
         /**
-         * Mounts the session persistence store (sub-14 Stage B): the engine
-         * restores sessions from {@link SessionPersistenceSpi#load()} at once
-         * and flushes through it on {@link #flushSessionPersistence()}.
+         * Mounts the per-world engine store (sub-14 Stage B / sub-02 Stage D):
+         * the engine restores sessions and the persistent id map from it at
+         * once and flushes through it on {@link #flushWorldStore()}.
          */
-        void mountSessionPersistence(SessionPersistenceSpi spi);
+        void mountWorldStore(WorldStoreSpi spi);
 
         /**
-         * Flushes live sessions through the mounted store; the driver calls
-         * this from its world-save/stop hook. A no-op without a store.
+         * Flushes engine-owned per-world data (sessions + id map) through the
+         * mounted store; the driver calls this from its world-save/stop hook.
+         * A no-op without a store.
          */
-        void flushSessionPersistence();
+        void flushWorldStore();
 
         /**
          * Reports the entries a loader's dynamic registry produced for a DESIGN

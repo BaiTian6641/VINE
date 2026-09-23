@@ -36,6 +36,7 @@ import dev.vineengine.vine.internal.config.ConfigService;
 import dev.vineengine.vine.internal.data.SchemaRegistry;
 import dev.vineengine.vine.internal.data.VoxelBlobCodec;
 import dev.vineengine.vine.internal.data.VoxelStorageBinding;
+import dev.vineengine.vine.internal.registry.IdMapStore;
 import dev.vineengine.vine.internal.net.VineNetImpl;
 import dev.vineengine.vine.internal.registry.DescriptorStore;
 import dev.vineengine.vine.internal.session.SessionService;
@@ -86,6 +87,7 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
     private final SessionService sessions = new SessionService();
     private final ConfigService config = new ConfigService();
     private final ExtensionPointsImpl extensions = new ExtensionPointsImpl();
+    private final IdMapStore idMap = new IdMapStore();
 
     VineEngineImpl() {
         // Phase changes are engine events too (sub-01 Stage B): every entry is
@@ -95,6 +97,7 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
         // and before any consumer initializer runs, so registration under
         // VineContent tokens is legal from the first REGISTRIES_OPEN moment and
         // the driver's structural view can never miss the types.
+        registries.idMap(idMap);
         registries.defineType(VineContent.BLOCK_TYPE);
         registries.defineType(VineContent.ITEM_TYPE);
         machine.onPhase(EnginePhase.REGISTRIES_FROZEN, change -> {
@@ -105,6 +108,7 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
             // the session store's snapshot schema is engine-owned and needs no
             // consumer registration.
             SessionService.ensureStoreSchema();
+            IdMapStore.ensureSchema();
             schemas.freeze();
             capabilities.freeze();
             sessions.freeze();
@@ -135,7 +139,7 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
         features = new FeatureMatrix(cell.features());
         LOG.log(System.Logger.Level.INFO, "[VINE] features " + features.ids());
         reportUnsafeScan();
-        driver.bootstrap(new CoreDriverContext(machine, registries, bus, sessions));
+        driver.bootstrap(new CoreDriverContext(machine, registries, bus, sessions, idMap));
     }
 
     @Override
@@ -327,6 +331,26 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
     @Override
     public ExtensionPoints extensions() {
         return extensions;
+    }
+
+    @Override
+    public void setMissingContentPolicy(String namespace, dev.vineengine.vine.registry.MissingContentPolicy policy) {
+        registries.setMissingContentPolicy(namespace, policy);
+    }
+
+    @Override
+    public dev.vineengine.vine.registry.MissingContentPolicy missingContentPolicyFor(String namespace) {
+        return registries.missingContentPolicyFor(namespace);
+    }
+
+    @Override
+    public boolean isRegistered(String key) {
+        return registries.isRegistered(key);
+    }
+
+    @Override
+    public java.util.Map<String, Integer> idMap() {
+        return idMap.mappings();
     }
 
     /**

@@ -511,6 +511,23 @@ public final class ScenarioRunner {
         // must observe the saved world, never a wiped one.
         if (firstBoot) {
             firstBoot = false;
+            // Scenario-owned run-dir fixtures (id-map flags/policy) must not leak
+            // between runs, exactly like world state: determinism first.
+            Path runDir = rootDir
+                .resolve(gradleTask.substring(1, gradleTask.lastIndexOf(':')).replace(':', '/'))
+                .resolve("run");
+            try (Stream<Path> fixtures = Files.list(runDir)) {
+                fixtures.filter(p -> p.getFileName().toString().startsWith("vine_tck_"))
+                    .forEach(p -> {
+                        try {
+                            Files.deleteIfExists(p);
+                        } catch (IOException e) {
+                            // best-effort
+                        }
+                    });
+            } catch (IOException e) {
+                // run dir may not exist before the first boot; the scenario writes what it needs
+            }
             String projectPath = gradleTask.substring(1, gradleTask.lastIndexOf(':')).replace(':', '/');
             Path world = rootDir.resolve(projectPath).resolve("run").resolve("world");
             if (Files.exists(world)) {

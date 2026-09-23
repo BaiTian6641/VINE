@@ -64,6 +64,39 @@ public final class VineRegistries {
         return backend().get(type, id);
     }
 
+    /**
+     * Sets {@code namespace}'s missing-content policy (sub-02 Stage D), applied
+     * the next time the persistent id map is restored. Default is
+     * {@link MissingContentPolicy#KEEP}.
+     */
+    public static void setMissingContentPolicy(String namespace, MissingContentPolicy policy) {
+        backend().setMissingContentPolicy(namespace, policy);
+    }
+
+    /** {@code namespace}'s current policy (never null; defaults to {@code KEEP}). */
+    public static MissingContentPolicy missingContentPolicyFor(String namespace) {
+        return backend().missingContentPolicyFor(namespace);
+    }
+
+    /**
+     * Whether {@code key} (the id-map key {@code registryId entryId}) refers to
+     * content that is registered right now — structural entries and loaded design
+     * entries alike. Engine-internal consumers and the id map use it to decide
+     * missing-content handling.
+     */
+    public static boolean isRegistered(String key) {
+        return backend().isRegistered(key);
+    }
+
+    /**
+     * Snapshot of the persistent {@code VineId}<->int map ({@code "registryId entryId"}
+     * keys, sorted) for the current world — the tooling/TCK observability surface
+     * behind {@code Holder#runtimeId}.
+     */
+    public static java.util.Map<String, Integer> idMap() {
+        return backend().idMap();
+    }
+
     private static RegistryBackend backend() {
         if (EngineAccess.get() instanceof RegistryBackend backend) {
             return backend;
