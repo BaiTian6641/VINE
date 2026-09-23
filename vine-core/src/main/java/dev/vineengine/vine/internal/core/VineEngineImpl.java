@@ -22,12 +22,14 @@ import dev.vineengine.vine.data.VoxelSchema;
 import dev.vineengine.vine.data.VoxelTarget;
 import dev.vineengine.vine.internal.CapabilityBackend;
 import dev.vineengine.vine.internal.CommandBackend;
+import dev.vineengine.vine.internal.ConfigBackend;
 import dev.vineengine.vine.internal.NetBackend;
 import dev.vineengine.vine.internal.RegistryBackend;
 import dev.vineengine.vine.internal.SessionBackend;
 import dev.vineengine.vine.internal.VoxelBackend;
 import dev.vineengine.vine.internal.capability.CapabilityStore;
 import dev.vineengine.vine.internal.command.CommandService;
+import dev.vineengine.vine.internal.config.ConfigService;
 import dev.vineengine.vine.internal.data.SchemaRegistry;
 import dev.vineengine.vine.internal.data.VoxelBlobCodec;
 import dev.vineengine.vine.internal.data.VoxelStorageBinding;
@@ -65,7 +67,7 @@ import dev.vineengine.vine.session.SessionManager;
  * real drivers exist.
  */
 final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, CommandBackend,
-        VoxelBackend, CapabilityBackend, SessionBackend {
+        VoxelBackend, CapabilityBackend, SessionBackend, ConfigBackend {
 
     private static final System.Logger LOG = System.getLogger(PhaseMachine.LOG_NAME);
 
@@ -77,6 +79,7 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
     private final SchemaRegistry schemas = new SchemaRegistry();
     private final CapabilityStore capabilities = new CapabilityStore();
     private final SessionService sessions = new SessionService();
+    private final ConfigService config = new ConfigService();
 
     VineEngineImpl() {
         // Engine-owned content kinds (sub-07): defined before the driver boots
@@ -258,5 +261,39 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
     @Override
     public SessionManager manager() {
         return sessions;
+    }
+
+    // ------------------------------------------------------------------
+    // ConfigBackend (sub-01 Stage E): the config service.
+    // ------------------------------------------------------------------
+
+    @Override
+    public String getString(String key, String defaultValue) {
+        return config.getString(key, defaultValue);
+    }
+
+    @Override
+    public int getInt(String key, int defaultValue) {
+        return config.getInt(key, defaultValue);
+    }
+
+    @Override
+    public long getLong(String key, long defaultValue) {
+        return config.getLong(key, defaultValue);
+    }
+
+    @Override
+    public boolean getBoolean(String key, boolean defaultValue) {
+        return config.getBoolean(key, defaultValue);
+    }
+
+    @Override
+    public void reload() {
+        config.reload();
+    }
+
+    @Override
+    public void onReload(Runnable listener) {
+        config.onReload(listener);
     }
 }
