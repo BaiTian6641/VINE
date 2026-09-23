@@ -29,6 +29,7 @@ import dev.vineengine.vine.internal.VoxelBackend;
 import dev.vineengine.vine.internal.capability.CapabilityStore;
 import dev.vineengine.vine.internal.command.CommandService;
 import dev.vineengine.vine.internal.data.SchemaRegistry;
+import dev.vineengine.vine.internal.data.VoxelBlobCodec;
 import dev.vineengine.vine.internal.data.VoxelStorageBinding;
 import dev.vineengine.vine.internal.net.VineNetImpl;
 import dev.vineengine.vine.internal.registry.DescriptorStore;
@@ -196,6 +197,16 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
                 "no VoxelStorageDriver bound — attach-point access needs a cell driver (headless runtimes use VineData.create)");
         }
         return storage.open(target, schemaId);
+    }
+
+    @Override
+    public byte[] encode(VoxelData tree) {
+        return VoxelBlobCodec.save(tree);
+    }
+
+    @Override
+    public VoxelData decode(byte[] blob) {
+        return VoxelBlobCodec.load(blob, schemas);
     }
 
     // ------------------------------------------------------------------

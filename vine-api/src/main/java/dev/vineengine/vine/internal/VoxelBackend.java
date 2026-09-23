@@ -28,4 +28,10 @@ public interface VoxelBackend {
 
     /** See {@code VineData#of} — routes to the bound {@code VoxelStorageDriver}. */
     VoxelData open(VoxelTarget target, VineId schemaId);
+
+    /** See {@code VineData#encode} — blob serialization (fixtures, transport). */
+    byte[] encode(VoxelData tree);
+
+    /** See {@code VineData#decode} — blob deserialization through the schema registry. */
+    VoxelData decode(byte[] blob);
 }

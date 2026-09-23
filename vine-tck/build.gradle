@@ -115,3 +115,21 @@ tasks.register('runScenarios') {
     description = 'Headless TCK scenario suite on the M0 acceptance matrix (both 1.21.1 cells).'
     dependsOn m0Cells.collect { perCellScenarioTasks[it] }
 }
+
+// ---------------------------------------------------------------------------
+// sub-21 Stage C — golden-fixture cross-cell round-trip: one fixture written
+// on the NeoForge cell and verified on the Fabric cell in a single JVM run
+// (digest byte-identity + semantic equality per section). Serialized against
+// the same port lock as the other server-driving tasks.
+// ---------------------------------------------------------------------------
+tasks.register('crossCellRoundTrip', JavaExec) {
+    group = 'verification'
+    description = 'Golden-fixture round-trip across the two 1.21.1 loader cells (sub-21 Stage C).'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'dev.vineengine.vine.internal.tck.CrossCellRunner'
+    args = [
+            '--root-dir', rootProject.layout.projectDirectory.asFile.absolutePath,
+            '--project-cache-dir', tckBuildDir.dir('project-cache').get().asFile.absolutePath,
+    ]
+    usesService(tckServerLock)
+}

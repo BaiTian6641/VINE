@@ -61,6 +61,27 @@ public final class VineData {
         return backend().open(target, schemaId);
     }
 
+    /**
+     * Serializes {@code tree} to the engine's self-describing blob format
+     * (schema id + version header, then the tree payload). Round-trips
+     * through {@link #decode} byte-stably; the TCK's golden-fixture
+     * cross-cell round-trip rides this pair.
+     */
+    public static byte[] encode(VoxelData tree) {
+        return backend().encode(tree);
+    }
+
+    /**
+     * Deserializes a blob produced by {@link #encode} — older versions route
+     * through the schema's fixer chain, newer-than-registered blobs open
+     * read-only (never destructive).
+     *
+     * @throws IllegalArgumentException on malformed input or an unknown schema
+     */
+    public static VoxelData decode(byte[] blob) {
+        return backend().decode(blob);
+    }
+
     private static VoxelBackend backend() {
         if (EngineAccess.get() instanceof VoxelBackend backend) {
             return backend;
