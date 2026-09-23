@@ -195,9 +195,36 @@ public interface VineDriver {
 
 ### Stage C — hook families + lazy install (M0 → M1)
 
-- [ ] **Do:** vine-api event records for the §5.8 families (version-free
+- [x] **Do:** vine-api event records for the §5.8 families (version-free
   payloads only); `HookSlot` first-subscribe-install / last-close-uninstall in
   vine-core; 1.21.1 driver translation per the §2 table.
+  - **Landed 2026-09-24:** `hook/HookSlot` + `hook/HookEvents` (BlockPlace,
+    BlockBreak, WorldLoad, WorldSave, RegistryRegister, PacketReceive,
+    CommandExecute; vetoable ones implement `Cancellable` — classes, since
+    records cannot carry cancel state). `EventBus.attachSlot` +
+    `DriverContext.installHook(slot, install, uninstall)`; the bus installs on
+    0→1 subscribers and uninstalls on 1→0, running driver code outside the bus
+    lock, and rolls the subscription back when install fails (a seam hook must
+    fail loudly, never sit silently inert). `EventBus.activeHookInstalls()` is
+    the Minimal Footprint debug counter.
+  - **Cutover:** the driver-internal `HookBus`/`HookEvent`/`VineHook`
+    collector (sub-18 M0 stand-in) dissolved into the engine bus; drivers now
+    bind `HookSlots.*` to their native sources (NF game-bus listeners with real
+    unregistration; Fabric listeners gated by a live flag — the API has no
+    unregister). `commandExecute` vetoing now gates execution (pre-event), and
+    `packetReceive` posts from vine-core's `VineNetImpl.onInbound` — one
+    dispatch point for every transport, including the TCK loopback.
+  - **Evidence:** new `vine_test:hooks` TCK scenario — `hooks native=0`
+    (zero-consumer boot), `after-subscribe native=1`, `after-close native=0`,
+    veto gating observable (`vetoed=false/true` with the NORMAL observer
+    count frozen at 1 on the cancelled post), packet hook on the loopback
+    frame. 10/10 scenarios PASS on NeoForge and Fabric.
+  - **Seams (documented, not silent):** Fabric binds no `blockPlace`/
+    `worldSave` source (quarantined Mixin work) — subscribing fails loudly;
+    real player-driven `blockBreak`/`worldLoad` firing needs a client and
+    lands with sub-21's client runner; content-driven slots
+    (`registryRegister`, `packetReceive`, `commandExecute`) install by
+    capturing the sink their live path posts to.
 - **Acceptance:** TCK scenario: one hook per family fires with identical
   observable order and cancel semantics on both 1.21.1 drivers; zero-consumer
   boot installs zero native listeners (driver debug counter).
