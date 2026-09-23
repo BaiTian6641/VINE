@@ -3,6 +3,7 @@ package dev.vineengine.vine.internal.driver1211.fabric.boot;
 
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents;
 import net.minecraft.SharedConstants;
 
 import org.slf4j.Logger;
@@ -16,6 +17,7 @@ import dev.vineengine.vine.hook.HookEvents;
 import dev.vineengine.vine.internal.driver1211.common.DriverRuntime;
 import dev.vineengine.vine.internal.driver1211.common.command.EngineCommands;
 import dev.vineengine.vine.internal.driver1211.fabric.command.FabricCommandFactory;
+import dev.vineengine.vine.internal.driver1211.common.persistence.FileSessionStore;
 import dev.vineengine.vine.internal.driver1211.fabric.events.FabricHookInstallers;
 import dev.vineengine.vine.internal.driver1211.fabric.net.FabricNetDriver;
 import dev.vineengine.vine.internal.driver1211.fabric.registry.FabricStructuralMaterializer;
@@ -84,6 +86,22 @@ public final class Fabric1211Driver implements VineDriver {
             ctx.advancePhase(EnginePhase.SERVER_UP);
         });
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> net.server(null));
+
+        // Session persistence (sub-14 Stage B): mount on the first world load,
+        // flush at stop. Fabric has no per-save callback (documented seam) — the
+        // stop flush is the durable point on this loader.
+        java.util.concurrent.atomic.AtomicBoolean mounted = new java.util.concurrent.atomic.AtomicBoolean();
+        ServerWorldEvents.LOAD.register((server, world) -> {
+            if (mounted.compareAndSet(false, true)) {
+                // Working directory = the run/module dir in dev and the server
+                // root in production; the default level lives at <cwd>/world
+                // (documented assumption — a renamed level-name would need the
+                // server-properties read).
+                ctx.mountSessionPersistence(new FileSessionStore(
+                    java.nio.file.Path.of("world", "vine", "sessions.vbl").toAbsolutePath()));
+            }
+        });
+        ServerLifecycleEvents.SERVER_STOPPING.register(server -> ctx.flushSessionPersistence());
 
         // Commands (sub-06 Stage A): Fabric's command callback fires at dispatcher
         // construction — before SERVER_STARTING on this cell, but the descriptor

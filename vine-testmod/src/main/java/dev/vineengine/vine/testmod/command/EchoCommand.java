@@ -55,6 +55,16 @@ public final class EchoCommand {
                     dev.vineengine.vine.testmod.session.SessionExemplar.runProof();
                     return 1;
                 }))
+            .then(VineCommand.literal("tck_sessions_persist")
+                .executes(ctx -> {
+                    dev.vineengine.vine.testmod.session.SessionPersistenceExemplar.createAndFlush();
+                    return 1;
+                }))
+            .then(VineCommand.literal("tck_sessions_restored")
+                .executes(ctx -> {
+                    dev.vineengine.vine.testmod.session.SessionPersistenceExemplar.reportRestored();
+                    return 1;
+                }))
             .then(VineCommand.literal("tck_hooks")
                 .executes(ctx -> {
                     dev.vineengine.vine.testmod.hook.HookExemplar.subscribe();

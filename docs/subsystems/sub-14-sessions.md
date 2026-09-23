@@ -117,9 +117,30 @@ sub-01 normalized hooks. No per-cell API-shape difference.
 
 ### Stage B — VoxelData persistence (M1)
 
-- [ ] **Do:** `SessionPersistenceSpi` in `vine-spi`; per-driver store mount on
+- [x] **Do:** `SessionPersistenceSpi` in `vine-spi`; per-driver store mount on
   world save/load; sessions + participant states serialize via `VoxelData`;
   suspend-on-unload policy.
+  - **Landed 2026-09-24:** `SessionPersistenceSpi` (load/save) +
+    `DriverContext.mountSessionPersistence/flushSessionPersistence`;
+    `SessionManager.snapshot()/restore()/flush()/liveSessions()`.
+    `SessionService` serializes every live session (id, type, scope, phase,
+    ticks, objectives, shared flags) into one `VoxelData` blob under schema
+    `vine:session_store` — registered before the schema registry freezes (the
+    first live failure: a lazy registration was refused post-freeze and every
+    flush silently failed). Restore re-hydrates sessions in their persisted
+    phase (suspend-on-unload: an ACTIVE session comes back ACTIVE), keeps the
+    id counter ahead so ids are never reused, and skips sessions whose type
+    factory is gone. Drivers mount a `FileSessionStore` (atomic temp+move) on
+    first world load: NF flushes on every `LevelEvent.Save`, Fabric at
+    `SERVER_STOPPING` (no per-save callback on that loader — documented seam).
+  - **Evidence:** new `vine_test:session_persistence` TCK scenario — create →
+    ACTIVE → score=12 → flush → `SaveReloadWorld` → restored: 11/11 scenarios
+    PASS on both 1.21.1 cells (real graceful reboot, real file store). The
+    cross-cell leg rides the existing golden-fixture session section
+    (VoxelData session state written on NF, verified on Fabric).
+  - **Assumptions:** Fabric's store path derives from the process working
+    directory (`<cwd>/world/vine/sessions.vbl`); a renamed `level-name` needs
+    the server-properties read (noted in the driver).
 - **Acceptance:** golden-fixture round-trip of an ACTIVE session across
   save/load, readable on a second cell.
 - **Touches:** `vine-spi`, `vine-core` store, all drivers' persistence attach.

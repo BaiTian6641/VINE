@@ -18,6 +18,10 @@ import dev.vineengine.vine.internal.driver1211.common.CellProbes;
 import dev.vineengine.vine.internal.driver1211.common.CellWindow;
 import dev.vineengine.vine.EventBus;
 import dev.vineengine.vine.hook.HookEvents;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.storage.LevelResource;
+import net.neoforged.neoforge.event.level.LevelEvent;
+import dev.vineengine.vine.internal.driver1211.common.persistence.FileSessionStore;
 import dev.vineengine.vine.internal.driver1211.common.DriverRuntime;
 import dev.vineengine.vine.internal.driver1211.common.command.EngineCommands;
 import dev.vineengine.vine.internal.driver1211.neoforge.command.NeoForgeCommandFactory;
@@ -88,6 +92,21 @@ public final class NeoForge1211Driver implements VineDriver {
             event -> ctx.advancePhase(EnginePhase.WORLD_LOAD));
         NeoForge.EVENT_BUS.addListener(ServerStartedEvent.class,
             event -> ctx.advancePhase(EnginePhase.SERVER_UP));
+
+        // Session persistence (sub-14 Stage B): mount on the first world load,
+        // flush on every level save (NF has a real save event).
+        java.util.concurrent.atomic.AtomicBoolean mounted = new java.util.concurrent.atomic.AtomicBoolean();
+        NeoForge.EVENT_BUS.addListener(LevelEvent.Load.class, event -> {
+            if (event.getLevel() instanceof ServerLevel level && mounted.compareAndSet(false, true)) {
+                ctx.mountSessionPersistence(new FileSessionStore(
+                    level.getServer().getWorldPath(LevelResource.ROOT).resolve("vine").resolve("sessions.vbl")));
+            }
+        });
+        NeoForge.EVENT_BUS.addListener(LevelEvent.Save.class, event -> {
+            if (event.getLevel() instanceof ServerLevel) {
+                ctx.flushSessionPersistence();
+            }
+        });
 
         NeoForgeHookInstallers.bind(ctx, ctx.bus());
 

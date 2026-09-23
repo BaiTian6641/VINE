@@ -101,6 +101,10 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
             registries.freeze();
             net.freezeAndSync();
             commands.freeze();
+            // Store schemas must be registered before the schema registry freezes:
+            // the session store's snapshot schema is engine-owned and needs no
+            // consumer registration.
+            SessionService.ensureStoreSchema();
             schemas.freeze();
             capabilities.freeze();
             sessions.freeze();
@@ -131,7 +135,7 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
         features = new FeatureMatrix(cell.features());
         LOG.log(System.Logger.Level.INFO, "[VINE] features " + features.ids());
         reportUnsafeScan();
-        driver.bootstrap(new CoreDriverContext(machine, registries, bus));
+        driver.bootstrap(new CoreDriverContext(machine, registries, bus, sessions));
     }
 
     @Override

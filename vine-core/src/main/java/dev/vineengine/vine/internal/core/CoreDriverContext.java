@@ -6,6 +6,8 @@ import dev.vineengine.vine.EnginePhase;
 import dev.vineengine.vine.EventBus;
 import dev.vineengine.vine.hook.HookSlot;
 import dev.vineengine.vine.internal.registry.DescriptorStore;
+import dev.vineengine.vine.internal.session.SessionService;
+import dev.vineengine.vine.internal.spi.SessionPersistenceSpi;
 import dev.vineengine.vine.internal.spi.StructuralRegistryView;
 import dev.vineengine.vine.internal.spi.VineDriver;
 
@@ -19,11 +21,14 @@ final class CoreDriverContext implements VineDriver.DriverContext {
     private final PhaseMachine machine;
     private final DescriptorStore registries;
     private final EngineEventBus bus;
+    private final SessionService sessions;
 
-    CoreDriverContext(PhaseMachine machine, DescriptorStore registries, EngineEventBus bus) {
+    CoreDriverContext(PhaseMachine machine, DescriptorStore registries, EngineEventBus bus,
+            SessionService sessions) {
         this.machine = machine;
         this.registries = registries;
         this.bus = bus;
+        this.sessions = sessions;
     }
 
     @Override
@@ -46,5 +51,15 @@ final class CoreDriverContext implements VineDriver.DriverContext {
         bus.attachSlot(Objects.requireNonNull(slot, "slot"),
             Objects.requireNonNull(install, "install"),
             Objects.requireNonNull(uninstall, "uninstall"));
+    }
+
+    @Override
+    public void mountSessionPersistence(SessionPersistenceSpi spi) {
+        sessions.mount(Objects.requireNonNull(spi, "spi"));
+    }
+
+    @Override
+    public void flushSessionPersistence() {
+        sessions.flush();
     }
 }

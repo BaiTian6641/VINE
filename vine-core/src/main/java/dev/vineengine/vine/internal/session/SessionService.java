@@ -12,10 +12,12 @@ import java.util.concurrent.atomic.AtomicLong;
 import com.mojang.serialization.Codec;
 
 import dev.vineengine.vine.data.VineData;
+import dev.vineengine.vine.internal.spi.SessionPersistenceSpi;
 import dev.vineengine.vine.data.VoxelData;
 import dev.vineengine.vine.data.VoxelSchema;
 import dev.vineengine.vine.registry.VineId;
 import dev.vineengine.vine.session.ActionVerdict;
+import dev.vineengine.vine.session.PartyRef;
 import dev.vineengine.vine.session.ParticipantState;
 import dev.vineengine.vine.session.SessionAction;
 import dev.vineengine.vine.session.SessionContext;
@@ -48,8 +50,9 @@ public final class SessionService implements SessionManager {
     private static final System.Logger LOG = System.getLogger("vine.session");
 
     private final Map<VineId, SessionFactory> factories = new LinkedHashMap<>();
-    private final Map<VineId, EngineSession> live = new HashMap<>();
+    private final Map<VineId, EngineSession> live = new LinkedHashMap<>();
     private final AtomicLong sessionCounter = new AtomicLong();
+    private volatile SessionPersistenceSpi store;
     private boolean frozen;
 
     /** Engine schema id backing a session type's state trees. */
@@ -126,6 +129,125 @@ public final class SessionService implements SessionManager {
     public synchronized int liveCount() {
         return live.size();
     }
+
+    // ------------------------------------------------------------------
+    // Persistence (sub-14 Stage B)
+    // ------------------------------------------------------------------
+
+    @Override
+    public synchronized java.util.Set<VineId> liveSessions() {
+        return java.util.Set.copyOf(live.keySet());
+    }
+
+    @Override
+    public synchronized byte[] snapshot() {
+        ensureStoreSchema();
+        VoxelData store = VineData.create(STORE_SCHEMA);
+        int index = 0;
+        for (EngineSession session : live.values()) {
+            String prefix = "sessions." + index++;
+            SessionState state = session.state();
+            store.put(prefix + ".id", session.id().toString());
+            store.put(prefix + ".type", session.type().toString());
+            store.put(prefix + ".scopeKind", session.scope().kind().name());
+            store.put(prefix + ".scopeId", scopeId(session.scope()));
+            store.put(prefix + ".phase", state.phase().name());
+            store.put(prefix + ".ticksRemaining", state.ticksRemaining());
+            store.put(prefix + ".objectives", state.objectives());
+            store.put(prefix + ".sharedFlags", state.sharedFlags());
+        }
+        store.put("count", index);
+        return VineData.encode(store);
+    }
+
+    @Override
+    public synchronized int restore(byte[] blob) {
+        if (blob == null || blob.length == 0) {
+            return 0;
+        }
+        VoxelData store = VineData.decode(blob);
+        int count = store.getInt("count");
+        int restored = 0;
+        for (int index = 0; index < count; index++) {
+            String prefix = "sessions." + index;
+            if (!store.contains(prefix + ".id")) {
+                continue;
+            }
+            VineId id = VineId.parse(store.getString(prefix + ".id"));
+            VineId type = VineId.parse(store.getString(prefix + ".type"));
+            SessionFactory factory = factories.get(type);
+            if (factory == null) {
+                LOG.log(System.Logger.Level.WARNING,
+                    "[VINE] session " + id + " references unknown type " + type + " — skipped on restore");
+                continue;
+            }
+            SessionScope scope = SessionScope.Kind.valueOf(store.getString(prefix + ".scopeKind"))
+                    == SessionScope.Kind.PARTY
+                ? new SessionScope.Party(new PartyRef(VineId.parse(store.getString(prefix + ".scopeId"))))
+                : new SessionScope.World(VineId.parse(store.getString(prefix + ".scopeId")));
+            EngineSession session = new EngineSession(id, type, scope, factory.newRules());
+            session.state = new SessionState(
+                SessionPhase.valueOf(store.getString(prefix + ".phase")),
+                store.getLong(prefix + ".ticksRemaining"),
+                store.getCompound(prefix + ".objectives").copy(),
+                store.getCompound(prefix + ".sharedFlags").copy());
+            live.put(id, session);
+            restored++;
+        }
+        // Keep the id counter ahead of restored sessions: ids are never reused.
+        for (VineId id : live.keySet()) {
+            if ("vine".equals(id.namespace()) && id.path().startsWith("session/")) {
+                try {
+                    long suffix = Long.parseLong(id.path().substring("session/".length()));
+                    sessionCounter.updateAndGet(current -> Math.max(current, suffix));
+                } catch (NumberFormatException ignored) {
+                    // Non-numeric session ids (consumer-created) never advance the counter.
+                }
+            }
+        }
+        LOG.log(System.Logger.Level.INFO, "[VINE] session store restored " + restored + " session(s)");
+        return restored;
+    }
+
+    @Override
+    public void flush() {
+        SessionPersistenceSpi current = store;
+        if (current == null) {
+            return;
+        }
+        try {
+            synchronized (this) {
+                current.save(snapshot());
+            }
+        } catch (RuntimeException e) {
+            LOG.log(System.Logger.Level.WARNING, "[VINE] session flush failed (world save continues): " + e);
+        }
+    }
+
+    /** Mounts the driver's store and restores whatever it holds (world load). */
+    public void mount(SessionPersistenceSpi spi) {
+        this.store = java.util.Objects.requireNonNull(spi, "spi");
+        restore(spi.load());
+    }
+
+    private static String scopeId(SessionScope scope) {
+        return switch (scope) {
+            case SessionScope.World world -> world.worldId().toString();
+            case SessionScope.Party party -> party.party().partyId().toString();
+        };
+    }
+
+    /** Registers the store schema; must run before the schema registry freezes. */
+    public static synchronized void ensureStoreSchema() {
+        if (storeSchemaRegistered) {
+            return;
+        }
+        VineData.registerSchema(new VoxelSchema(STORE_SCHEMA, 1, Codec.unit(null)), List.of());
+        storeSchemaRegistered = true;
+    }
+
+    private static final VineId STORE_SCHEMA = VineId.of("vine", "session_store");
+    private static boolean storeSchemaRegistered;
 
     // ------------------------------------------------------------------
     // EngineSession

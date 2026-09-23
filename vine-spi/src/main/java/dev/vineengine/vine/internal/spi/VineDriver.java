@@ -90,6 +90,19 @@ public interface VineDriver {
          * event type.
          */
         void installHook(HookSlot slot, Runnable install, Runnable uninstall);
+
+        /**
+         * Mounts the session persistence store (sub-14 Stage B): the engine
+         * restores sessions from {@link SessionPersistenceSpi#load()} at once
+         * and flushes through it on {@link #flushSessionPersistence()}.
+         */
+        void mountSessionPersistence(SessionPersistenceSpi spi);
+
+        /**
+         * Flushes live sessions through the mounted store; the driver calls
+         * this from its world-save/stop hook. A no-op without a store.
+         */
+        void flushSessionPersistence();
     }
 
     /**
