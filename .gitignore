@@ -1,0 +1,30 @@
+# Gradle / build
+.gradle/
+build/
+out/
+!**/src/**/build/
+
+# Run directories (dev servers, per-cell runs)
+run/
+runs/
+run-data/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+bin/
+
+# Logs & crash reports
+*.log
+crash-reports/
+
+# Local maven repo (sub-00 Stage E publishes here; never committed)
+build/repo/
+
+# OS
+Thumbs.db
+.DS_Store

@@ -1,0 +1,8 @@
+plugins {
+    id 'vine.java-shared'
+}
+
+dependencies {
+    // SPI sees the API (drivers implement against both); never the reverse.
+    api project(':vine-api')
+}

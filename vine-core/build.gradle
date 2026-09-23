@@ -1,0 +1,9 @@
+plugins {
+    id 'vine.java-shared'
+}
+
+dependencies {
+    api project(':vine-api')
+    // SPI types are internal but shared with drivers at build time.
+    api project(':vine-spi')
+}

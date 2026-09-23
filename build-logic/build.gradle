@@ -1,0 +1,4 @@
+plugins {
+    // Precompiled Groovy script plugins living in src/main/groovy.
+    id 'groovy-gradle-plugin'
+}

@@ -1,0 +1,2 @@
+// Root project: container only. All engine code lives in the included modules;
+// toolchain plugins (MDG/loom) are forbidden at root (sub-00 §2/§4).

@@ -1,0 +1,8 @@
+plugins {
+    id 'vine.java-shared'
+}
+
+dependencies {
+    // TCK drives the engine through the public API + testmod scenarios (sub-21).
+    implementation project(':vine-core')
+}

@@ -1,0 +1,8 @@
+plugins {
+    id 'vine.java-shared'
+}
+
+dependencies {
+    // Client surface extends the core API; same Prime Invariant (§5.11).
+    api project(':vine-api')
+}

@@ -1,0 +1,10 @@
+plugins {
+    id 'vine.java-shared'
+}
+
+dependencies {
+    // Consumer-style mod (sub-22): compiles against the API ONLY — this
+    // dependency edge is the Prime Invariant's build-level enforcement.
+    api project(':vine-api')
+    api project(':vine-client-api')
+}

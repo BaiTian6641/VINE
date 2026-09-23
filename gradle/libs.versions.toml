@@ -1,0 +1,16 @@
+[versions]
+# Shared modules + 1.21.1 drivers compile to Java 21 bytecode (§5.0 floor);
+# 26.x drivers use Java 25 (26.1+ requires it, §5.10).
+jdk-shared = "21"
+jdk-26x = "25"
+
+# 26.x drop window (§3: latest + previous drop). Driver stages B/C pin exact
+# loader/toolchain versions here — a drop bump is a two-line edit (sub-00 §4).
+mc26Latest = "26.3"
+mc26Previous = "26.2"
+
+[libraries]
+# Populated by sub-00 stages B/C (NeoForge, MDG, Fabric Loader/API, Yarn, Mixin).
+
+[plugins]
+# Populated by sub-00 stages B/C (ModDevGradle / fabric-loom per driver cell).

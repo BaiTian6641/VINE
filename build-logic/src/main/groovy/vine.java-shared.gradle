@@ -1,0 +1,27 @@
+// Shared-module convention (sub-00 Stage A): everything that ships version-free
+// engine code compiles to Java 21 bytecode — the 1.21.1 cell sets the floor
+// (plan §5.0). 26.x drivers may use Java 25 internally, via their own
+// per-driver conventions (stages B/C), never this one.
+plugins {
+    id 'java-library'
+}
+
+group = 'dev.vineengine'
+version = '0.1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release.set(21)
+    // Parameter names kept for descriptor/Codec introspection at runtime.
+    options.compilerArgs += ['-parameters']
+}
