@@ -97,6 +97,12 @@ public enum TckTag { SMOKE, PERSISTENCE, NETWORK, BRAIN, ANIMATION, PERF, QUARAN
   activates with SUB-19).
 - **Acceptance:** two consecutive CI runs byte-identical; 1.21.1-NF ↔
   1.21.1-Fabric fixture round-trip green today as differ proof.
+  - **Progress 2026-09-24:** the 1.21.1-NF ↔ 1.21.1-Fabric round-trip half is
+    green: `:vine-tck:crossCellRoundTrip` drives NF `tck_fixture_write` →
+    Fabric `tck_fixture_read` in one JVM, comparing file digests (byte
+    identity) plus per-section semantics (VoxelData/capability/session).
+    Fixed seeds, tick-locked `AdvanceTicks`, canonical differ, and
+    repeat-run byte-identity remain open.
 - **Touches:** `tck-core`, `fixtures/`, driver tick hook.
 - **Bootstrap prompt:**
   > Execute sub-21 Stage C. Fixed seed, tick-locked stepping, seeded RNG —
@@ -163,6 +169,16 @@ public enum TckTag { SMOKE, PERSISTENCE, NETWORK, BRAIN, ANIMATION, PERF, QUARAN
 - **Determinism fragility:** any wall-clock call or unseeded RNG in engine or
   testmod breaks byte-identity; Stage C's repeat-run check is the tripwire;
   violations are bugs owned by the violating subsystem, not the TCK.
+- **Resolved 2026-09-24 — non-hermetic world probe (flake):** the world
+  scenarios probed `[0,0,0]`, deep underground — a fluid pocket adjacent to
+  the slot refilled it between the removal probe and the absence probe, so
+  `air→air rejected` saw a changed block (one red run, then green twice).
+  Fixed by moving both world scenarios to `[0,300,0]` (air in every world,
+  no terrain/fluid neighbors) and by accepting "No chunks were marked for
+  force loading" as forceload satisfaction (removes a 15 s stall per boot).
+  Failures now dump the last 30 console lines (`[TCK-DUMP]`) and every boot
+  persists `tck-capture-<cell>.boot<N>.log`, so flakes carry their evidence
+  instead of needing a rerun.
 - **CI runtime budget:** parallel per-cell jobs; PR CI runs `SMOKE` tag only,
   nightly runs all; boot time measured from Stage A onward.
 - **26.x absent until M4:** machinery is cell-count-agnostic from day one
