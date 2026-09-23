@@ -9,6 +9,7 @@ import java.util.function.Consumer;
 
 import dev.vineengine.vine.EnginePhase;
 import dev.vineengine.vine.EventBus;
+import dev.vineengine.vine.Feature;
 import dev.vineengine.vine.Subscription;
 import dev.vineengine.vine.VineEngine;
 import dev.vineengine.vine.capability.CapabilityProvider;
@@ -74,6 +75,7 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
 
     private final PhaseMachine machine = new PhaseMachine();
     private final EngineEventBus bus = new EngineEventBus();
+    private volatile FeatureMatrix features = FeatureMatrix.EMPTY;
     private final DescriptorStore registries = new DescriptorStore();
     private final VineNetImpl net = new VineNetImpl();
     private final CommandService commands = new CommandService();
@@ -123,6 +125,8 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
         LOG.log(System.Logger.Level.INFO,
             "[VINE] driver bound: " + driver.getClass().getName()
                 + " (loader=" + cell.loader() + ", dataVersion=" + cell.dataVersion() + ")");
+        features = new FeatureMatrix(cell.features());
+        LOG.log(System.Logger.Level.INFO, "[VINE] features " + features.ids());
         driver.bootstrap(new CoreDriverContext(machine, registries));
     }
 
@@ -140,6 +144,11 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
     @Override
     public EventBus events() {
         return bus;
+    }
+
+    @Override
+    public boolean supports(Feature feature) {
+        return features.supports(Objects.requireNonNull(feature, "feature"));
     }
 
     @Override

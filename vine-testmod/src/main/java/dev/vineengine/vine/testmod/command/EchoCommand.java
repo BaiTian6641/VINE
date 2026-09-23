@@ -55,6 +55,11 @@ public final class EchoCommand {
                     dev.vineengine.vine.testmod.session.SessionExemplar.runProof();
                     return 1;
                 }))
+            .then(VineCommand.literal("tck_features")
+                .executes(ctx -> {
+                    dev.vineengine.vine.testmod.feature.FeatureExemplar.runProof();
+                    return 1;
+                }))
             .then(VineCommand.literal("tck_fixture_write")
                 .executes(ctx -> {
                     dev.vineengine.vine.testmod.fixture.FixtureExemplar.write();

@@ -48,6 +48,13 @@ public interface VineEngine {
     EventBus events();
 
     /**
+     * Whether the running cell provides {@code feature}. True only when the
+     * driver's runtime probes reported the feature's id ({@link Feature}); the
+     * inert engine (no driver bound) supports nothing.
+     */
+    boolean supports(Feature feature);
+
+    /**
      * Fired when the engine enters a phase. Delivered both to the replaying
      * phase machine's {@link #onPhase} subscribers and, as an ordinary event,
      * to {@link #events()} handlers.
