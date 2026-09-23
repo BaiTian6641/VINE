@@ -9,6 +9,7 @@ import java.util.function.Consumer;
 
 import dev.vineengine.vine.EnginePhase;
 import dev.vineengine.vine.EventBus;
+import dev.vineengine.vine.ExtensionPoints;
 import dev.vineengine.vine.Feature;
 import dev.vineengine.vine.Subscription;
 import dev.vineengine.vine.VineEngine;
@@ -84,6 +85,7 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
     private final CapabilityStore capabilities = new CapabilityStore();
     private final SessionService sessions = new SessionService();
     private final ConfigService config = new ConfigService();
+    private final ExtensionPointsImpl extensions = new ExtensionPointsImpl();
 
     VineEngineImpl() {
         // Phase changes are engine events too (sub-01 Stage B): every entry is
@@ -102,6 +104,7 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
             schemas.freeze();
             capabilities.freeze();
             sessions.freeze();
+            extensions.freeze();
         });
         // Engine state install before any driver can bind (net-seam ordering rule)
         VoxelStorageBinding.engineRegistry(schemas);
@@ -127,6 +130,7 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
                 + " (loader=" + cell.loader() + ", dataVersion=" + cell.dataVersion() + ")");
         features = new FeatureMatrix(cell.features());
         LOG.log(System.Logger.Level.INFO, "[VINE] features " + features.ids());
+        reportUnsafeScan();
         driver.bootstrap(new CoreDriverContext(machine, registries, bus));
     }
 
@@ -314,5 +318,30 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
     @Override
     public void onReload(Runnable listener) {
         config.onReload(listener);
+    }
+
+    @Override
+    public ExtensionPoints extensions() {
+        return extensions;
+    }
+
+    /**
+     * Audits consumer jars for @VineUnsafe-vs-manifest consistency (sub-01 §5.1).
+     * Best-effort: violations are logged, never fatal — the scan must not break
+     * a boot it merely audits.
+     */
+    private void reportUnsafeScan() {
+        try {
+            UnsafeScan.Report report = UnsafeScan.scanClasspath(
+                System.getProperty("java.class.path", ""));
+            for (UnsafeScan.Violation violation : report.violations()) {
+                LOG.log(System.Logger.Level.WARNING, "[VINE] Vine-Unsafe mismatch — " + violation.describe());
+            }
+            LOG.log(System.Logger.Level.INFO, "[VINE] unsafe scan: " + report.scanned().size()
+                + " entries clean, " + report.violations().size() + " mismatch(es)"
+                + (report.skipped().isEmpty() ? "" : ", " + report.skipped().size() + " unreadable"));
+        } catch (RuntimeException e) {
+            LOG.log(System.Logger.Level.WARNING, "[VINE] unsafe scan failed (boot continues): " + e);
+        }
     }
 }

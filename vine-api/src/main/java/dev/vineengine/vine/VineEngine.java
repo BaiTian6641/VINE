@@ -48,6 +48,13 @@ public interface VineEngine {
     EventBus events();
 
     /**
+     * The engine's extension-point registry (sub-01 Stage E): named, typed
+     * buckets every later subsystem reuses. Registration is open until
+     * {@code REGISTRIES_FROZEN}, then the store freezes.
+     */
+    ExtensionPoints extensions();
+
+    /**
      * Whether the running cell provides {@code feature}. True only when the
      * driver's runtime probes reported the feature's id ({@link Feature}); the
      * inert engine (no driver bound) supports nothing.
