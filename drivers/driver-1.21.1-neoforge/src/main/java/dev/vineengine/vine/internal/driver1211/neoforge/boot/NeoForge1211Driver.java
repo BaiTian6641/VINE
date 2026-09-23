@@ -115,6 +115,11 @@ public final class NeoForge1211Driver implements VineDriver {
         NeoForgeVoxelStorage.registerComponent(modBus);
         NeoForgeVoxelStorage voxelStorage = new NeoForgeVoxelStorage();
         voxelStorage.engine(VoxelStorageBinding.bind(voxelStorage));
+        // Capability interop (sub-04 Stage C/D): native queries answer from the
+        // same item payload the storage driver writes.
+        dev.vineengine.vine.internal.capability.CapabilityDriverBinding.bind(
+            new dev.vineengine.vine.internal.driver1211.common.data.ItemStackCapabilityDriver(
+                NeoForgeVoxelStorage::rawPayload));
         // Session persistence (sub-14 Stage B): mount on the first world load,
         // flush on every level save (NF has a real save event).
         java.util.concurrent.atomic.AtomicBoolean mounted = new java.util.concurrent.atomic.AtomicBoolean();

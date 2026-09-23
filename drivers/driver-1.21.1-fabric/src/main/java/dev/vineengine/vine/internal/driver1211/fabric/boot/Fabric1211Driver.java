@@ -113,6 +113,11 @@ public final class Fabric1211Driver implements VineDriver {
         FabricVoxelStorage.registerComponent();
         FabricVoxelStorage voxelStorage = new FabricVoxelStorage();
         voxelStorage.engine(VoxelStorageBinding.bind(voxelStorage));
+        // Capability interop (sub-04 Stage C/D): native queries answer from the
+        // same item payload the storage driver writes.
+        dev.vineengine.vine.internal.capability.CapabilityDriverBinding.bind(
+            new dev.vineengine.vine.internal.driver1211.common.data.ItemStackCapabilityDriver(
+                FabricVoxelStorage::rawPayload));
         ServerWorldEvents.LOAD.register((server, world) -> {
             if (mounted.compareAndSet(false, true)) {
                 // Working directory = the run/module dir in dev and the server

@@ -68,6 +68,15 @@ public final class VineCapabilities {
         backend().applyClone(type, oldTarget, newTarget);
     }
 
+    /**
+     * Flushes every live capability tree for {@code target} through the storage
+     * layer (sub-04 Stage C/D): capability state rides the target's attach point,
+     * so it survives the target's own save/load and copies made from it.
+     */
+    public static void flush(CapabilityTarget target) {
+        backend().flush(target);
+    }
+
     private static CapabilityBackend backend() {
         if (EngineAccess.get() instanceof CapabilityBackend backend) {
             return backend;

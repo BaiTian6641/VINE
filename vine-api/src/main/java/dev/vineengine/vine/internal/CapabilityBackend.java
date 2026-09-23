@@ -31,6 +31,9 @@ public interface CapabilityBackend {
     /** See {@code VineCapabilities#findForeign}. */
     <T> Optional<T> findForeign(VineId nativeId, Class<T> apiClass, CapabilityTarget target);
 
+    /** See {@code VineCapabilities#flush}. */
+    void flush(dev.vineengine.vine.capability.CapabilityTarget target);
+
     /** See {@code VineCapabilities#invalidate}. */
     void invalidate(CapabilityTarget target);
 

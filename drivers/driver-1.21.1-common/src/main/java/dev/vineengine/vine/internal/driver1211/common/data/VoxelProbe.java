@@ -7,6 +7,7 @@ import com.mojang.serialization.Codec;
 import dev.vineengine.vine.data.ItemStackTarget;
 import dev.vineengine.vine.data.VineData;
 import dev.vineengine.vine.data.VoxelData;
+import dev.vineengine.vine.capability.VineCapabilities;
 import dev.vineengine.vine.data.VoxelSchema;
 import dev.vineengine.vine.internal.data.VoxelStorageBinding;
 import dev.vineengine.vine.registry.VineId;
@@ -25,7 +26,43 @@ public final class VoxelProbe {
 
     public static final VineId ROUNDTRIP_SCHEMA = VineId.of("vine", "probe_roundtrip");
     public static final VineId NATIVE_SCHEMA = VineId.of("vine", "probe_native");
+    public static final VineId CAP_SCHEMA = VineId.of("vine", "probe_cap_state");
     public static final String NATIVE_DAMAGE = "minecraft:damage";
+
+    /** The probe's consumer-visible capability interface (sub-04 Stage C/D leg). */
+    public interface ProbeCap {
+        int value();
+
+        void value(int value);
+    }
+
+    /** Stateful capability type whose state rides the item's engine payload. */
+    public static final dev.vineengine.vine.capability.CapabilityType<ProbeCap> PROBE_CAP =
+        dev.vineengine.vine.capability.CapabilityType.stateful(
+            VineId.of("vine", "probe_cap"), ProbeCap.class,
+            new dev.vineengine.vine.capability.CapabilityCodec<ProbeCap>() {
+                @Override
+                public VoxelData save(ProbeCap instance) {
+                    VoxelData tree = VineData.create(CAP_SCHEMA);
+                    tree.put("value", instance.value());
+                    return tree;
+                }
+
+                @Override
+                public ProbeCap load(VoxelData data) {
+                    return new ProbeCap() {
+                        @Override
+                        public int value() {
+                            return data.getInt("value");
+                        }
+
+                        @Override
+                        public void value(int value) {
+                            data.put("value", value);
+                        }
+                    };
+                }
+            }, dev.vineengine.vine.capability.ClonePolicy.FULL);
 
     private VoxelProbe() {
     }
@@ -35,6 +72,13 @@ public final class VoxelProbe {
         VineData.registerSchema(new VoxelSchema(ROUNDTRIP_SCHEMA, 1, Codec.unit(null)), java.util.List.of());
         VineData.registerSchema(new VoxelSchema(NATIVE_SCHEMA, 1, Codec.unit(null)), java.util.List.of());
         VineData.registerNativeField(NATIVE_SCHEMA, "damage", NATIVE_DAMAGE);
+        VineData.registerSchema(new VoxelSchema(CAP_SCHEMA, 1, Codec.unit(null)), java.util.List.of());
+        VineCapabilities.register(PROBE_CAP);
+        // Scope binding: stateful types answer through their state tree, so the
+        // provider is never consulted — the attach marks which scopes the type
+        // serves.
+        VineCapabilities.attach(PROBE_CAP, dev.vineengine.vine.capability.CapabilityScope.ITEM,
+            target -> null);
     }
 
     /** Runs both legs; {@code stackFactory} creates a probe stack on the calling cell. */
@@ -63,6 +107,24 @@ public final class VoxelProbe {
         System.out.println("[VINE] voxeldata native cell=" + cell);
         System.out.println("[VINE] voxeldata native value damage="
             + access.nativeInt(nativeStack, NATIVE_DAMAGE));
+
+        // Leg 3 — capability interop: the instance writes through to the target's
+        // attach point, and a copy of the target carries the capability with it,
+        // readable through the native-query seam.
+        Object capStack = stackFactory.get();
+        var capTarget = new dev.vineengine.vine.capability.CapabilityTarget.ItemCapabilityTarget(capStack);
+        ProbeCap cap = VineCapabilities.find(PROBE_CAP, capTarget)
+            .orElseThrow(() -> new IllegalStateException("probe capability not served on this cell"));
+        cap.value(11);
+        VineCapabilities.flush(capTarget);
+
+        Object capCopy = stackFactory.get();
+        access.write(capCopy, access.read(capStack));
+        var copiedTarget = new dev.vineengine.vine.capability.CapabilityTarget.ItemCapabilityTarget(capCopy);
+        var foreign = VineCapabilities.findForeign(PROBE_CAP.id(), VoxelData.class, copiedTarget);
+        System.out.println("[VINE] caps driver interop cell=" + cell);
+        System.out.println("[VINE] caps driver interop value="
+            + foreign.map(carrier -> carrier.getInt("value")).orElse(-1));
     }
 
     private static void flush(VineId schemaId, Object stack) {

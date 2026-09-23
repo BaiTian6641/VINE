@@ -44,6 +44,12 @@ public final class NeoForgeVoxelStorage extends AbstractItemStackVoxelStorage {
         return new ItemStack(item);
     }
 
+    /** The stored payload bytes on {@code stack} (capability interop carrier). */
+    public static byte[] rawPayload(Object stack) {
+        String payload = ((ItemStack) stack).get(voxelData.get());
+        return payload == null ? null : java.util.Base64.getDecoder().decode(payload);
+    }
+
     /** Raw component access for the probe's own save/load simulation. */
     public static VoxelProbe.ComponentAccess probeAccess() {
         return new VoxelProbe.ComponentAccess() {

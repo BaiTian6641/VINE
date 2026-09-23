@@ -1,0 +1,17 @@
+{
+  "id": "vine_test:caps_driver_interop",
+  "tags": [
+    "SMOKE"
+  ],
+  "steps": [
+    {
+      "type": "AssertTrace",
+      "trace": "caps",
+      "expect": [
+        "caps: exposed vine:probe_cap ITEM (carrier: item payload)",
+        "caps driver interop cell=",
+        "caps driver interop value=11"
+      ]
+    }
+  ]
+}

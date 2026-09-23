@@ -57,6 +57,11 @@ public final class FabricVoxelStorage extends AbstractItemStackVoxelStorage {
         return new ItemStack(item);
     }
 
+    /** The stored payload bytes on {@code stack} (capability interop carrier). */
+    public static byte[] rawPayload(Object stack) {
+        return decode(((ItemStack) stack).get(VOXEL_DATA));
+    }
+
     /** Raw component access for the probe's own save/load simulation. */
     public static VoxelProbe.ComponentAccess probeAccess() {
         return new VoxelProbe.ComponentAccess() {

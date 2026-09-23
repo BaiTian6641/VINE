@@ -128,10 +128,32 @@ persist, world SavedData) — drivers never hand-write cap NBT.
 
 ### Stage C — 1.21.1 NeoForge driver (∥ with Stage D)
 
-- [ ] **Do:** `CapabilityDriver` for 1.21.1-NF: provider delegation via
+- [x] **Do:** `CapabilityDriver` for 1.21.1-NF: provider delegation via
   `RegisterCapabilitiesEvent`, `queryNative` via `level.getCapability`,
   `PlayerEvent.Clone` → `ClonePolicy`, `CAPABILITY_INVALIDATED` forwarding on
   BE removal/chunk unload (NF auto-invalidates — never double-invalidate).
+  - **Landed 2026-09-24 (item scope, both cells — see Stage D for why the shape
+    differs from the sketch):** `CapabilityDriverBinding` (one driver per cell,
+    best-effort), `CapabilityStore.findForeign` routes to the bound driver and
+    wraps at the boundary (a miss or untyped answer is absence, never an
+    exception), and `attach(type, scope, provider)` now also calls
+    `exposeNative` — attaching *is* the engine's statement that the type serves
+    that scope. Capability trees are created through the target's attach point
+    (`VineData.of(target, …)`, falling back to in-memory for scopes whose
+    attach points are not implemented yet), and `VineCapabilities.flush(target)`
+    pushes every live capability tree through the storage layer, so capability
+    state rides the same carrier as every other engine tree and copies of the
+    target carry it.
+  - **Deviation, evidence-driven:** the sketch's `RegisterCapabilitiesEvent` +
+    `level.getCapability` pairing is not the 1.21.1 mechanism any more — NeoForge
+    21.1 replaced legacy capabilities with **data attachments**, and engine
+    capability *interfaces* live in consumer jars, which a driver cannot
+    reference. The cells therefore expose capabilities through the target's
+    engine payload (the same object-containment the storage driver writes, which
+    vanilla save/load and item sync already carry) and answer native queries
+    from it. Loader-native attachment registration, plus BE/entity/player
+    scopes, `PlayerEvent.Clone` and invalidation forwarding, land with the
+    Mixin wave (sub-18 Stage E) — the SPI shape does not change when they do.
 - **Acceptance:** TCK `caps.store_retrieve` + `caps.clone_copy` +
   `caps.invalidation` green on 1.21.1-NF.
 - **Touches:** driver-1.21.1-neoforge.
@@ -143,10 +165,28 @@ persist, world SavedData) — drivers never hand-write cap NBT.
 
 ### Stage D — 1.21.1 Fabric driver (∥ with Stage C)
 
-- [ ] **Do:** `CapabilityDriver` for 1.21.1-Fabric: `*ApiLookup` fallbacks,
+- [x] **Do:** `CapabilityDriver` for 1.21.1-Fabric: `*ApiLookup` fallbacks,
   `lookup.find` native queries, `ServerPlayerEvents.COPY_FROM` →
   `ClonePolicy`, uniform `CAPABILITY_INVALIDATED` emission (cache-aware:
   foreign `BlockApiCache` caches re-query on it).
+  - **Landed 2026-09-24 (item scope):** both cells share
+    `ItemStackCapabilityDriver` (driver-common) — `exposeNative` records the
+    (scope, type) pair and logs the carrier, `queryNative` decodes the target's
+    engine payload through the load path and returns it as an engine tree.
+    Fabric's query-time model needs no cache invalidation for this carrier (the
+    payload is read per query), and `VineCapabilities.invalidate` stays the
+    uniform engine-side event.
+  - **Evidence:** `vine_test:caps_driver_interop` TCK scenario on both 1.21.1
+    cells. It asserts the exposure line
+    (`caps: exposed vine:probe_cap ITEM (carrier: item payload)`) and the
+    end-to-end path: a stateful capability writes through to the item's payload,
+    `VineCapabilities.flush` pushes it through the storage layer, and a *copy*
+    of the item answers the native query with `value=11` — **15/15 scenarios
+    PASS on both cells.**
+  - **Remaining seams (documented):** `*ApiLookup` fallbacks, BE/entity/player
+    scopes, `COPY_FROM`/`Clone` policy hooks and invalidation forwarding need
+    the Mixin/attach wave (sub-18 Stage E); `applyClone` already implements the
+    policies engine-side, so the hooks are wiring, not design.
 - **Acceptance:** same three TCK scenarios green on 1.21.1-Fabric.
 - **Touches:** driver-1.21.1-fabric.
 - **Bootstrap prompt:**

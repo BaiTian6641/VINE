@@ -290,6 +290,11 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
     }
 
     @Override
+    public void flush(CapabilityTarget target) {
+        capabilities.flush(target);
+    }
+
+    @Override
     public void invalidate(CapabilityTarget target) {
         capabilities.invalidate(target);
     }
