@@ -111,11 +111,33 @@ retained), `DROP`, `FAIL` (refuse load).
 
 ### Stage C — design descriptors on dynamic registries, both 1.21.1 loaders
 
-- [ ] **Do:** NF `DataPackRegistryEvent.NewRegistry`, Fabric
+- [x] **Do:** NF `DataPackRegistryEvent.NewRegistry`, Fabric
   `DynamicRegistries.registerSynced`; vanilla JSON layout; `syncToClient` /
   `skipWhenEmpty`; datapack override; `/reload` rebinding without cross-world
   caching. Testmod: design type + JSON entry + overriding datapack fixture.
   Touches: vine-core, vine-spi, both 1.21.1 drivers, vine-testmod, vine-tck.
+  - **Landed 2026-09-24:** `DesignRegistryView` + `RegistryDriver.registerDesign`
+    + `DriverContext.designRegistries()/reportDesignEntries(...)`.
+    `DescriptorStore` keeps a per-type design-entry slot (writable after freeze
+    by design — entries arrive from datapacks at world load), and
+    `VineRegistries.get` resolves structural first, then datapack-loaded design
+    entries (runtime id = load position). Each report replaces the previous set
+    and fires one `RegistryRegister` hook event per entry, so nothing is cached
+    across worlds. NF registers dynamic registries inside
+    `DataPackRegistryEvent.NewRegistry` — reading the type view *fresh* at that
+    moment, because the driver's bootstrap runs inside the mod constructor while
+    consumer initializers run after boot (the stale-view bug the NF run caught:
+    zero registries, zero entries). Fabric registers at mod init via
+    `DynamicRegistries.registerSynced` (synced types) / `register` (server-only).
+  - **Evidence:** `vine_test:design_registry` TCK scenario — JSON entry loads
+    from a world datapack, is replaced by an override pack, and a rewritten pack
+    is re-read across graceful reboots (value 1 → 2 → 3 asserted through
+    `VineRegistries.get`). **12/12 scenarios PASS on both 1.21.1 cells.**
+  - **Seams (documented):** the dev harness does not load the testmod's bundled
+    `data/` as a datapack source, so JSON loading/override/re-read is proven
+    through world datapacks; shipping consumer JSON inside a mod jar is a
+    packaging-wave check. Client-side join-sync receipt needs the sub-21 client
+    runner (headless server proves registration + per-world rebinding only).
 - **Acceptance:** TCK on both 1.21.1 cells: JSON loads, override wins,
   `/reload` re-reads, join sync delivers values, loaders agree.
 - **Bootstrap prompt:**

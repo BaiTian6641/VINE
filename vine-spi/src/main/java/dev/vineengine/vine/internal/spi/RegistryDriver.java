@@ -25,4 +25,14 @@ public interface RegistryDriver {
      * must complete before the loader freezes its registries.
      */
     void materializeStructural(StructuralRegistryView structural);
+
+    /**
+     * Registers every DESIGN descriptor type into the loader's dynamic datapack
+     * registries (sub-02 Stage C). Driven by the driver's loader wiring on the
+     * dynamic-registry registration moment (NF {@code DataPackRegistryEvent.NewRegistry},
+     * Fabric {@code DynamicRegistries.registerSynced}); entries themselves arrive
+     * from datapacks per world and are reported through
+     * {@link VineDriver.DriverContext#reportDesignEntries}.
+     */
+    void registerDesign(DesignRegistryView design);
 }

@@ -133,4 +133,8 @@ public final class NeoForgeStructuralMaterializer implements RegistryDriver {
     private static ResourceLocation location(VineId id) {
         return ResourceLocation.fromNamespaceAndPath(id.namespace(), id.path());
     }
+    /** Design descriptors are handled by NeoForgeDesignMaterializer; this class owns the structural half. */
+    @Override
+    public void registerDesign(dev.vineengine.vine.internal.spi.DesignRegistryView design) {
+    }
 }

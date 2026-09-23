@@ -6,6 +6,7 @@ import java.util.Set;
 import dev.vineengine.vine.EnginePhase;
 import dev.vineengine.vine.EventBus;
 import dev.vineengine.vine.hook.HookSlot;
+import dev.vineengine.vine.registry.VineId;
 
 /**
  * The one-per-cell driver contract. NOT public API — implemented only by VINE's
@@ -103,6 +104,22 @@ public interface VineDriver {
          * this from its world-save/stop hook. A no-op without a store.
          */
         void flushSessionPersistence();
+
+        /**
+         * Reports the entries a loader's dynamic registry produced for a DESIGN
+         * type (sub-02 Stage C) — called after each world load / re-read, and it
+         * replaces the previous set, so nothing is cached across worlds. The
+         * engine makes them visible through {@code VineRegistries.get} and fires
+         * one {@code RegistryRegister} hook event per entry.
+         */
+        void reportDesignEntries(VineId registryId, java.util.Map<VineId, Object> entries);
+
+        /**
+         * Read-only view of the DESIGN descriptor types for datapack-registry
+         * registration (sub-02 Stage C). Snapshot per call; valid from
+         * {@code REGISTRIES_OPEN} on.
+         */
+        DesignRegistryView designRegistries();
     }
 
     /**

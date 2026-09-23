@@ -64,4 +64,8 @@ public final class FabricStructuralMaterializer implements RegistryDriver {
     private static Identifier identifier(VineId id) {
         return Identifier.of(id.namespace(), id.path());
     }
+    /** Design descriptors are handled by FabricDesignMaterializer; this class owns the structural half. */
+    @Override
+    public void registerDesign(dev.vineengine.vine.internal.spi.DesignRegistryView design) {
+    }
 }

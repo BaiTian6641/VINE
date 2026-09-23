@@ -10,6 +10,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.TreeMap;
 
+import dev.vineengine.vine.internal.spi.DesignRegistryView;
 import dev.vineengine.vine.internal.spi.StructuralRegistryView;
 import dev.vineengine.vine.registry.DescriptorClass;
 import dev.vineengine.vine.registry.DescriptorType;
@@ -35,6 +36,7 @@ import dev.vineengine.vine.registry.VineId;
 public final class DescriptorStore {
 
     private final Map<VineId, TypeEntries<?>> types = new LinkedHashMap<>();
+    private final Map<VineId, DesignEntries> designEntries = new LinkedHashMap<>();
     private boolean frozen;
 
     /** Whether {@link #freeze()} has run (engine entered {@code REGISTRIES_FROZEN}). */
@@ -101,7 +103,38 @@ public final class DescriptorStore {
         }
         @SuppressWarnings("unchecked")
         Holder<D> holder = (Holder<D>) entries.map.get(id);
-        return Optional.ofNullable(holder);
+        if (holder != null) {
+            return Optional.of(holder);
+        }
+        // DESIGN entries come from the loader's datapack registry (sub-02 Stage C),
+        // never from consumer registration — same lookup surface either way.
+        if (entries.type.descriptorClass() == DescriptorClass.DESIGN) {
+            DesignEntries slot = designEntries.get(type.registryId());
+            if (slot != null && slot.byId.containsKey(id)) {
+                int runtimeId = 0;
+                for (VineId key : slot.byId.keySet()) {
+                    if (key.equals(id)) {
+                        break;
+                    }
+                    runtimeId++;
+                }
+                @SuppressWarnings("unchecked")
+                Holder<D> designHolder = (Holder<D>) (Holder<?>) new DesignHolder<>(
+                    id, slot.byId.get(id), runtimeId);
+                return Optional.of(designHolder);
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** Holder for datapack-loaded design entries (runtime id = position in load order). */
+    private record DesignHolder<D>(VineId id, Object payload, int runtimeId) implements Holder<D> {
+
+        @SuppressWarnings("unchecked")
+        @Override
+        public D value() {
+            return (D) payload;
+        }
     }
 
     /**
@@ -119,6 +152,37 @@ public final class DescriptorStore {
         }
         snapshot.sort(Comparator.comparing(type -> type.type().registryId()));
         return new ViewSnapshot(List.copyOf(snapshot));
+    }
+
+    /**
+     * Replaces the design entries for {@code registryId} (sub-02 Stage C). Legal
+     * after freeze by design: design entries arrive from datapacks at world load
+     * and are re-reported on every re-read, never registered by consumers.
+     */
+    public synchronized void putDesignEntries(VineId registryId, java.util.Map<VineId, Object> entries) {
+        DesignEntries slot = designEntries.computeIfAbsent(
+            Objects.requireNonNull(registryId, "registryId"), id -> new DesignEntries());
+        slot.byId.clear();
+        slot.byId.putAll(Objects.requireNonNull(entries, "entries"));
+        slot.nextRuntimeId = slot.byId.size();
+    }
+
+    /** Snapshot of the current design entries for {@code registryId} (empty when unloaded). */
+    public synchronized java.util.Map<VineId, Object> designEntries(VineId registryId) {
+        DesignEntries slot = designEntries.get(registryId);
+        return slot == null ? java.util.Map.of() : java.util.Map.copyOf(slot.byId);
+    }
+
+    /** DESIGN types as the driver needs them (registry id + codec + sync flags). */
+    public synchronized DesignRegistryView designView() {
+        List<DesignRegistryView.DesignType> snapshot = new ArrayList<>();
+        for (TypeEntries<?> entries : types.values()) {
+            if (entries.type.descriptorClass() == DescriptorClass.DESIGN) {
+                snapshot.add(new DesignSnapshot(entries.type));
+            }
+        }
+        snapshot.sort(Comparator.comparing(DesignRegistryView.DesignType::registryId));
+        return () -> List.copyOf(snapshot);
     }
 
     /** Null-safe lookup for writes: undefined type or foreign instance both fail explicitly. */
@@ -144,6 +208,35 @@ public final class DescriptorStore {
         if (frozen) {
             throw new IllegalStateException(
                 "cannot " + action + ": registries are frozen (REGISTRIES_FROZEN entered)");
+        }
+    }
+
+    /** Design-type entries reported by the driver's datapack registries. */
+    private static final class DesignEntries {
+        final Map<VineId, Object> byId = new java.util.LinkedHashMap<>();
+        int nextRuntimeId;
+    }
+
+    private record DesignSnapshot(DescriptorType<?> type) implements DesignRegistryView.DesignType {
+
+        @Override
+        public VineId registryId() {
+            return type.registryId();
+        }
+
+        @Override
+        public com.mojang.serialization.Codec<?> codec() {
+            return type.codec();
+        }
+
+        @Override
+        public boolean syncToClient() {
+            return type.syncToClient();
+        }
+
+        @Override
+        public boolean skipWhenEmpty() {
+            return type.skipWhenEmpty();
         }
     }
 

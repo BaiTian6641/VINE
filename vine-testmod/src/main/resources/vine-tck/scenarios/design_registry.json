@@ -1,0 +1,25 @@
+{
+  "id": "vine_test:design_registry",
+  "tags": ["SMOKE"],
+  "steps": [
+    { "type": "WriteFile", "path": "world/datapacks/tck_override/pack.mcmeta", "content": "{\"pack\":{\"pack_format\":48,\"description\":\"VINE TCK override\"}}" },
+    { "type": "WriteFile", "path": "world/datapacks/tck_override/data/vinetest/vine_test/probe/base.json", "content": "{\"value\":1,\"label\":\"pack\"}" },
+    { "type": "SaveReloadWorld" },
+    { "type": "RunCommand", "command": "vine_test tck_design_probe" },
+    { "type": "AssertTrace", "trace": "design", "expect": [
+      "design base present=true value=1 label=pack"
+    ] },
+    { "type": "WriteFile", "path": "world/datapacks/tck_override/data/vinetest/vine_test/probe/base.json", "content": "{\"value\":2,\"label\":\"override\"}" },
+    { "type": "SaveReloadWorld" },
+    { "type": "RunCommand", "command": "vine_test tck_design_probe" },
+    { "type": "AssertTrace", "trace": "design", "expect": [
+      "design base present=true value=2 label=override"
+    ] },
+    { "type": "WriteFile", "path": "world/datapacks/tck_override/data/vinetest/vine_test/probe/base.json", "content": "{\"value\":3,\"label\":\"reread\"}" },
+    { "type": "SaveReloadWorld" },
+    { "type": "RunCommand", "command": "vine_test tck_design_probe" },
+    { "type": "AssertTrace", "trace": "design", "expect": [
+      "design base present=true value=3 label=reread"
+    ] }
+  ]
+}

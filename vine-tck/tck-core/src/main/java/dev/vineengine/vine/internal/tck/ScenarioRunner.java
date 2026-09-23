@@ -178,6 +178,7 @@ public final class ScenarioRunner {
                     case "AssertData" -> assertData(step);
                     case "SendPacket" -> sendPacket(step);
                     case "SaveReloadWorld" -> saveReloadWorld();
+                    case "WriteFile" -> writeFile(step);
                     default -> "unknown step type: " + type;
                 };
                 if (failure != null) {
@@ -350,6 +351,28 @@ public final class ScenarioRunner {
         // testmod's console drive command through the real C2S path.
         send("vine_test tck_echo " + payload.get("number").getAsInt()
                 + " " + payload.get("text").getAsString());
+        return null;
+    }
+
+    /**
+     * Writes a UTF-8 fixture file under the cell's run dir (datapack overrides,
+     * config files). Paths are run-dir-relative; escapes are rejected.
+     */
+    private String writeFile(JsonObject step) throws IOException {
+        String path = step.get("path").getAsString();
+        String content = step.get("content").getAsString();
+        Path base = rootDir
+            .resolve(gradleTask.substring(1, gradleTask.lastIndexOf(':')).replace(':', '/'))
+            .resolve("run").normalize();
+        Path target = base.resolve(path).normalize();
+        if (!target.startsWith(base)) {
+            return "WriteFile path escapes the run dir: " + path;
+        }
+        Path parent = target.getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
+        Files.writeString(target, content, StandardCharsets.UTF_8);
         return null;
     }
 

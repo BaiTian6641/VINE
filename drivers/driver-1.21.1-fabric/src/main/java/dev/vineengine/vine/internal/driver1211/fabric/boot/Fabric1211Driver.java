@@ -20,6 +20,7 @@ import dev.vineengine.vine.internal.driver1211.fabric.command.FabricCommandFacto
 import dev.vineengine.vine.internal.driver1211.common.persistence.FileSessionStore;
 import dev.vineengine.vine.internal.driver1211.fabric.events.FabricHookInstallers;
 import dev.vineengine.vine.internal.driver1211.fabric.net.FabricNetDriver;
+import dev.vineengine.vine.internal.driver1211.fabric.registry.FabricDesignMaterializer;
 import dev.vineengine.vine.internal.driver1211.fabric.registry.FabricStructuralMaterializer;
 import dev.vineengine.vine.internal.spi.VineDriver;
 
@@ -126,5 +127,8 @@ public final class Fabric1211Driver implements VineDriver {
                 "Fabric1211Driver.bootstrap has not run — entrypoint wiring broken");
         }
         new FabricStructuralMaterializer().materializeStructural(ctx.structuralRegistries());
+        // Design descriptors (sub-02 Stage C): dynamic datapack registries
+        // register at the same mod-init moment, before any world loads.
+        new FabricDesignMaterializer(ctx).registerDesign(ctx.designRegistries());
     }
 }

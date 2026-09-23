@@ -27,6 +27,7 @@ import dev.vineengine.vine.internal.driver1211.common.command.EngineCommands;
 import dev.vineengine.vine.internal.driver1211.neoforge.command.NeoForgeCommandFactory;
 import dev.vineengine.vine.internal.driver1211.neoforge.events.NeoForgeHookInstallers;
 import dev.vineengine.vine.internal.driver1211.neoforge.net.NeoForgeNetDriver;
+import dev.vineengine.vine.internal.driver1211.neoforge.registry.NeoForgeDesignMaterializer;
 import dev.vineengine.vine.internal.driver1211.neoforge.registry.NeoForgeStructuralMaterializer;
 import dev.vineengine.vine.internal.spi.VineDriver;
 
@@ -88,6 +89,8 @@ public final class NeoForge1211Driver implements VineDriver {
         // Structural descriptor materialization (sub-02 Stage B): wires itself to
         // NewRegistryEvent/RegisterEvent on the same mod bus.
         new NeoForgeStructuralMaterializer(modBus, ctx);
+        // Design descriptors (sub-02 Stage C): dynamic datapack registries.
+        new NeoForgeDesignMaterializer(modBus, ctx);
         NeoForge.EVENT_BUS.addListener(ServerAboutToStartEvent.class,
             event -> ctx.advancePhase(EnginePhase.WORLD_LOAD));
         NeoForge.EVENT_BUS.addListener(ServerStartedEvent.class,
