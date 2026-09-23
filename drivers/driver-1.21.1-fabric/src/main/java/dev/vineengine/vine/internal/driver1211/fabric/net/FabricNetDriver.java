@@ -21,12 +21,12 @@ import net.minecraft.util.Identifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import dev.vineengine.vine.internal.driver1211.common.DriverRuntime;
 import dev.vineengine.vine.VinePlayer;
 import dev.vineengine.vine.internal.driver1211.common.events.HookEvent;
 import dev.vineengine.vine.internal.driver1211.common.net.ChannelTable;
 import dev.vineengine.vine.internal.driver1211.common.net.DriverVinePlayer;
-import dev.vineengine.vine.internal.driver1211.common.net.NetTransportAdapter;
-import dev.vineengine.vine.internal.net.NetTransport;
+import dev.vineengine.vine.internal.net.NetTransportBinding;
 import dev.vineengine.vine.internal.spi.NetDriver;
 import dev.vineengine.vine.net.ChannelSpec;
 import dev.vineengine.vine.net.Endpoint;
@@ -58,7 +58,7 @@ public final class FabricNetDriver implements NetDriver {
     private final ChannelTable table = new ChannelTable();
     private final Set<String> bound = ConcurrentHashMap.newKeySet();
     private final AtomicReference<Consumer<HookEvent>> packetHook;
-    private volatile NetTransport.InboundSink engineSink;
+    private volatile InboundSink engineSink;
     private volatile MinecraftServer server;
 
     private static volatile FabricNetDriver instance;
@@ -76,9 +76,9 @@ public final class FabricNetDriver implements NetDriver {
 
     /** Binds this driver as the process transport; called once from bootstrap. */
     public void bindTransport() {
-        engineSink = NetTransportAdapter.bind(this);
+        engineSink = NetTransportBinding.bind(this);
+        DriverRuntime.installNet(this, engineSink);
     }
-
     /** Called from {@code SERVER_STARTED}/{@code SERVER_STOPPING} to track the live server. */
     public void server(MinecraftServer current) {
         server = current;

@@ -6,6 +6,8 @@ import dev.vineengine.vine.testmod.event.PhaseTrace;
 import dev.vineengine.vine.testmod.net.EchoPacket;
 import dev.vineengine.vine.testmod.registry.Testmarkers;
 import dev.vineengine.vine.testmod.command.EchoCommand;
+import dev.vineengine.vine.testmod.data.VoxelExemplar;
+import dev.vineengine.vine.testmod.content.TestContent;
 
 /**
  * vine-testmod entrypoint (sub-22) — the consumer-side proof of the Prime
@@ -42,7 +44,8 @@ public final class VineTestmod implements VineInitializer {
         Testmarkers.register(engine);  // registry exemplar (sub-02, M0): Java path
         EchoPacket.register();       // packet echo exemplar (sub-05 Stage A): vinetest:echo C2S→S2C
         EchoCommand.register();      // command exemplar (sub-06, M0): /vine_test echo <msg>, op-level 2
-        // Seam — testblock/testitem exemplars (sub-07, M0 minimal): pending the vine-api
-        //   content surface; guarded by a supports(...) probe while incubating.
+        VoxelExemplar.register();    // voxel-data exemplar (sub-03 Stage C): vine_test:voxel, 1 portable + 1 native field
+        TestContent.register(engine);  // block/item exemplars (sub-07, M0 minimal):
+                                        //   vine_test:testblock + vine_test:testitem
     }
 }

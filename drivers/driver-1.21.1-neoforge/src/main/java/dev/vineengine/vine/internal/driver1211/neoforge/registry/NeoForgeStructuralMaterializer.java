@@ -4,6 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import net.minecraft.core.Registry;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.IEventBus;
@@ -19,6 +20,7 @@ import dev.vineengine.vine.internal.spi.RegistryDriver;
 import dev.vineengine.vine.internal.spi.StructuralRegistryView;
 import dev.vineengine.vine.internal.spi.VineDriver;
 import dev.vineengine.vine.registry.Holder;
+import dev.vineengine.vine.content.VineContent;
 import dev.vineengine.vine.registry.VineId;
 
 /**
@@ -33,10 +35,19 @@ import dev.vineengine.vine.registry.VineId;
  * <p>Values registered are the descriptor data objects themselves; per-type
  * native delegates (blocks, items, …) are the content subsystems' concern
  * (sub-07+), never this generic machinery.
+ *
+ * <p>Sub-07 extension: the engine content kinds {@code vine:block} and
+ * {@code vine:item} are routed away from the vine-created registries into the
+ * <em>vanilla</em> BLOCK/ITEM registries via {@link NeoForgeContentMaterializer}
+ * at those registries' own {@code RegisterEvent} firings.
  */
 public final class NeoForgeStructuralMaterializer implements RegistryDriver {
 
     private static final Logger LOG = LoggerFactory.getLogger(NeoForgeStructuralMaterializer.class);
+    /** Snapshot slice for {@code vine:block}, non-null iff entries exist (sub-07). */
+    private StructuralRegistryView.StructuralType blockType;
+    /** Snapshot slice for {@code vine:item}, non-null iff entries exist (sub-07). */
+    private StructuralRegistryView.StructuralType itemType;
     /** Types whose vanilla registry was created but whose RegisterEvent has not fired yet. */
     private final Map<ResourceLocation, StructuralRegistryView.StructuralType> pending = new LinkedHashMap<>();
     /** The in-flight NewRegistryEvent, set by the mod-bus listener around {@link #materializeStructural}. */
@@ -69,14 +80,36 @@ public final class NeoForgeStructuralMaterializer implements RegistryDriver {
     @Override
     public void materializeStructural(StructuralRegistryView structural) {
         for (StructuralRegistryView.StructuralType type : structural.types()) {
+            // Content kinds (sub-07) never get a vine-created registry: they
+            // materialize into the VANILLA registries at their own
+            // RegisterEvent firings (see onRegister) — a placeable block or
+            // inventory-real item only exists as a vanilla singleton.
+            if (type.type() == VineContent.BLOCK_TYPE) {
+                blockType = type;
+                continue;
+            }
+            if (type.type() == VineContent.ITEM_TYPE) {
+                itemType = type;
+                continue;
+            }
             ResourceKey<Registry<Object>> key = registryKey(type.type().registryId());
             newRegistryEvent.create(new RegistryBuilder<>(key));
             pending.put(key.location(), type);
         }
     }
 
-    /** Fills one of our registries when its RegisterEvent fires; logs the total when the last drains. */
+    /**
+     * Fills one of our registries when its RegisterEvent fires, and routes the
+     * vanilla BLOCK/ITEM firings to content materialization (sub-07); logs the
+     * custom-registry total when the last drains.
+     */
     private void onRegister(RegisterEvent event) {
+        if (blockType != null && event.getRegistryKey().equals(Registries.BLOCK)) {
+            NeoForgeContentMaterializer.registerBlocks(event, blockType);
+        }
+        if (itemType != null && event.getRegistryKey().equals(Registries.ITEM)) {
+            NeoForgeContentMaterializer.registerItems(event, itemType);
+        }
         StructuralRegistryView.StructuralType type = pending.remove(event.getRegistryKey().location());
         if (type == null) {
             return; // a vanilla or foreign registry's firing — not ours

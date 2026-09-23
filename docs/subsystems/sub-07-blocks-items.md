@@ -1,6 +1,6 @@
 # SUB-07 — Blocks & items
 
-> **Status:** `planning` — one of `planning | in-progress | blocked(<reason>) | done`
+> **Status:** `in-progress` — one of `planning | in-progress | blocked(<reason>) | done`
 > **Milestone:** M0 minimal → M3 full · **Depends on:** SUB-02, SUB-03 · **Blocks:** SUB-11
 > **Cells:** all · **Loaders:** both
 > **Master plan:** §5.3 (+ §5.2, §5.4, §5.8) · **Module(s):** vine-api, vine-core, vine-spi, drivers
@@ -111,7 +111,7 @@ one item type, damage as data (§5.3/§5.4).
 
 ### Stage A — M0 minimal: one block, one item
 
-- [ ] **Do:** `BlockDescriptor`/`ItemDescriptor` skeletons (id + minimal
+- [x] **Do:** `BlockDescriptor`/`ItemDescriptor` skeletons (id + minimal
   tuning only, no behaviors/states/BEs), registered as sub-02 structural
   types; testmod registers one block + one item; materialization on both
   1.21.1 drivers; placeholder cube-all/generated models.
