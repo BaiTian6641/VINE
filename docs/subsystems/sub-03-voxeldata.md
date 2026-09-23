@@ -1,6 +1,6 @@
 # SUB-03 — VoxelData persistence
 
-> **Status:** `planning` — one of `planning | in-progress | blocked(<reason>) | done`
+> **Status:** `in-progress` — one of `planning | in-progress | blocked(<reason>) | done`
 > **Milestone:** M1 · **Depends on:** SUB-01, SUB-02 · **Blocks:** SUB-04, SUB-07, SUB-08, SUB-13, SUB-14
 > **Cells:** all · **Loaders:** both
 > **Master plan:** §5.4 (+ §5.1, §5.12, §7, §9 perf row) · **Module(s):** vine-api, vine-core, vine-spi, drivers
@@ -99,7 +99,7 @@ public interface VoxelStorageDriver {
 
 ### Stage A — core tree & codec
 
-- [ ] **Do:** `VoxelType`, node model, `VoxelData`/`VoxelList`/`VoxelView` impl
+- [x] **Do:** `VoxelType`, node model, `VoxelData`/`VoxelList`/`VoxelView` impl
   in `internal.data`; binary codec + engine header; deep-equal/copy. Pure JVM,
   zero MC imports.
 - **Acceptance:** vine-core unit: 100k randomized-tree round-trips
@@ -113,7 +113,7 @@ public interface VoxelStorageDriver {
 
 ### Stage B — schema versioning & engine datafixers
 
-- [ ] **Do:** `VoxelSchema`, `VoxelDataFixer`, schema registry, lazy
+- [x] **Do:** `VoxelSchema`, `VoxelDataFixer`, schema registry, lazy
   fix-on-load, newer-version read-only guard.
 - **Acceptance:** unit: v1 fixture blob + two chained fixers reads as current;
   newer-version blob opens read-only, mutations never persist.
