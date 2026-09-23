@@ -58,6 +58,7 @@ public final class ScenarioRunner {
     private static final Duration STOP_GRACE = Duration.ofSeconds(90);
 
     private final String cell;
+    private int bootCount;
     private final Path rootDir;
     private final String gradleTask;
     private final Path projectCacheDir;
@@ -180,6 +181,7 @@ public final class ScenarioRunner {
                     default -> "unknown step type: " + type;
                 };
                 if (failure != null) {
+                    dumpConsoleTail();
                     return "step " + type + " in " + id + ": " + failure;
                 }
             }
@@ -283,8 +285,8 @@ public final class ScenarioRunner {
                 // The setblock outcome below is the real discriminator; an
                 // actually-unloaded chunk returns "That position is not loaded"
                 // and takes the retry path.
-                await(fl, line -> line.contains("Marked chunk"), "forceload confirmation",
-                    java.time.Duration.ofSeconds(15));
+                await(fl, line -> line.contains("Marked chunk") || line.contains("No chunks were marked"),
+                    "forceload confirmation", java.time.Duration.ofSeconds(15));
             }
             int from = mark();
             send("setblock " + pos[0] + " " + pos[1] + " " + pos[2] + " " + block);
@@ -364,6 +366,17 @@ public final class ScenarioRunner {
     private int mark() {
         synchronized (log) {
             return log.size();
+        }
+    }
+
+    /** Prints the tail of the captured console so a failure carries its evidence. */
+    private void dumpConsoleTail() {
+        synchronized (log) {
+            int from = Math.max(0, log.size() - 30);
+            System.out.println("[TCK-DUMP] last " + (log.size() - from) + " console lines:");
+            for (int i = from; i < log.size(); i++) {
+                System.out.println("[TCK-DUMP] " + log.get(i));
+            }
         }
     }
 
@@ -456,6 +469,16 @@ public final class ScenarioRunner {
         // Fresh history per boot: boot-marker and probe awaits must only ever
         // observe the CURRENT server, never a previous incarnation.
         synchronized (log) {
+            if (!log.isEmpty()) {
+                Path prev = projectCacheDir.resolveSibling(
+                    "tck-capture-" + cell + ".boot" + bootCount + ".log");
+                try {
+                    Files.writeString(prev, String.join(System.lineSeparator(), log));
+                } catch (IOException e) {
+                    System.out.println("[TCK] could not persist boot capture: " + e);
+                }
+            }
+            bootCount++;
             log.clear();
         }
         forceloaded.clear();
