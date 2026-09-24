@@ -99,7 +99,16 @@ public final class NeoForge1211Driver implements VineDriver {
         new NeoForgeDesignMaterializer(modBus, ctx);
         NeoForge.EVENT_BUS.addListener(ServerAboutToStartEvent.class,
             event -> ctx.advancePhase(EnginePhase.WORLD_LOAD));
+        NeoForge.EVENT_BUS.addListener(net.neoforged.neoforge.event.server.ServerStoppedEvent.class,
+            event -> dev.vineengine.vine.internal.PlayerNames.install(null));
         NeoForge.EVENT_BUS.addListener(ServerStartedEvent.class, event -> {
+            // Player-name lookup (sub-06 Stage C): the engine knows session
+            // participants by UUID; naming them for suggestions is a cell concern.
+            var server = event.getServer();
+            dev.vineengine.vine.internal.PlayerNames.install(uuid -> {
+                var player = server.getPlayerList().getPlayer(uuid);
+                return player == null ? null : player.getGameProfile().getName();
+            });
             ctx.advancePhase(EnginePhase.SERVER_UP);
             VoxelProbe.run(NeoForgeVoxelStorage::probeStack, NeoForgeVoxelStorage.probeAccess(), "1.21.1-neoforge");
         });

@@ -27,6 +27,12 @@
     { "type": "RunCommand", "command": "vinequest start hunt" },
     { "type": "RunCommand", "command": "vinequest status" },
     { "type": "RunCommand", "command": "vinequest vt echo jsonaliased" },
+    { "type": "RunCommand", "command": "vine_test tree id vine_test:testblock" },
+    { "type": "RunCommand", "command": "vine_test tree path shared.hunt.phase" },
+    { "type": "RunCommand", "command": "vine_test tree id minecraft:stone" },
+    { "type": "RunCommand", "command": "vine_test tree badpath Bad.Path" },
+    { "type": "RunCommand", "command": "vine_test tree suggestid vine_test" },
+    { "type": "RunCommand", "command": "vine_test tree sessionplayers" },
     { "type": "RunCommand", "command": "vt echo aliased" },
     { "type": "RunCommand", "command": "vt tree int 7" },
     { "type": "AssertTrace", "trace": "command", "expect": [
@@ -42,6 +48,16 @@
       "suggest: ON,OFF",
       "tree open ok",
       "second ok"
+    ]},
+    { "type": "AssertTrace", "trace": "command", "expect": [
+      "tree id=vine_test:testblock",
+      "tree path=shared.hunt.phase",
+      "tree id=minecraft:stone"
+    ]},
+    { "type": "AssertTrace", "trace": "command", "expect": [
+      "Invalid value: voxel path 'Bad.Path' has an invalid segment 'Bad'",
+      "suggestid: vine_test:testblock",
+      "sessionplayers: none"
     ]},
     { "type": "AssertTrace", "trace": "command", "expect": [
       "quest json: started",

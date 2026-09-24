@@ -95,6 +95,18 @@ public final class CommandBridge {
         return new EngineCommandContext(source, Map.of()).source();
     }
 
+    /**
+     * Reports an argument that parsed natively but failed engine validation
+     * (sub-06 Stage C): server-parsed engine types ride vanilla argument types so
+     * unmodded clients keep working, which means some rules can only be enforced
+     * once the value is in engine hands. Those failures are consumer-visible
+     * errors, never dispatcher crashes.
+     */
+    public static int invalidArgument(NativeSource source, String name, String message) {
+        source.sendError("Invalid " + name + ": " + message);
+        return 0;
+    }
+
     public static boolean requirementsMet(
             List<java.util.function.Predicate<dev.vineengine.vine.command.CommandSourceRef>> requirements,
             NativeSource source) {

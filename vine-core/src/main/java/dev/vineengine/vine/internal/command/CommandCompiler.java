@@ -90,6 +90,9 @@ final class CommandCompiler {
     static boolean isSupportedType(ArgumentTypeRef<?> type) {
         String id = type.id();
         return id.equals("string") || id.equals("int") || id.equals("long") || id.equals("double")
-            || id.equals("bool") || id.equals("greedy") || id.startsWith("enum:");
+            || id.equals("bool") || id.equals("greedy") || id.startsWith("enum:")
+            // sub-06 Stage C engine types: server-parsed, mapped to the nearest
+            // vanilla type in the synced tree.
+            || id.equals("vine_id") || id.equals("voxel_path") || id.equals("player_in_session");
     }
 }

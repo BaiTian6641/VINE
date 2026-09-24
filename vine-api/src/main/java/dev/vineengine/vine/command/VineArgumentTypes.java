@@ -35,6 +35,34 @@ public final class VineArgumentTypes {
     public static final ArgumentTypeRef<String> GREEDY = new ArgumentTypeRef<>("greedy", String.class);
 
     /**
+     * A registered engine id ({@code namespace:path}) — sub-06 Stage C. Mapped to
+     * the cell's resource-location type so an unmodded vanilla client parses and
+     * tab-completes it; the parsed value is the engine's own {@link VineId}.
+     * Default suggestions are the engine's registered content ids
+     * ({@link VineSuggestions#REGISTERED_IDS}).
+     */
+    public static final ArgumentTypeRef<dev.vineengine.vine.registry.VineId> VINE_ID =
+        new ArgumentTypeRef<>("vine_id", dev.vineengine.vine.registry.VineId.class);
+
+    /**
+     * A dotted path expression into a voxel data tree ({@code shared.hunt.phase}) —
+     * sub-06 Stage C. Mapped to a greedy string in the synced tree (a vanilla
+     * client sees one opaque token sequence); validation is the engine's, so a
+     * malformed path is rejected at parse, never silently accepted.
+     */
+    public static final ArgumentTypeRef<String> VOXEL_PATH = new ArgumentTypeRef<>("voxel_path", String.class);
+
+    /**
+     * A player who is a participant of the executing player's session — sub-06
+     * Stage C. Mapped to the cell's player selector, so vanilla clients get the
+     * usual player completion; the engine adds session-member suggestions when
+     * sessions are present (sub-14), and degrades to a plain player selector
+     * otherwise.
+     */
+    public static final ArgumentTypeRef<dev.vineengine.vine.VinePlayer> PLAYER_IN_SESSION =
+        new ArgumentTypeRef<>("player_in_session", dev.vineengine.vine.VinePlayer.class);
+
+    /**
      * An enumeration of {@code type}'s constants, in declaration order — the
      * compiler maps it to the native enum argument and parses by constant name
      * (case-insensitive), so consumers get a typed value and suggest nothing by

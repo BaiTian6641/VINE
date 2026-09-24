@@ -190,11 +190,17 @@ public final class EngineCommands {
             java.util.List<java.util.function.Predicate<dev.vineengine.vine.command.CommandSourceRef>>
                 requirements = node.requirements();
             builder.executes(context -> {
+                CommandBridge.NativeSource source = factory.adapt(context.getSource());
                 Map<String, Object> arguments = new HashMap<>();
                 for (ArgumentSpec spec : pathArgs) {
-                    arguments.put(spec.name(), factory.getArg(context, spec.name(), spec.type()));
+                    try {
+                        arguments.put(spec.name(), factory.getArg(context, spec.name(), spec.type()));
+                    } catch (IllegalArgumentException invalid) {
+                        // Engine validation of a natively-parsed value (sub-06
+                        // Stage C): a clean error to the source, never a crash.
+                        return CommandBridge.invalidArgument(source, spec.name(), invalid.getMessage());
+                    }
                 }
-                CommandBridge.NativeSource source = factory.adapt(context.getSource());
                 if (!CommandBridge.requirementsMet(requirements, source)) {
                     // Stage B gates: denied before any engine code sees the call.
                     return 0;

@@ -62,6 +62,14 @@ public final class FabricCommandFactory implements EngineCommands.NativeFactory<
             // Enums ride a string argument: Brigadier has no native enum type,
             // and parsing/validation happens in getArg against the declaration.
             builder = CommandManager.argument(name, StringArgumentType.string());
+        } else if (id.equals("vine_id")) {
+            // Engine ids are resource locations on every cell: an unmodded
+            // client parses and completes them with no client-side engine code.
+            builder = CommandManager.argument(name, net.minecraft.command.argument.IdentifierArgumentType.identifier());
+        } else if (id.equals("voxel_path")) {
+            builder = CommandManager.argument(name, StringArgumentType.greedyString());
+        } else if (id.equals("player_in_session")) {
+            builder = CommandManager.argument(name, net.minecraft.command.argument.EntityArgumentType.player());
         } else {
             throw new IllegalStateException("Fabric cell cannot map engine argument type " + id);
         }
@@ -95,7 +103,24 @@ public final class FabricCommandFactory implements EngineCommands.NativeFactory<
         if (id.equals("bool")) {
             return BoolArgumentType.getBool(context, name);
         }
+        if (id.equals("vine_id")) {
+            return dev.vineengine.vine.registry.VineId.parse(
+                net.minecraft.command.argument.IdentifierArgumentType.getIdentifier(context, name).toString());
+        }
+        if (id.equals("player_in_session")) {
+            // Brigadier already validated the selector; a failure here is an
+            // engine-level resolution problem, reported through the executor's
+            // error path rather than as an unchecked Brigadier crash.
+            try {
+                return playerOf(net.minecraft.command.argument.EntityArgumentType.getPlayer(context, name));
+            } catch (com.mojang.brigadier.exceptions.CommandSyntaxException e) {
+                throw new IllegalArgumentException(e.getMessage(), e);
+            }
+        }
         String raw = StringArgumentType.getString(context, name);
+        if (id.equals("voxel_path")) {
+            return dev.vineengine.vine.command.VoxelPath.parse(raw);
+        }
         if (id.startsWith("enum:")) {
             for (String constant : type.enumValues()) {
                 if (constant.equalsIgnoreCase(raw)) {
@@ -111,6 +136,21 @@ public final class FabricCommandFactory implements EngineCommands.NativeFactory<
     @Override
     public Predicate<ServerCommandSource> hasPermission(int level) {
         return source -> source.hasPermissionLevel(level);
+    }
+
+    /** The engine's player facade over a native player (argument values, suggestions). */
+    static dev.vineengine.vine.VinePlayer playerOf(net.minecraft.server.network.ServerPlayerEntity player) {
+        return new dev.vineengine.vine.VinePlayer() {
+            @Override
+            public java.util.UUID uniqueId() {
+                return player.getUuid();
+            }
+
+            @Override
+            public String name() {
+                return player.getGameProfile().getName();
+            }
+        };
     }
 
     @Override

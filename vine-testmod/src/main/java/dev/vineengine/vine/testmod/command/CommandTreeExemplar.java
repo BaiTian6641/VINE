@@ -3,6 +3,7 @@ package dev.vineengine.vine.testmod.command;
 import java.util.List;
 
 import dev.vineengine.vine.command.SuggestionContext;
+import dev.vineengine.vine.command.VineSuggestions;
 import dev.vineengine.vine.command.SuggestionSource;
 import dev.vineengine.vine.command.VineArgumentTypes;
 import dev.vineengine.vine.command.VineCommand;
@@ -111,6 +112,61 @@ public final class CommandTreeExemplar {
                         ctx.feedback("tree open ok");
                         return 1;
                     }))
+                // Engine argument types (sub-06 Stage C): server-parsed, mapped to
+                // the nearest vanilla type in the synced tree, with engine-state
+                // suggestions — an unmodded vanilla client completes all three.
+                .then(VineCommand.literal("id")
+                    .then(VineCommand.argument("value", VineArgumentTypes.VINE_ID)
+                        .suggests(VineSuggestions.REGISTERED_IDS)
+                        .executes(ctx -> {
+                            ctx.feedback("tree id=" + ctx.argument("value",
+                                dev.vineengine.vine.registry.VineId.class));
+                            return 1;
+                        })))
+                .then(VineCommand.literal("path")
+                    .then(VineCommand.argument("value", VineArgumentTypes.VOXEL_PATH)
+                        .executes(ctx -> {
+                            ctx.feedback("tree path=" + ctx.argument("value",
+                                dev.vineengine.vine.command.VoxelPath.class));
+                            return 1;
+                        })))
+                .then(VineCommand.literal("sessionplayer")
+                    .then(VineCommand.argument("value", VineArgumentTypes.PLAYER_IN_SESSION)
+                        .suggests(VineSuggestions.SESSION_PLAYERS)
+                        .executes(ctx -> {
+                            ctx.feedback("tree sessionplayer=" + ctx.argument("value",
+                                dev.vineengine.vine.VinePlayer.class).name());
+                            return 1;
+                        })))
+                .then(VineCommand.literal("badpath")
+                    .then(VineCommand.argument("value", VineArgumentTypes.VOXEL_PATH)
+                        .executes(ctx -> {
+                            // Unreachable for a malformed path: the engine rejects
+                            // it before the executor runs.
+                            ctx.feedback("tree badpath accepted=" + ctx.argument("value",
+                                dev.vineengine.vine.command.VoxelPath.class));
+                            return 1;
+                        })))
+                .then(VineCommand.literal("sessionplayers")
+                    .executes(ctx -> {
+                        // Degradation path, exercised live: a console source has no
+                        // session, so the source yields no candidates instead of
+                        // failing. The player-source path (and live name lookup)
+                        // needs a joining player — sub-21's client runner.
+                        List<String> names = VineSuggestions.SESSION_PLAYERS.suggest(
+                            new SuggestionContext("", ctx.source()));
+                        ctx.feedback("sessionplayers: " + (names.isEmpty() ? "none" : String.join(",", names)));
+                        return 1;
+                    }))
+                .then(VineCommand.literal("suggestid")
+                    .then(VineCommand.argument("prefix", VineArgumentTypes.STRING)
+                        .executes(ctx -> {
+                            String prefix = ctx.argument("prefix", String.class);
+                            List<String> candidates = VineSuggestions.REGISTERED_IDS.suggest(
+                                new SuggestionContext(prefix, ctx.source()));
+                            ctx.feedback("suggestid: " + String.join(",", candidates));
+                            return 1;
+                        })))
                 // Declared last on purpose: a greedy argument consumes the rest
                 // of the line, and the compiler rejects any sibling after one.
                 .then(VineCommand.literal("greedy")

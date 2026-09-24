@@ -63,6 +63,14 @@ public final class NeoForgeCommandFactory implements EngineCommands.NativeFactor
             // Enums ride a string argument: Brigadier has no native enum type,
             // and parsing/validation happens in getArg against the declaration.
             builder = Commands.argument(name, StringArgumentType.string());
+        } else if (id.equals("vine_id")) {
+            // Engine ids are resource locations on every cell: an unmodded client
+            // parses and completes them with no client-side engine code.
+            builder = Commands.argument(name, net.minecraft.commands.arguments.ResourceLocationArgument.id());
+        } else if (id.equals("voxel_path")) {
+            builder = Commands.argument(name, StringArgumentType.greedyString());
+        } else if (id.equals("player_in_session")) {
+            builder = Commands.argument(name, net.minecraft.commands.arguments.EntityArgument.player());
         } else {
             throw new IllegalStateException("NeoForge cell cannot map engine argument type " + id);
         }
@@ -96,7 +104,24 @@ public final class NeoForgeCommandFactory implements EngineCommands.NativeFactor
         if (id.equals("bool")) {
             return BoolArgumentType.getBool(context, name);
         }
+        if (id.equals("vine_id")) {
+            return dev.vineengine.vine.registry.VineId.parse(
+                net.minecraft.commands.arguments.ResourceLocationArgument.getId(context, name).toString());
+        }
+        if (id.equals("player_in_session")) {
+            // Brigadier has already validated the selector; a failure here is an
+            // engine-level resolution problem, reported through the executor's
+            // error path rather than as an unchecked Brigadier crash.
+            try {
+                return playerOf(net.minecraft.commands.arguments.EntityArgument.getPlayer(context, name));
+            } catch (com.mojang.brigadier.exceptions.CommandSyntaxException e) {
+                throw new IllegalArgumentException(e.getMessage(), e);
+            }
+        }
         String raw = StringArgumentType.getString(context, name);
+        if (id.equals("voxel_path")) {
+            return dev.vineengine.vine.command.VoxelPath.parse(raw);
+        }
         if (id.startsWith("enum:")) {
             for (String constant : type.enumValues()) {
                 if (constant.equalsIgnoreCase(raw)) {
@@ -111,6 +136,21 @@ public final class NeoForgeCommandFactory implements EngineCommands.NativeFactor
     @Override
     public Predicate<CommandSourceStack> hasPermission(int level) {
         return source -> source.hasPermission(level);
+    }
+
+    /** The engine's player facade over a native player (argument values, suggestions). */
+    static dev.vineengine.vine.VinePlayer playerOf(ServerPlayer player) {
+        return new dev.vineengine.vine.VinePlayer() {
+            @Override
+            public java.util.UUID uniqueId() {
+                return player.getUUID();
+            }
+
+            @Override
+            public String name() {
+                return player.getGameProfile().getName();
+            }
+        };
     }
 
     @Override

@@ -68,7 +68,7 @@ read, follow, track, and build subsystems **independently and in parallel**.
 | 03 | VoxelData persistence | M1 | 01, 02 | in-progress | [sub-03](subsystems/sub-03-voxeldata.md) |
 | 04 | Capabilities | M1 | 02, 03 | in-progress | [sub-04](subsystems/sub-04-capabilities.md) |
 | 05 | Networking | M0→M1 | 01, 02, 03 | done | [sub-05](subsystems/sub-05-networking.md) |
-| 06 | Commands | M0 minimal→M1 full | 01, 02, 03 | in-progress | [sub-06](subsystems/sub-06-commands.md) |
+| 06 | Commands | M0 minimal→M1 full | 01, 02, 03 | in-progress (A-C done) | [sub-06](subsystems/sub-06-commands.md) |
 | 07 | Blocks & items | M0 minimal→M3 full | 02, 03 | in-progress | [sub-07](subsystems/sub-07-blocks-items.md) |
 | 08 | Entities & VineBrain | M2 | 02, 03, 05 | planning | [sub-08](subsystems/sub-08-entities.md) |
 | 09 | Animation runtime | M2 data → M5 render | 08 | planning | [sub-09](subsystems/sub-09-animation.md) |

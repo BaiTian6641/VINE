@@ -75,6 +75,12 @@ public final class Fabric1211Driver implements VineDriver {
         ctx.advancePhase(EnginePhase.REGISTRIES_OPEN);
         driverContext = ctx;
         ServerLifecycleEvents.SERVER_STARTING.register(server -> {
+            // Player-name lookup (sub-06 Stage C): the engine knows session
+            // participants by UUID; naming them for suggestions is a cell concern.
+            dev.vineengine.vine.internal.PlayerNames.install(uuid -> {
+                net.minecraft.server.network.ServerPlayerEntity player = server.getPlayerManager().getPlayer(uuid);
+                return player == null ? null : player.getGameProfile().getName();
+            });
             // Schemas must be registered by consumers/drivers *after* engine boot
             // (bootstrap runs inside it, where the facade is deliberately blocked)
             // and before the store freezes — this anchor is exactly that window.
@@ -94,7 +100,10 @@ public final class Fabric1211Driver implements VineDriver {
             ctx.advancePhase(EnginePhase.SERVER_UP);
             VoxelProbe.run(FabricVoxelStorage::probeStack, FabricVoxelStorage.probeAccess(), "1.21.1-fabric");
         });
-        ServerLifecycleEvents.SERVER_STOPPING.register(server -> net.server(null));
+        ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
+            net.server(null);
+            dev.vineengine.vine.internal.PlayerNames.install(null);
+        });
 
         // Session persistence (sub-14 Stage B): mount on the first world load,
         // flush at stop. Fabric has no per-save callback (documented seam) — the
