@@ -36,6 +36,13 @@ drops in the first seven months of 2026 — 26.1 "Tiny Takeover", 26.2 "Chaos
 Cubed", 26.3 "Wilderness Bound" (Sep 15). Version churn is permanent,
 accelerating, and now observable rather than predicted.
 
+*(Verified 2026-09-25 against minecraft.net's drop announcements: 26.1 shipped
+2026-03-24, 26.2 on 2026-06-16, 26.3 on 2026-09-15, and 26.4 is already in
+snapshots — Snapshot 1 landed 2026-09-22, i.e. the next drop is in flight while
+the current one is four weeks old. That is the cadence the driver-cells model
+exists for: a drop bump is a catalog edit plus a driver wave, never a consumer
+change.)*
+
 ### 1.2 The thesis
 
 Insert one thick, stable layer between mod code and the game:
@@ -364,6 +371,15 @@ and no remapping step exists. The mappings problem now belongs entirely to the
 1.21.1 cells — where it was already solved. CI runs a JDK matrix (**21 / 25**)
 alongside the version matrix.
 
+*(Verified 2026-09-25 against Fabric's own porting docs,
+github.com/FabricMC/fabric-docs → versions/26.1.2/develop/porting/{index,mappings,loom}:
+Yarn and Intermediary are unmaintained past 1.21.11, 26.1 needs no `mappings`
+dependency because the game is already unobfuscated, and the plugin id itself
+changes — `net.fabricmc.fabric-loom` for 26.1+, with `jar` replacing `remapJar`.
+The repo's `build-logic/vine.driver-26.x-fabric.gradle` already applies that
+plugin id and documents the same two consequences, so the provision and the
+practice agree.)*
+
 ### 5.11 Client surface — designed day-zero, implemented in phases
 
 **Locked 2026-09-23**: the plan covers the *entire* client surface from day
@@ -454,7 +470,10 @@ designing a competing format is needless weight.
   a VINE-native fallback renderer; a future backend remains possible behind
   the same SPI. GeckoLib's generational churn (GL4 on 1.21.1, GL5 on 1.21.5+)
   is quarantined inside the per-cell drivers — consumers only ever see VINE
-  animation IDs.
+  animation IDs. The GL4→GL5 break includes a package namespace move
+  (`software.bernie.geckolib` → `com.geckolib`, verified 2026-09-25 against
+  wiki.geckolib.com/docs/geckolib5), so the two adapters probe different
+  namespaces and the boundary is never inferred from a version string.
 - Consumers register animation assets and play them by ID. Sync model: the
   server selects/approves the animation; clients render it.
 

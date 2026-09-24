@@ -1,0 +1,38 @@
+{
+  "id": "vine_test:determinism_tick_barrier",
+  "tags": [
+    "SMOKE",
+    "DETERMINISM"
+  ],
+  "steps": [
+    {
+      "type": "PlaceBlock",
+      "block": "vine_test:stateblock",
+      "pos": [
+        1,
+        300,
+        0
+      ]
+    },
+    {
+      "type": "AdvanceTicks",
+      "ticks": 40
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_state_get 1 300 0"
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_state_set 1 300 0 level 2"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "command",
+      "expect": [
+        "tck: state @1,300,0 block=vine_test:stateblock state=lit=true,level=0,mode=IDLE loaded=true",
+        "tck: state-set @1,300,0 property=level value=2 applied=true before=lit=true,level=0,mode=IDLE after=lit=true,level=2,mode=IDLE"
+      ]
+    }
+  ]
+}

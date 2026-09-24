@@ -158,6 +158,13 @@ outside drivers.
   26.x availability VERIFIED (was unverifiable at first draft): GeckoLib
   5.5.x ships for 26.1.2 and 26.2 on Fabric AND NeoForge (CurseForge,
   Sep 2026), so Stage E's GL5 backend has a real dependency target.
+  Re-verified 2026-09-25 against the publisher's own version table
+  (modrinth.com/mod/geckolib, wiki.geckolib.com/docs/geckolib5): the line is
+  26.1 → 5.5, 26.1.2 → 5.5.2, 26.2 → 5.5.6, Fabric and NeoForge both listed.
+  **One fact the adapters must carry:** GL5 changed its Java package namespace
+  from `software.bernie.geckolib` to `com.geckolib`, so `GeckoLib5Adapter`
+  probes the new namespace only — a GL4-style probe against a GL5 jar finds
+  nothing and would silently report the partner absent.
 
 ## 5. Verification
 

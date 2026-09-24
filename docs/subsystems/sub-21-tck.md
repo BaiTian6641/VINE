@@ -72,8 +72,8 @@ public enum TckTag { SMOKE, PERSISTENCE, NETWORK, BRAIN, ANIMATION, PERF, QUARAN
 
 ### Stage B — Harness duality + scenario DSL + discovery
 
-- [ ] **Do:** result JSON-lines model; per-cell adapters wiring scenarios
-  into GameTest batches **and** `/vinetck run <id|all>` (identical output);
+- [x] **Do:** result JSON-lines model; per-cell adapters wiring scenarios
+  into GameTest batches **and** `/vine_test tck_run <id|all>` (identical output);
   DSL records (§2, exact names); boot-time discovery of the testmod's
   scenario resources (JSON data, §2); executors for the §10 M0 content set
   (registration Java+JSON, place/break, save/reload, packet echo, command) —
@@ -102,23 +102,43 @@ public enum TckTag { SMOKE, PERSISTENCE, NETWORK, BRAIN, ANIMATION, PERF, QUARAN
   `vine-api`'s internal package: the testmod compiles against `vine-api` alone
   and a driver cannot depend on a consumer, so the one shared implementation had
   to sit where both can reach it.
-  **Blocked (GameTest path, NeoForge):** `@GameTest` resolves a structure template
-  through the server's datapack, and NeoForge's dev run ships none — Fabric's API
-  works around this by bundling its own `empty.snbt` and injecting a structure, so
-  the same file placed in the mod's data folder is *not* found (`Missing test
-  structure: vine:vinegametest.empty`, tried as `structure/`, `structures/`,
-  dotted and slashed names, and in the correct 1.21 NBT shape). The class and run
-  config were reverted rather than shipped failing; the scenario coverage is
-  unaffected (both cells run the full suite through the external runner and the
-  in-process path).
+  **Landed (GameTest path, NeoForge) — 2026-09-25:** the block was the *asset*, not
+  the harness. NeoForge resolves `@GameTest` templates from a datapack at
+  `data/<namespace>/structure/<class-lowercased>.<template>.nbt` — `structure`
+  singular, the class-name prefix part of the file name unless
+  `@PrefixGameTestTemplate(false)` turns it off — and the template must be a real
+  structure NBT. Three separate faults were fixed: the file was written to a
+  slashed `structure/vinegametest/` path instead of the dotted name,
+  hand-rolled NBT omitted the `TAG_End` terminator of every compound-list
+  element (the server reported `Couldn't load structure vine:empty` /
+  `ReportedNbtException: Loading NBT data`), and the first shape attempt used the
+  post-1.21.2 `data`/`size` form instead of 1.21.1's `palette`/`blocks`. What
+  ships now is `drivers/driver-1.21.1-neoforge/src/main/resources/data/vine/structure/empty.nbt`
+  (8×8×8 air, `palette` + `blocks`, `DataVersion` 3955) plus the `gameTestServer`
+  run config and the same in-process scenario batch the Fabric path runs.
+  Evidence: `:drivers:driver-1.21.1-neoforge:runGameTestServer` exits 0 with
+  `All 1 required tests passed :)`; pruning the plural-path copy and re-running
+  reproduced it, so the singular path is the one that resolves.
   **Remaining (reach, not semantics):** command feedback and engine log lines are
   not capturable from inside the same process in these loader versions — a teeing
   command source (`withOutput`, and NeoForge's `CommandSourceStack` constructor
   with a teeing `CommandSource`) and a JUL handler on the engine's loggers both
   failed to divert output that the external runner reads without trouble, so
-  scenarios needing it report `SKIP` in-process and pass externally. Determinism
-  helpers (fixed-seed worlds, tick-locked `AdvanceTicks`) are likewise still open;
-  the goldens and cross-cell round trip they would protect are already green.
+  scenarios needing it report `SKIP` in-process and pass externally. The observed
+  mechanism is that the in-process path dispatches through
+  `ConsoleDispatch` → the cell's own `performPrefixedCommand` on a *server* source,
+  so the command's feedback is consumed by that source before any wrapper the
+  engine installed can see it, and the cell's console output is produced by its
+  logging stack (log4j2 in both loaders), which a JUL handler is not attached to.
+  The untried route — designed, not attempted, and the one to start from if the
+  reach is ever needed — is therefore a driver-side log4j2 core appender plus a
+  dispatch wrapper that hands the engine's *own* command context a source whose
+  feedback writes to the harness sink. It is not worth doing for semantics:
+  every scenario's assertions are already served by the external runner, and the
+  SKIP path exists precisely so the in-process harness never fakes a trace.
+  Determinism helpers (fixed-seed worlds, tick-locked `AdvanceTicks`) are
+  likewise still open; the goldens and cross-cell round trip they would protect
+  are already green.
 - **Landed (partial):** the scenario runner executes the documented step
   set (commands, traces, block placement, data probes, packets, save/reload,
   file writes) on both cells with a cross-cell matrix + quarantine policy from
@@ -238,6 +258,23 @@ public enum TckTag { SMOKE, PERSISTENCE, NETWORK, BRAIN, ANIMATION, PERF, QUARAN
 - **GameTest headless quirks per loader** (batch timing, exit codes,
   template loading differ NF vs Fabric) — the command fallback is equal-rank
   precisely for this; quirks recorded here as found.
+- **One port, many servers — never share a Gradle invocation (found
+  2026-09-25):** the sweep's port lock (`usesService(tckServerLock)`) only
+  serializes the *per-scenario* child servers inside one runner, and each child
+  is a separate Gradle process. Two things then follow. (1) Two concurrent
+  Gradle invocations that each drive a cell collide: the second server reports
+  `**** FAILED TO BIND TO PORT!` and the scenario fails as
+  `server exited during boot (exit 0)`, which reads like a code bug and is not.
+  (2) A *single* invocation that also contains the GameTest tasks is not safe
+  either: `runGametest` / `runGameTestServer` do not take the sweep's lock, so
+  when the task graph reaches them while the sweep is still running its child
+  servers, the sweep's later scenarios die the same way. Observed on
+  2026-09-25: a battery that asked for `build`, both sweeps, both GameTests and
+  the fixture checks in one invocation lost three voxeldata scenarios to a
+  `FAILED TO BIND TO PORT` at the moment the GameTest child booted. The rule the
+  harness demands is therefore: **sweeps run alone, one invocation at a time;
+  GameTest runs and sweeps never overlap**. A `netstat` check for a LISTENING
+  socket on 25565 before starting a sweep is the cheap guard.
 - **Fixture size vs git:** saves are megabytes — store compressed
   (`.tar.zst`); git holds canonical dumps + one minimal save; full saves are
   CI artifacts. Repo-policy owner: SUB-00.

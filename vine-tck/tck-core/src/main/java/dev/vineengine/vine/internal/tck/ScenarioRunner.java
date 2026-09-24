@@ -55,6 +55,16 @@ public final class ScenarioRunner {
     private static final int EXIT_USAGE = 2;
     private static final int EXIT_FAIL = 1;
     private static final Duration ASSERT_TIMEOUT = Duration.ofSeconds(90);
+
+    /**
+     * The pinned world seed: any fixed value does, what matters is that it never
+     * changes between runs or cells. Vanilla accepts a string seed and hashes it.
+     */
+    private static final String SEED = "vine-tck-determinism";
+
+    /** Vanilla's game-time answer: {@code The time is <N>} (also the tick barrier's signal). */
+    private static final java.util.regex.Pattern GAMETIME =
+        java.util.regex.Pattern.compile("The time is (\\d+)");
     private static final Duration STOP_GRACE = Duration.ofSeconds(90);
 
     /** One scenario's outcome for the results journal (sub-21 Stage D). */
@@ -201,6 +211,41 @@ public final class ScenarioRunner {
         return failed == 0 ? 0 : EXIT_FAIL;
     }
 
+    /**
+     * Pins the dev server's world seed before the first boot of this runner
+     * (sub-21 Stage E determinism helpers). The world is wiped at the same moment,
+     * so the world the server generates afterwards is a function of this seed —
+     * a fixed point that makes terrain-dependent observations comparable between
+     * runs and cells.
+     *
+     * <p>Only {@code level-seed} is touched; every other key the loader or a
+     * previous run wrote is preserved verbatim. An already-generated world keeps
+     * its own seed — substituting a new one would be a lie about a world that
+     * exists — so the pin applies to the world this boot is about to create.
+     */
+    private void pinLevelSeed(Path runDir) {
+        try {
+            Files.createDirectories(runDir);
+            Path properties = runDir.resolve("server.properties");
+            List<String> lines = Files.exists(properties)
+                ? new ArrayList<>(Files.readAllLines(properties, StandardCharsets.UTF_8))
+                : new ArrayList<>();
+            boolean replaced = false;
+            for (int i = 0; i < lines.size(); i++) {
+                if (lines.get(i).startsWith("level-seed=")) {
+                    lines.set(i, "level-seed=" + SEED);
+                    replaced = true;
+                }
+            }
+            if (!replaced) {
+                lines.add("level-seed=" + SEED);
+            }
+            Files.write(properties, lines, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            System.out.println("[TCK] could not pin the level seed: " + e);
+        }
+    }
+
     private String runScenario(Path file) {
         JsonObject root;
         try {
@@ -220,6 +265,7 @@ public final class ScenarioRunner {
                     case "AssertData" -> assertData(step);
                     case "SendPacket" -> sendPacket(step);
                     case "SaveReloadWorld" -> saveReloadWorld();
+                    case "AdvanceTicks" -> advanceTicks(step);
                     case "WriteFile" -> writeFile(step);
                     default -> "unknown step type: " + type;
                 };
@@ -303,6 +349,113 @@ public final class ScenarioRunner {
         send(step.get("command").getAsString());
         // Assertions follow as their own steps; nothing to await here.
         return null;
+    }
+
+    /**
+     * The tick-barrier step (sub-21 Stage E determinism helpers): freeze the
+     * server's tick loop, step it exactly {@code ticks} times, prove the world's
+     * game time advanced by exactly that many ticks, then unfreeze.
+     *
+     * <p>Freezing is what makes the step worth having: a scenario that needs a
+     * fixed number of ticks to elapse between two observations cannot get one from
+     * a free-running loop, and stepping a frozen loop is the only mechanism
+     * vanilla offers that is exact rather than "at least". The unfreeze at the end
+     * keeps the step side-effect-free for the scenarios that follow it in the same
+     * boot; a scenario that wants a frozen world for its whole body says so with an
+     * explicit {@code RunCommand} of {@code tick freeze}.
+     *
+     * <p>Every check is an observable effect of the server, never a phrase from its
+     * output: a frozen loop is proven by game time standing still across a poll,
+     * and a step is proven by the exact delta it produced. The step therefore
+     * cannot pass by matching a message some loader decided to reword.
+     */
+    private String advanceTicks(JsonObject step) throws IOException {
+        if (!step.has("ticks")) {
+            return "AdvanceTicks needs a \"ticks\" count";
+        }
+        int ticks = step.get("ticks").getAsInt();
+        if (ticks <= 0) {
+            return "AdvanceTicks needs a positive tick count, got " + ticks;
+        }
+        send("tick freeze");
+        int frozenAt = awaitGametime();
+        if (frozenAt < 0) {
+            send("tick unfreeze");
+            return "could not read game time while freezing the tick loop";
+        }
+        sleepFor(250);
+        int stillFrozen = awaitGametime();
+        if (stillFrozen < 0) {
+            send("tick unfreeze");
+            return "could not read game time a second time while frozen";
+        }
+        if (stillFrozen != frozenAt) {
+            send("tick unfreeze");
+            return "the tick loop kept advancing after /tick freeze (game time " + frozenAt + " -> "
+                + stillFrozen + "), so a tick-exact barrier cannot be driven on this cell";
+        }
+        send("tick step " + ticks);
+        long deadline = System.nanoTime() + ASSERT_TIMEOUT.toNanos();
+        while (System.nanoTime() < deadline) {
+            int now = awaitGametime();
+            if (now < 0) {
+                continue;
+            }
+            int advanced = now - stillFrozen;
+            if (advanced == ticks) {
+                send("tick unfreeze");
+                return null;
+            }
+            if (advanced > ticks) {
+                send("tick unfreeze");
+                return "game time advanced " + advanced + " ticks, expected exactly " + ticks;
+            }
+        }
+        send("tick unfreeze");
+        return "game time did not advance " + ticks + " ticks within " + ASSERT_TIMEOUT;
+    }
+
+    /** Sends {@code time query gametime} and returns the answer that follows it. */
+    private int awaitGametime() throws IOException {
+        int cursor;
+        synchronized (log) {
+            cursor = log.size();
+        }
+        send("time query gametime");
+        long deadline = System.nanoTime() + ASSERT_TIMEOUT.toNanos();
+        while (System.nanoTime() < deadline) {
+            int value = gametimeAfter(cursor);
+            if (value >= 0) {
+                return value;
+            }
+            sleepFor(50);
+        }
+        return -1;
+    }
+
+    /** The first {@code The time is N} printed at or after {@code cursor}, or -1. */
+    private int gametimeAfter(int cursor) {
+        synchronized (log) {
+            for (int i = cursor; i < log.size(); i++) {
+                var matcher = GAMETIME.matcher(log.get(i));
+                if (matcher.find()) {
+                    try {
+                        return Integer.parseInt(matcher.group(1));
+                    } catch (NumberFormatException e) {
+                        return -1;
+                    }
+                }
+            }
+        }
+        return -1;
+    }
+
+    private static void sleepFor(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private String placeBlock(JsonObject step) throws IOException {
@@ -635,6 +788,7 @@ public final class ScenarioRunner {
             } catch (IOException e) {
                 // run dir may not exist before the first boot; the scenario writes what it needs
             }
+            pinLevelSeed(runDir);
             String projectPath = gradleTask.substring(1, gradleTask.lastIndexOf(':')).replace(':', '/');
             Path world = rootDir.resolve(projectPath).resolve("run").resolve("world");
             if (Files.exists(world)) {

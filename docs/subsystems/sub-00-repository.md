@@ -138,6 +138,15 @@ TCK scenarios (sub-21), testmod content (sub-22), remote publishing (§11.1).
   bumped 9.1.0 → 9.6.0 (Fabric's official pairing with loom 1.17 for 26.3,
   https://www.fabricmc.net/2026/09/15/263.html); loom pinned 1.17.21.
   Owner: sub-00.
+  **Re-verified 2026-09-25** against the same post and Fabric's maven index:
+  26.3 pairs with Loom **1.17** (1.18 exists since 2026-09-20 but is not the
+  documented pairing), Fabric Loader **0.19.5**, Fabric API **0.161.0+26.3**;
+  Gradle 9.6.0 is what the post shipped with, which is why the wrapper sits
+  there. NeoForge's *published* 21.1 line is what the catalog pins from the
+  Forge/NeoForged maven directly: the repo resolves **21.1.251** for the
+  1.21.1 cells (evidence: the resolved `neoforge-21.1.251` artifact in the
+  Gradle cache), while the public maven index page still lists 21.1.250 as
+  newest — the index lags, the artifact is the ground truth.
 - **26.x drop-window churn** (~3 drops/year, §9) — contained: a drop bump is a
   two-line catalog edit + CI run; unsupported-runtime boot failure is sub-01's
   driver self-check.

@@ -83,6 +83,15 @@ bridge), never breaks a consumer.
 | Energy/fluid | FE/RF caps | Fabric transfer API | FE/RF caps | Fabric transfer API |
 | Shader/render stack | Sodium+Iris (probe-only) | Sodium+Iris (probe-only) | Sodium+Iris (probe-only) | Sodium+Iris (probe-only) |
 
+GL5's generation boundary is also a *namespace* boundary: GeckoLib 5 moved
+from `software.bernie.geckolib` to `com.geckolib` (verified 2026-09-25,
+wiki.geckolib.com/docs/geckolib5 + modrinth.com/mod/geckolib version table:
+26.1 → 5.5, 26.1.2 → 5.5.2, 26.2 → 5.5.6, Fabric and NeoForge both listed).
+`GeckoLib5Adapter` therefore probes `com.geckolib` only, and the 26.x hard-dep
+metadata names that coordinate; the two adapters never share a probe class name,
+which is what keeps "partner absent" and "partner present with a different
+generation" distinguishable at boot.
+
 Sodium + Iris is a **probe-only coexistence partner** — no bridge module, no
 code integration: presence flips `PBR_MATERIALS`-class probes (sub-16/sub-17);
 labPBR assets and render-pass behavior are the contract (sub-17). Locked
