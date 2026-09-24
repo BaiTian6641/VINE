@@ -1,0 +1,15 @@
+{
+  "id": "vine_test:voxeldata_sync_delta",
+  "tags": ["SMOKE"],
+  "steps": [
+    { "type": "RunCommand", "command": "vine_test echo warmup" },
+    { "type": "AssertTrace", "trace": "command", "expect": ["echo: warmup"] },
+    { "type": "RunCommand", "command": "vine_test tree voxel_sync_delta" },
+    { "type": "AssertTrace", "trace": "command", "expect": [
+      "voxel sync delta:",
+      "smaller=true",
+      "peerMatches=true",
+      "listenerPaths=[stats.mana, stats]"
+    ] }
+  ]
+}

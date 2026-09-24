@@ -83,6 +83,31 @@ public final class VineData {
     }
 
     /**
+     * Serializes only the entries of {@code tree} named by {@code paths} — the
+     * delta form of {@link #encode} (sub-03 Stage E). Deltas carry their own
+     * magic and a sparse payload, so a peer can tell them apart from full blobs
+     * and apply them onto a live tree.
+     *
+     * <p>A path that no longer exists in the tree (a removed key) is still named
+     * by the delta and carries no value: applying it removes the peer's entry —
+     * deletion is a mutation like any other.
+     */
+    public static byte[] encodeDelta(VoxelData tree, java.util.Set<String> paths) {
+        return backend().encodeDelta(tree, paths);
+    }
+
+    /**
+     * Applies a {@link #encodeDelta} blob onto {@code tree} (sub-03 Stage E):
+     * named paths are overwritten, named-and-absent paths removed.
+     *
+     * @return the number of paths applied
+     * @throws IllegalArgumentException when {@code delta} is not a delta blob
+     */
+    public static int applyDelta(VoxelData tree, byte[] delta) {
+        return backend().applyDelta(tree, delta);
+    }
+
+    /**
      * Declares that {@code path} of {@code schemaId}'s trees mirrors the vanilla
      * data component {@code nativeComponentId} ({@link FieldStrategy.Native},
      * sub-03 §2): drivers copy that component's value into the tree on open and

@@ -178,6 +178,23 @@ public interface VoxelStorageDriver {
 
 - [ ] **Do:** BE/entity/player attach (NF attachments; Fabric custom-data
   Mixin); dirty path-set tracking; change listeners; client-visible filtering.
+- **Landed (engine half):** dirty tracking is live at the two mutation funnels
+  (`putNode`/`remove`): a write records the mutated path plus its ancestors on
+  the shared tree state, accumulates them for the next flush, and dispatches
+  them to registered `VoxelSyncListener`s per mutation — a listener that throws
+  is logged and isolated, never allowed to corrupt the write that triggered it.
+  Deltas are a first-class blob form: `VineData.encodeDelta(tree, paths)` writes
+  a sparse compound under its own magic (only *deletions* carry a name list, so
+  a one-field delta costs less than the tree it describes) and
+  `VineData.applyDelta(peer, delta)` merges it in lockstep — compounds merge
+  (siblings untouched), leaves overwrite, named-and-absent paths are removed.
+  Drivers persist by dirty set instead of the whole tree.
+  Proven live: a 34-field tree, one field changed — delta 52B of 467B whole,
+  `applied=1`, the peer's untouched fields intact, and the listener's recorded
+  set is exactly `[stats.mana, stats]` (path + ancestor).
+  **Remaining:** BE/entity/player attach points (their save/load survival is the
+  `voxeldata.attach_all` half) and the sub-05 transport wiring for delta sends;
+  client-visible path filtering rides the schema field-flag work.
 - **Acceptance:** TCK `voxeldata.attach_all` + `voxeldata.sync_delta` green on
   both 1.21.1 cells; measured delta payload < whole-tree payload.
 - **Touches:** vine-core (sync), both 1.21.1 drivers, vine-tck.

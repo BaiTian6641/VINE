@@ -79,6 +79,13 @@ public enum TckTag { SMOKE, PERSISTENCE, NETWORK, BRAIN, ANIMATION, PERF, QUARAN
   (registration Java+JSON, place/break, save/reload, packet echo, command) —
   capability and recipe executors land with their M1/M3 surfaces.
 - **Acceptance:** testmod-declared M0 scenarios green via both harness paths
+- **Landed (partial):** the scenario runner executes the documented step
+  set (commands, traces, block placement, data probes, packets, save/reload,
+  file writes) on both cells with a cross-cell matrix + quarantine policy from
+  Stage D; `AssertTrace` now matches needles as an ordered subsequence over log
+  *characters*, so several needles describing one output line (a value and its
+  verdict) all match — the line-granular cursor silently rejected them, which is
+  what made multi-fact assertions look flaky.
   on both 1.21.1 cells; new scenarios need zero `tck-core` edits; loader
   quirks logged in §4.
 - **Touches:** `tck-core`, driver cell adapters, testmod discovery hook.

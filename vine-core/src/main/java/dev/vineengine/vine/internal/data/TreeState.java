@@ -3,6 +3,7 @@ package dev.vineengine.vine.internal.data;
 import java.util.HashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
+import dev.vineengine.vine.data.VoxelData;
 import dev.vineengine.vine.data.VoxelSyncListener;
 import dev.vineengine.vine.registry.VineId;
 
@@ -34,11 +35,19 @@ final class TreeState {
     boolean readOnly;
 
     /**
-     * Registered sync listeners (sub-03 Stage C registration; dispatch is
-     * Stage E). Copy-on-write: registration is boot-time-rare, and the Stage-E
-     * dispatch will iterate this on tick threads.
+     * Registered sync listeners (sub-03 Stage C registration, Stage E dispatch).
+     * Copy-on-write: registration is boot-time-rare, dispatch iterates on tick
+     * threads.
      */
     private final CopyOnWriteArrayList<VoxelSyncListener> syncListeners = new CopyOnWriteArrayList<>();
+
+    /**
+     * Paths touched since the last drain, with ancestor coarsening applied by
+     * {@link #markDirty}. This is what a driver's {@code flushDirty} persists and
+     * what a sync pass transmits — never the whole tree, which is reserved for
+     * initial send and late-join.
+     */
+    private final java.util.LinkedHashSet<String> dirtyPaths = new java.util.LinkedHashSet<>();
 
     private final HashMap<String, String> segmentInterner = new HashMap<>();
 
@@ -57,8 +66,51 @@ final class TreeState {
         return segmentInterner.computeIfAbsent(segment, s -> s);
     }
 
-    /** Stage-C registration seam; dispatch activates with Stage E sync-delta. */
     void addListener(VoxelSyncListener listener) {
         syncListeners.addIfAbsent(listener);
+    }
+
+    /**
+     * Records one mutation (sub-03 Stage E): the mutated path plus its
+     * ancestors, accumulated for the next flush and dispatched to listeners —
+     * per mutation, with that mutation's set, exactly as
+     * {@link VoxelSyncListener#onChange} documents.
+     */
+    void markDirty(VoxelData data, String path) {
+        java.util.Set<String> touched = new java.util.LinkedHashSet<>(2);
+        String at = path;
+        while (!at.isEmpty()) {
+            touched.add(at);
+            dirtyPaths.add(at);
+            int dot = at.lastIndexOf('.');
+            at = dot < 0 ? "" : at.substring(0, dot);
+        }
+        if (syncListeners.isEmpty()) {
+            return;
+        }
+        java.util.Set<String> immutable = java.util.Collections.unmodifiableSet(touched);
+        for (VoxelSyncListener listener : syncListeners) {
+            try {
+                listener.onChange(data, immutable);
+            } catch (RuntimeException listenerFailure) {
+                // A listener is consumer (or sync-transport) code: one failing
+                // observer must not corrupt the write that triggered it.
+                System.getLogger("vine.voxel").log(System.Logger.Level.WARNING,
+                    "[VINE] voxel change listener failed on path " + path + ": " + listenerFailure,
+                    listenerFailure);
+            }
+        }
+    }
+
+    /** The dirty paths accumulated since the last drain (empty when nothing mutated). */
+    synchronized java.util.Set<String> dirtySnapshot() {
+        return java.util.Set.copyOf(dirtyPaths);
+    }
+
+    /** Takes the accumulated dirty paths, clearing them for the next mutation window. */
+    synchronized java.util.Set<String> drainDirty() {
+        java.util.Set<String> drained = java.util.Set.copyOf(dirtyPaths);
+        dirtyPaths.clear();
+        return drained;
     }
 }

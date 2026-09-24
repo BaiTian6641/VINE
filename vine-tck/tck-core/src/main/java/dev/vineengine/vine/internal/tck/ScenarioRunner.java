@@ -257,17 +257,23 @@ public final class ScenarioRunner {
 
         synchronized (log) {
             while (true) {
-                int at = 0;
+                // Ordered subsequence over the log *characters*, not lines: two
+                // needles that describe one output line (a value and its verdict)
+                // must both match, which line-granular cursors silently reject.
+                int line = 0;
+                int col = 0;
                 boolean all = true;
                 for (String needle : needles) {
                     boolean found = false;
-                    while (at < log.size()) {
-                        if (log.get(at).contains(needle)) {
+                    while (line < log.size()) {
+                        int at = log.get(line).indexOf(needle, col);
+                        if (at >= 0) {
+                            col = at + needle.length();
                             found = true;
-                            at++;
                             break;
                         }
-                        at++;
+                        line++;
+                        col = 0;
                     }
                     if (!found) {
                         all = false;

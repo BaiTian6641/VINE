@@ -43,6 +43,10 @@ public final class VoxelBlobCodec {
     /** 'VOXD' — bytes every blob starts with; anything else is not a VoxelData blob. */
     static final byte[] MAGIC = {'V', 'O', 'X', 'D'};
 
+    /** Delta blobs (sub-03 Stage E) carry their own magic: they hold a sparse
+     * compound that is *applied* onto a tree, never loaded as one. */
+    static final byte[] DELTA_MAGIC = {'V', 'O', 'X', 'A'};
+
     /** Header layout version; bumps only on a header-shape break, never silently. */
     static final int FORMAT_VERSION = 1;
 
@@ -73,6 +77,118 @@ public final class VoxelBlobCodec {
             throw new UncheckedIOException("in-memory write cannot fail", e); // BAOS never throws
         }
         return buffer.toByteArray();
+    }
+
+    /**
+     * Serializes only the entries named by {@code paths} as a delta blob
+     * (sub-03 Stage E): same header shape, own magic, sparse compound holding the
+     * dirty slice — the values as of now, so applying it onto a peer's tree
+     * yields exactly this state for those paths.
+     */
+    public static byte[] saveDelta(VoxelData data, java.util.Set<String> paths) {
+        VoxelDataImpl root = VoxelDataImpl.asImpl(Objects.requireNonNull(data, "data"));
+        Objects.requireNonNull(paths, "paths");
+        VoxelDataImpl sparse = VoxelDataImpl.detached(root.tree.schemaId);
+        java.util.List<String> present = new java.util.ArrayList<>(paths.size());
+        java.util.List<String> deleted = new java.util.ArrayList<>(0);
+        for (String path : paths) {
+            VoxelNode node = root.resolve(path);
+            if (node == null) {
+                // A dirty path that no longer exists is a deletion: named in the
+                // header (there is no value to carry) and applied as a removal.
+                deleted.add(path);
+            } else {
+                present.add(path);
+            }
+        }
+        java.util.Collections.sort(present);
+        java.util.Collections.sort(deleted);
+        for (String path : present) {
+            sparse.putNodeCopy(path, root.resolve(path));
+        }
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream(128);
+        try {
+            DataOutputStream out = new DataOutputStream(buffer);
+            out.write(DELTA_MAGIC);
+            out.writeByte(FORMAT_VERSION);
+            out.writeUTF(root.tree.schemaId.toString());
+            out.writeInt(root.tree.version);
+            // Only deletions need a name: the sparse compound below carries its
+            // own keys, so carrying present paths twice would make a one-field
+            // delta cost more than the tree it describes.
+            out.writeInt(deleted.size());
+            for (String path : deleted) {
+                out.writeUTF(path);
+            }
+            out.writeByte(VoxelType.COMPOUND.nbtId());
+            writeCompound(out, sparse);
+        } catch (IOException e) {
+            throw new UncheckedIOException("in-memory write cannot fail", e);
+        }
+        return buffer.toByteArray();
+    }
+
+    /**
+     * Applies a {@link #saveDelta} blob onto {@code target}: entries present in
+     * the delta overwrite the target's, entries the delta names but does not
+     * carry are removed (they were deleted on the writer's side).
+     *
+     * @return the number of paths applied
+     */
+    public static int applyDelta(VoxelData target, byte[] blob) {
+        VoxelDataImpl root = VoxelDataImpl.asImpl(Objects.requireNonNull(target, "target"));
+        Objects.requireNonNull(blob, "blob");
+        try {
+            DataInputStream in = new DataInputStream(new ByteArrayInputStream(blob));
+            byte[] magic = new byte[DELTA_MAGIC.length];
+            in.readFully(magic);
+            if (!java.util.Arrays.equals(magic, DELTA_MAGIC)) {
+                throw new IllegalArgumentException("not a VoxelData delta blob");
+            }
+            in.readByte(); // header version
+            String schemaId = in.readUTF();
+            in.readInt();  // schema version: deltas ride the receiver's tree
+            int deletedCount = in.readInt();
+            java.util.List<String> deleted = new java.util.ArrayList<>(deletedCount);
+            for (int i = 0; i < deletedCount; i++) {
+                deleted.add(in.readUTF());
+            }
+            int tagId = in.readByte();
+            if (tagId != VoxelType.COMPOUND.nbtId()) {
+                throw new IllegalArgumentException("delta payload is not a compound");
+            }
+            VoxelDataImpl sparse = readCompound(in, new TreeState(VineId.parse(schemaId), 1), 0);
+            int applied = applySparse(root, sparse);
+            for (String path : deleted) {
+                root.remove(path);
+                applied++;
+            }
+            return applied;
+        } catch (IOException e) {
+            throw new UncheckedIOException("in-memory read cannot fail", e);
+        }
+    }
+
+    /**
+     * Merges a sparse delta compound into {@code target} recursively; returns
+     * entries applied. Paths are resolved *relative to the receiver* at every
+     * level (that is what {@code VoxelData.put} means), so the recursion walks
+     * both trees in lockstep rather than re-resolving absolute paths.
+     */
+    private static int applySparse(VoxelDataImpl target, VoxelDataImpl sparse) throws IOException {
+        int applied = 0;
+        for (Map.Entry<String, VoxelNode> entry : sparse.childEntries()) {
+            VoxelNode value = entry.getValue();
+            if (value instanceof VoxelDataImpl nested && target.resolve(entry.getKey()) instanceof VoxelDataImpl into) {
+                // Compound-on-compound merges: a delta never deletes siblings it
+                // did not touch.
+                applied += applySparse(into, nested);
+            } else {
+                target.putNodeCopy(entry.getKey(), value);
+                applied++;
+            }
+        }
+        return applied;
     }
 
     private static void writeCompound(DataOutputStream out, VoxelDataImpl node) throws IOException {

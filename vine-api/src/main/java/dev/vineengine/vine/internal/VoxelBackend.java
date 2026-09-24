@@ -35,6 +35,12 @@ public interface VoxelBackend {
     /** See {@code VineData#decode} — blob deserialization through the schema registry. */
     VoxelData decode(byte[] blob);
 
+    /** See {@code VineData#encodeDelta} — dirty-slice blob serialization. */
+    byte[] encodeDelta(VoxelData tree, java.util.Set<String> paths);
+
+    /** See {@code VineData#applyDelta}. */
+    int applyDelta(VoxelData tree, byte[] delta);
+
     /** See {@code VineData#registerNativeField}. */
     void registerNativeField(VineId schemaId, String path, String nativeComponentId);
 }

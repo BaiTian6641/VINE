@@ -275,6 +275,16 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
     }
 
     @Override
+    public byte[] encodeDelta(VoxelData tree, java.util.Set<String> paths) {
+        return VoxelBlobCodec.saveDelta(tree, paths);
+    }
+
+    @Override
+    public int applyDelta(VoxelData tree, byte[] delta) {
+        return VoxelBlobCodec.applyDelta(tree, delta);
+    }
+
+    @Override
     public void registerNativeField(VineId schemaId, String path, String nativeComponentId) {
         NativeFields.register(schemaId, path, nativeComponentId);
     }

@@ -98,5 +98,30 @@ public final class VoxelStorageBinding {
         public java.util.Map<String, String> nativeFields(VineId schemaId) {
             return NativeFields.fieldsFor(schemaId);
         }
+
+        /**
+         * Paths mutated since the last {@link #drainDirty} (sub-03 Stage E) — what
+         * {@code VoxelStorageDriver.flushDirty} persists instead of the whole tree.
+         */
+        public java.util.Set<String> dirtyPaths(VoxelData data) {
+            return VoxelDataImpl.stateOf(data).dirtySnapshot();
+        }
+
+        /** Takes the accumulated dirty paths, clearing them (the flush boundary). */
+        public java.util.Set<String> drainDirty(VoxelData data) {
+            return VoxelDataImpl.stateOf(data).drainDirty();
+        }
+
+        /**
+         * Encodes just the mutated slice of {@code data} as a standalone blob
+         * (sub-03 Stage E sync deltas): the entries named by {@code paths}, in the
+         * declared order, with the same engine header semantics as
+         * {@link #save}. A delta is smaller than the whole tree whenever the
+         * mutation touched less than everything — which is every tick but an
+         * initial send.
+         */
+        public byte[] saveDelta(VoxelData data, java.util.Set<String> paths) {
+            return VoxelBlobCodec.saveDelta(data, paths);
+        }
     }
 }

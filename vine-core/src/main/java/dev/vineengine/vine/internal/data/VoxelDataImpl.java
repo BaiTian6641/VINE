@@ -265,6 +265,7 @@ final class VoxelDataImpl extends VoxelNode implements VoxelData {
         VoxelDataImpl owner = (VoxelDataImpl) node.parent;
         owner.children.remove(node.key);
         invalidateUp(owner);
+        tree.markDirty(rootTree(), path);
     }
 
     // -------------------------------------------------------------- internals
@@ -325,6 +326,37 @@ final class VoxelDataImpl extends VoxelNode implements VoxelData {
         node.tree = tree;
         owner.children.put(internedKey, node);
         invalidateUp(owner);
+        // Stage E: a mutation is what marks paths dirty — the driver's flush and
+        // the sync pass both read that record instead of the whole tree.
+        tree.markDirty(rootTree(), path);
+    }
+
+    /** A detached root for {@code schemaId} (delta/sparse construction, tests). */
+    static VoxelDataImpl detached(dev.vineengine.vine.registry.VineId schemaId) {
+        return new VoxelDataImpl(new TreeState(schemaId, 1));
+    }
+
+    /**
+     * Attaches a copy of {@code source} at {@code path} (delta application): the
+     * source subtree is never aliased, so a received delta can never share nodes
+     * with the sender's tree.
+     */
+    void putNodeCopy(String path, VoxelNode source) {
+        putNode(path, (key, parent, target) -> source.copyAttached(key, parent, target));
+    }
+
+    /** The shared tree state behind {@code data} (sub-03 Stage E dirty bookkeeping). */
+    static TreeState stateOf(VoxelData data) {
+        return asImpl(data).tree;
+    }
+
+    /** The tree root this node belongs to (dirty bookkeeping is tree-wide). */
+    private VoxelData rootTree() {
+        VoxelNode node = this;
+        while (node.parent != null) {
+            node = node.parent;
+        }
+        return (VoxelData) node;
     }
 
     /** Walk a parent path, auto-creating compounds; a blocking non-compound throws. */

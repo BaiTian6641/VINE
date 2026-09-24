@@ -158,6 +158,11 @@ public final class CommandTreeExemplar {
                         ctx.feedback("reload probe: " + CommandJsonExemplar.writeReloadFixture(false));
                         return 1;
                     }))
+                .then(VineCommand.literal("voxel_sync_delta")
+                    .executes(ctx -> {
+                        ctx.feedback(dev.vineengine.vine.testmod.data.VoxelExemplar.syncDeltaProof());
+                        return 1;
+                    }))
                 .then(VineCommand.literal("sessionplayers")
                     .executes(ctx -> {
                         // Degradation path, exercised live: a console source has no
