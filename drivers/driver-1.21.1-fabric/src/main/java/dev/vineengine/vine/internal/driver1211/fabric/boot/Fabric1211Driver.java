@@ -111,6 +111,10 @@ public final class Fabric1211Driver implements VineDriver {
         net.bindTransport();
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             net.server(server);
+            // In-process TCK harness (sub-21 Stage B): the console path a scenario's
+            // commands run through, so verdicts match the external runner's.
+            dev.vineengine.vine.internal.ConsoleDispatch.install(command ->
+                server.getCommandManager().executeWithPrefix(server.getCommandSource(), command));
             ctx.advancePhase(EnginePhase.SERVER_UP);
             VoxelProbe.run(FabricVoxelStorage::probeStack, FabricVoxelStorage.probeAccess(), "1.21.1-fabric", FabricVoxelStorage.probeHolders());
         });

@@ -1,0 +1,7 @@
+{
+  "id": "vine_test:harness_probe",
+  "tags": ["SMOKE"],
+  "steps": [
+    { "type": "RunCommand", "command": "vine_test tck_sessions" }
+  ]
+}

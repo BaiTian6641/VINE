@@ -1,0 +1,14 @@
+{
+  "id": "vine_test:harness_duality",
+  "tags": ["SMOKE"],
+  "steps": [
+    { "type": "RunCommand", "command": "vine_test tck_run harness_probe" },
+    { "type": "AssertTrace", "trace": "command", "expect": [
+      "[TCK] scenario harness_probe: PASS"
+    ] },
+    { "type": "RunCommand", "command": "vine_test tck_run harness_truncation" },
+    { "type": "AssertTrace", "trace": "command", "expect": [
+      "SKIP (trace not captured in-process: cell feedback tee pending)"
+    ] }
+  ]
+}

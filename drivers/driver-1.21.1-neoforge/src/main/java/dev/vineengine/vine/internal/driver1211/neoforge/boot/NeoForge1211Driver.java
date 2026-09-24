@@ -127,6 +127,10 @@ public final class NeoForge1211Driver implements VineDriver {
             });
             ctx.advancePhase(EnginePhase.SERVER_UP);
             VoxelProbe.run(NeoForgeVoxelStorage::probeStack, NeoForgeVoxelStorage.probeAccess(), "1.21.1-neoforge", NeoForgeVoxelStorage.probeHolders());
+            // In-process TCK harness (sub-21 Stage B): the console path a scenario's
+            // commands run through, so verdicts match the external runner's.
+            dev.vineengine.vine.internal.ConsoleDispatch.install(command ->
+                server.getCommands().performPrefixedCommand(server.createCommandSourceStack(), command));
         });
 
         // Voxel storage (sub-03 Stage D): item-stack attach point + acceptance probe.

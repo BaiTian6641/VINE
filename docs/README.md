@@ -65,10 +65,10 @@ read, follow, track, and build subsystems **independently and in parallel**.
 | 00 | Repository & bootstrap | M0 | — | done | [sub-00](subsystems/sub-00-repository.md) |
 | 01 | Core runtime (boot, events, probes) | M0→M1 | 00 | done | [sub-01](subsystems/sub-01-core-runtime.md) |
 | 02 | Registry & descriptors | M0→M1 | 00, 01 | done | [sub-02](subsystems/sub-02-registry.md) |
-| 03 | VoxelData persistence | M1 | 01, 02 | in-progress | [sub-03](subsystems/sub-03-voxeldata.md) |
-| 04 | Capabilities | M1 | 02, 03 | in-progress | [sub-04](subsystems/sub-04-capabilities.md) |
+| 03 | VoxelData persistence | M1 | 01, 02 | done (M1) | [sub-03](subsystems/sub-03-voxeldata.md) |
+| 04 | Capabilities | M1 | 02, 03 | done (M1) | [sub-04](subsystems/sub-04-capabilities.md) |
 | 05 | Networking | M0→M1 | 01, 02, 03 | done | [sub-05](subsystems/sub-05-networking.md) |
-| 06 | Commands | M0 minimal→M1 full | 01, 02, 03 | in-progress (A-C done) | [sub-06](subsystems/sub-06-commands.md) |
+| 06 | Commands | M0 minimal→M1 full | 01, 02, 03 | done (A-D, reload) | [sub-06](subsystems/sub-06-commands.md) |
 | 07 | Blocks & items | M0 minimal→M3 full | 02, 03 | in-progress | [sub-07](subsystems/sub-07-blocks-items.md) |
 | 08 | Entities & VineBrain | M2 | 02, 03, 05 | planning | [sub-08](subsystems/sub-08-entities.md) |
 | 09 | Animation runtime | M2 data → M5 render | 08 | planning | [sub-09](subsystems/sub-09-animation.md) |
@@ -76,11 +76,11 @@ read, follow, track, and build subsystems **independently and in parallel**.
 | 11 | Recipes & crafting | M3 | 02, 07 | planning | [sub-11](subsystems/sub-11-recipes.md) |
 | 12 | Audio | M3 | 02, 05, 10 | planning | [sub-12](subsystems/sub-12-audio.md) |
 | 13 | World & population | M3 | 02, 03, 05 (08 soft) | planning | [sub-13](subsystems/sub-13-world.md) |
-| 14 | Sessions & parties | M1 basics → M3 full | 03, 05 | in-progress | [sub-14](subsystems/sub-14-sessions.md) |
+| 14 | Sessions & parties | M1 basics → M3 full | 03, 05 | done (M1 basics) | [sub-14](subsystems/sub-14-sessions.md) |
 | 15 | Quests & activities | M3 | 02, 14 (16 soft) | planning | [sub-15](subsystems/sub-15-quests.md) |
 | 16 | Client 2D (GUI/HUD) | M2→M3 | 01, 05 | planning | [sub-16](subsystems/sub-16-client-2d.md) |
 | 17 | Client 3D (models/FX/camera) | M5 | 09, 16 | planning | [sub-17](subsystems/sub-17-client-3d.md) |
-| 18 | Driver 1.21.1 (NF + Fabric) | M0 | 00, 01 | in-progress | [sub-18](subsystems/sub-18-driver-1211.md) |
+| 18 | Driver 1.21.1 (NF + Fabric) | M0 | 00, 01 | done (M0) | [sub-18](subsystems/sub-18-driver-1211.md) |
 | 19 | Driver 26.x (NF + Fabric) | M4 | 18 | planning | [sub-19](subsystems/sub-19-driver-26x.md) |
 | 20 | Ecosystem bridges | Continuous | 02, 04, 11 | planning | [sub-20](subsystems/sub-20-ecosystem.md) |
 | 21 | TCK harness | M0, continuous | 00 | in-progress | [sub-21](subsystems/sub-21-tck.md) |

@@ -50,6 +50,8 @@ public final class VineTestmod implements VineInitializer {
         dev.vineengine.vine.testmod.net.SyncChunkExemplar.register();
         dev.vineengine.vine.testmod.net.HandshakeExemplar.register();
         EchoCommand.register();      // command exemplar (sub-06, M0): /vine_test echo + tck_echo (TCK drive child)
+        dev.vineengine.vine.testmod.tck.InProcessRunner.register();  // in-process TCK harness
+                                     //   (sub-21 Stage B): /vine_test tck_run <id|all>
         dev.vineengine.vine.testmod.command.PermissionExemplar.register();  // permission-bridge exemplar
                                      //   (sub-06 Stage D): node gates + a test provider the TCK installs
         dev.vineengine.vine.testmod.command.CommandJsonExemplar.register();  // JSON command exemplar

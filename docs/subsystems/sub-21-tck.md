@@ -79,6 +79,23 @@ public enum TckTag { SMOKE, PERSISTENCE, NETWORK, BRAIN, ANIMATION, PERF, QUARAN
   (registration Java+JSON, place/break, save/reload, packet echo, command) —
   capability and recipe executors land with their M1/M3 surfaces.
 - **Acceptance:** testmod-declared M0 scenarios green via both harness paths
+- **Landed (in-process path):** `/vine_test tck_run <id|all>` runs the *same
+  scenario files* inside the running server through a testmod-side interpreter
+  (a dependency-free JSON reader plus the step executors), printing the same
+  `[TCK] scenario <id>: PASS|FAIL` verdict lines as the external runner — a
+  scenario's meaning stays in its file, not in which harness ran it. Its reach is
+  narrower by construction: it has only what a running server exposes, so
+  restart-, packet- and world-shaped steps report `SKIP (<step> needs the external
+  runner)`, and a trace assertion it cannot serve (a cell's console feedback
+  travels that cell's logging stack, which the external runner reads from the
+  process) reports `SKIP (trace not captured in-process: cell feedback tee
+  pending)` instead of blaming the scenario. Both halves are asserted live:
+  `harness_duality` runs a scenario in-process (verdict `PASS`), then runs one
+  whose assertion needs the external path and sees the `SKIP` reason on both
+  1.21.1 cells.
+  **Remaining:** the per-cell feedback tee (wrap the console source so command
+  feedback reaches the in-process sink) and the GameTest batch path — both are
+  *additional* harnesses over the same DSL, not gaps in the DSL itself.
 - **Landed (partial):** the scenario runner executes the documented step
   set (commands, traces, block placement, data probes, packets, save/reload,
   file writes) on both cells with a cross-cell matrix + quarantine policy from

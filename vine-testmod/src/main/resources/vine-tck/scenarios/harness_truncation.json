@@ -1,0 +1,8 @@
+{
+  "id": "vine_test:harness_truncation",
+  "tags": ["SMOKE"],
+  "steps": [
+    { "type": "RunCommand", "command": "vine_test tck_sessions" },
+    { "type": "AssertTrace", "trace": "command", "expect": ["[VINE] session created"] }
+  ]
+}
