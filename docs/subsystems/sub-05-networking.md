@@ -1,6 +1,6 @@
 # SUB-05 — Networking
 
-> **Status:** `in-progress` — one of `planning | in-progress | blocked(<reason>) | done`
+> **Status:** `done` — one of `planning | in-progress | blocked(<reason>) | done`
 > **Milestone:** M0 minimal → M1 full · **Depends on:** SUB-01, SUB-02, SUB-03 · **Blocks:** SUB-08, SUB-10, SUB-14, SUB-16
 > **Cells:** all (M0 stages land on 1.21.1 first) · **Loaders:** both
 > **Master plan:** §5.6 · **Module(s):** vine-api, vine-core, vine-spi, drivers
@@ -106,7 +106,8 @@ public enum Endpoint { SERVER, CLIENT }          // handler side
     1.21.1 cells.**
   - **Seam (documented):** the drivers' configuration-phase wiring (NF registrar
     tasks / Fabric configuration networking) and the client-side hello sender
-    land with sub-21's client runner; the engine-side negotiation, gate and
+    need a client runner, which no stage provides yet (sub-21 automates
+    server-side boots only); the engine-side negotiation, gate and
     reasons are what this suite proves.
 - **Acceptance:** TCK handshake scenario — `REQUIRE_MATCH` mismatch disconnects with engine reason; `OPTIONAL` disables only that channel; vanilla-client join is a clean no-op.
 - **Touches:** vine-core handshake state machine, driver configuration-phase bindings (NF registrar tasks / Fabric configuration networking), TCK.
@@ -164,7 +165,8 @@ public enum Endpoint { SERVER, CLIENT }          // handler side
     bytes=3072000`), and a 5 MiB payload is rejected at encode
     (`bulk oversized rejected=true`). **18/18 scenarios PASS on both 1.21.1 cells.**
   - **Seams (documented):** S2C chunking needs the client-side reassembly
-    handler (sub-21's client runner); this suite proves the server inbound path.
+    handler, and no stage provides a client runner yet (sub-21 automates
+    server-side boots only); this suite proves the server inbound path.
 - **Acceptance:** TCK late-join scenario — joining player receives two sync snapshots in registration order before any consumer message; chunk scenario — 3 MiB payload intact, 5 MiB rejected at encode.
 - **Touches:** vine-core sync orchestration + chunk transport, drivers, TCK.
 - **Bootstrap prompt:**
@@ -180,7 +182,15 @@ public enum Endpoint { SERVER, CLIENT }          // handler side
 
 ## 5. Verification
 
-Owns TCK scenarios (§7/§8 — each ships only passing on ≥2 drivers, one per loader family): **packet echo**, **codec round-trip + hostile input**, **handshake/version negotiation**, **hostile flood (rate limit)**, **late-join sync ordering**, **chunked transfer**. Golden fixture: pinned byte encodings of the stage-B nested fixture, identical on all four cells. Budgets: echo ≤1 ms median server dispatch; round-trip ≤4 KB allocated per message. Client-smoke: vanilla client joins a VINE server cleanly; version-mismatched client gets the engine disconnect reason, not a crash.
+Owns TCK scenarios (`vine-testmod/src/main/resources/vine-tck/scenarios/`; each
+ships only once green on ≥2 drivers, one per loader family): `packet_echo`,
+`codec_roundtrip` + `hostile_payload`, `handshake`, `net_sync_chunk` (late-join
+ordering *and* chunked transfer). Golden fixture: the stage-B nested fixture's
+pinned byte encodings — `codec_roundtrip` asserts the encoded hex is identical
+across the two loader cells. Budgets: echo ≤1 ms median server dispatch;
+round-trip ≤4 KB allocated per message. Client-smoke: vanilla client joins a
+VINE server cleanly; version-mismatched client gets the engine disconnect
+reason, not a crash.
 
 ## 6. Agent guidance
 

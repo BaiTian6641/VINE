@@ -143,7 +143,7 @@ public interface VoxelStorageDriver {
   - **Landed 2026-09-24 (item-stack + native legs):** the engine's
     `vine:voxel_data` data component is registered per cell (Fabric
     `Registry.register` in mod init; NF `DeferredRegister` on the mod bus), and
-    `AbstractItemStackVoxelStorage` implements `open`/`flushDirty` for both:
+    `AbstractVoxelStorage` implements `open`/`flushDirty` for both:
     blobs go through the engine's load/save handle (fix-on-load, read-only
     guard), native-mapped fields (`VineData.registerNativeField`, resolved via
     `NativeFields`) copy the vanilla component in at open and out at flush.
@@ -162,12 +162,14 @@ public interface VoxelStorageDriver {
     (`vine_test:voxeldata_roundtrip`: `mana=42 kills=3` after flush + reopen on
     a copy) and the native leg (`damage=7` visible in the vanilla DAMAGE
     component). **14/14 scenarios PASS on both 1.21.1 cells.**
-  - **Seams (documented):** block-entity, entity and player attach points need
-    loader hooks (BE save-tag sub-compound; NF data attachments / Fabric custom
-    data) and land with the Mixin wave (sub-18 Stage E) — the SPI does not
-    change when they do. World attach (`SavedData`) rides the same wave.
-- **Acceptance:** TCK `voxeldata.roundtrip` + `voxeldata.native_strategy`
-  green on both 1.21.1 cells (§8: one per loader family).
+  - **Seams (documented):** the block-entity/entity/player attach points this
+    bullet listed as Mixin-wave work landed in Stage E through each cell's own
+    attachment API (`AttachmentRegistry.createPersistent` on Fabric,
+    `AttachmentType` on NeoForge) — no Mixin was needed and the SPI did not
+    change. World attach (`SavedData`) rides sub-13.
+- **Acceptance:** TCK `voxeldata_roundtrip` green on both 1.21.1 cells (§8: one
+  per loader family); its native leg asserts the vanilla `DAMAGE` component is
+  driven from the tree.
 - **Touches:** driver-1.21.1-neoforge, driver-1.21.1-fabric.
 - **Bootstrap prompt:**
   > Implement `VoxelStorageDriver` for your cell (1.21.1-NF or 1.21.1-Fabric)
@@ -206,8 +208,8 @@ public interface VoxelStorageDriver {
   `IAttachmentHolder`). Both mechanisms persist into the holder's own save data,
   which is the property that makes a tree survive a save/reload; neither declares
   sync yet, because only client-visible paths should cross to clients and no path
-  carries that flag. `AbstractItemStackVoxelStorage` became `AbstractVoxelStorage`,
-  dispatching over all four reachable target kinds; native-field interop stays an
+  carries that flag. `AbstractVoxelStorage`
+  dispatches over all four reachable target kinds; native-field interop stays an
   item-stack mapping (a holder without a component view reports "unknown
   component" instead of guessing). Flush calls now carry the tree's own dirty set
   rather than a wildcard.
@@ -218,8 +220,12 @@ public interface VoxelStorageDriver {
   **Remaining:** player attach shares the entity code path (no headless player
   exists to probe it), world attach rides sub-13, and client-visible path
   filtering + the sub-05 delta transport stay open.
-- **Acceptance:** TCK `voxeldata.attach_all` + `voxeldata.sync_delta` green on
-  both 1.21.1 cells; measured delta payload < whole-tree payload.
+- **Acceptance met (both legs):** TCK `voxeldata_attach_all` +
+  `voxeldata_sync_delta` green on both 1.21.1 cells; measured delta payload
+  < whole-tree payload.
+- **Stage order (deliberate):** F is ticked while this box is open — the golden
+  fixtures, the cross-cell round-trip and the perf benchmark were independent of
+  the remaining attach/sync scope and landed without it.
 - **Touches:** vine-core (sync), both 1.21.1 drivers, vine-tck.
 - **Bootstrap prompt:**
   > Complete attach points and sync per sub-03 §2; depends on Stage D of your
@@ -228,7 +234,7 @@ public interface VoxelStorageDriver {
 ### Stage F — golden fixtures, perf budget, 26.x readiness
 
 - [x] **Do:** pin golden saves from each 1.21.1 driver; cross-read harness;
-  TCK `voxeldata.perf`; `@FastPath` hooks only where the benchmark proves a
+  TCK `voxeldata_perf`; `@FastPath` hooks only where the benchmark proves a
   hotspot; 26.x notes for sub-19 (26.x executes in M4).
 - **Landed:** the cross-cell harness writes a fixture on one cell and verifies it
   on the other (digest + semantic equality, `crossCellRoundTrip`), and the
@@ -253,7 +259,9 @@ public interface VoxelStorageDriver {
   deliberate non-goal here, and pretending otherwise would have shipped a green
   gate that measured the optimiser.
   **Remaining:** the ≤5% dirty-tracking-overhead criterion is reported as absolute
-  cost (~0.7–1.8 µs per mutation) rather than as a ratio, and sub-19's 26.x notes
+  cost rather than as a ratio — the named fixture is `voxeldata_perf`'s
+  `vine_test tree voxel_perf` probe, whose `mutate1k` figure is 0.7–1.8 µs per
+  mutation on the two 1.21.1 cells — and sub-19's 26.x notes
   are still to be written when that driver wave starts.
 - **Acceptance:** fixtures cross-read byte-identical on all available cells;
   §5 perf budget met on both 1.21.1 cells.
@@ -270,7 +278,7 @@ public interface VoxelStorageDriver {
   phase; the SPI forces registration there; acceptance = boot log + round-trip.
 - **Change-sync granularity: dirty flags vs whole-tree** — decided:
   path-granular dirty sets with ancestor coarsening; whole-tree only for
-  initial/late-join. Revisit only if `voxeldata.perf` regresses.
+  initial/late-join. Revisit only if `voxeldata_perf` regresses.
 - **DFU version skew between cells** (1.21.1 vs 26.x data versions diverge) —
   engine header + engine fixers; Mojang DFU never touches `vine:voxel_data`;
   golden fixtures are the standing proof.
@@ -283,15 +291,27 @@ public interface VoxelStorageDriver {
 
 ## 5. Verification
 
-TCK scenarios owned (each green on ≥2 drivers, one per loader family — §8):
-`voxeldata.roundtrip` (write → save → reload → deep-equal) ·
-`voxeldata.schemafix` (v1 fixture + fixer chain reads current) ·
-`voxeldata.native_strategy` (`minecraft:damage` visible to vanilla anvil) ·
-`voxeldata.attach_all` (all five attach points survive save/load) ·
-`voxeldata.sync_delta` (dirty delta < whole-tree bytes).
-Golden fixtures: `vine-tck/fixtures/save-1.21.1/` + `save-26x/`; every driver
-reads both; loaded trees byte-identical (§7).
-**Perf budget** (`voxeldata.perf`, all cells): primitive get on a 3-level path
+TCK scenarios owned — each a file under
+`vine-testmod/src/main/resources/vine-tck/scenarios/`, green on ≥2 drivers, one
+per loader family (§8):
+`voxeldata_roundtrip` (write → save → reload → deep-equal, carrying the
+native-strategy leg: `voxeldata native value damage=7` read back from vanilla's
+`DAMAGE` component) · `voxeldata_placed_block` (a placed engine block's payload
+survives a server restart) · `voxeldata_attach_all` (the reachable attach points
+survive save/load) · `voxeldata_sync_delta` (dirty delta < whole-tree bytes) ·
+`voxeldata_perf` (the budget below).
+**Known gap:** the schema-fixer chain has no TCK scenario — the id
+`voxeldata.schemafix` claimed here does not exist in the scenario directory
+(looked for `voxeldata_schemafix` under
+`vine-testmod/src/main/resources/vine-tck/scenarios/`); the Stage-B fixer checks
+live only in the engine-side harness.
+Golden fixtures: the committed goldens are `vine-tck/fixtures/datagen/<cell>/`
+(sub-02's datagen check). The cross-cell VoxelData fixture is **build output**
+written under `vine-tck/build/fixtures/` (`CrossCellRunner`):
+`:vine-tck:crossCellRoundTrip` writes it on 1.21.1-neoforge and verifies digest
+plus per-section semantics on 1.21.1-fabric. There is no committed
+`vine-tck/fixtures/save-1.21.1/` or `save-26x/` pair.
+**Perf budget** (`voxeldata_perf`, all cells): primitive get on a 3-level path
 ≤ 250 ns/op; zero allocation on primitive read hits; 64-field compound
 serialize ≤ 15 µs; 10k mixed reads in one tick ≤ 1 ms; dirty tracking ≤ 5%
 overhead on a 1k-mutation loop.

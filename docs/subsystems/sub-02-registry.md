@@ -1,6 +1,6 @@
 # SUB-02 — Registry & descriptors
 
-> **Status:** `in-progress` — one of `planning | in-progress | blocked(<reason>) | done`
+> **Status:** `done` — one of `planning | in-progress | blocked(<reason>) | done`
 > **Milestone:** M0 minimal → M1 full · **Depends on:** SUB-00, SUB-01 · **Blocks:** SUB-04, SUB-07, SUB-11, SUB-12, SUB-13, SUB-15, SUB-20, SUB-22
 > **Cells:** all · **Loaders:** both
 > **Master plan:** §5.2 (+ §5.3, §5.16) · **Module(s):** vine-api, vine-core, vine-spi, drivers
@@ -136,8 +136,9 @@ retained), `DROP`, `FAIL` (refuse load).
   - **Seams (documented):** the dev harness does not load the testmod's bundled
     `data/` as a datapack source, so JSON loading/override/re-read is proven
     through world datapacks; shipping consumer JSON inside a mod jar is a
-    packaging-wave check. Client-side join-sync receipt needs the sub-21 client
-    runner (headless server proves registration + per-world rebinding only).
+    packaging-wave check. Client-side join-sync receipt needs a client runner,
+    which no stage provides yet (sub-21 automates server-side boots only;
+    headless server proves registration + per-world rebinding only).
 - **Acceptance:** TCK on both 1.21.1 cells: JSON loads, override wins,
   `/reload` re-reads, join sync delivers values, loaders agree.
 - **Bootstrap prompt:**

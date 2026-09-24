@@ -1,6 +1,6 @@
 # SUB-14 — Sessions & parties (`VineSession`)
 
-> **Status:** `planning` — one of `planning | in-progress | blocked(<reason>) | done`
+> **Status:** `in-progress` — one of `planning | in-progress | blocked(<reason>) | done`
 > **Milestone:** M1 basics → M3 full · **Depends on:** SUB-03, SUB-05 · **Blocks:** SUB-15
 > **Cells:** all · **Loaders:** both
 > **Master plan:** §5.19 · **Module(s):** vine-api | vine-core | vine-spi | drivers
@@ -176,8 +176,9 @@ sub-01 normalized hooks. No per-cell API-shape difference.
   `othersIncluded=1` for the opted-in type, on both 1.21.1 cells; the send log
   shows the snapshot leaving for the joining participant.
   **Remaining:** change-driven re-sends (a transition or a state write currently
-  does not push a fresh snapshot to participants), and real client receipt, which
-  needs the client runner — the payload is the same bytes this scenario decodes.
+  does not push a fresh snapshot to participants), and real client receipt,
+  which needs a client runner no stage provides yet — the payload is the same
+  bytes this scenario decodes.
 - **Touches:** `vine-core` replication, sub-05 channel, driver login hooks.
 - **Bootstrap prompt:**
   > Implement SUB-14 Stage C over the sub-05 channel API: replicate per the §2

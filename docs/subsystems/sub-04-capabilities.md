@@ -1,6 +1,6 @@
 # SUB-04 — Capabilities
 
-> **Status:** `planning` — one of `planning | in-progress | blocked(<reason>) | done`
+> **Status:** `in-progress` — one of `planning | in-progress | blocked(<reason>) | done`
 > **Milestone:** M1 · **Depends on:** SUB-02, SUB-03 · **Blocks:** SUB-20
 > **Cells:** all · **Loaders:** both
 > **Master plan:** §5.5 (+ §5.20, §5.1, §5.12) · **Module(s):** vine-api, vine-core, vine-spi, drivers
@@ -151,11 +151,17 @@ persist, world SavedData) — drivers never hand-write cap NBT.
     reference. The cells therefore expose capabilities through the target's
     engine payload (the same object-containment the storage driver writes, which
     vanilla save/load and item sync already carry) and answer native queries
-    from it. Loader-native attachment registration, plus BE/entity/player
-    scopes, `PlayerEvent.Clone` and invalidation forwarding, land with the
-    Mixin wave (sub-18 Stage E) — the SPI shape does not change when they do.
-- **Acceptance:** TCK `caps.store_retrieve` + `caps.clone_copy` +
-  `caps.invalidation` green on 1.21.1-NF.
+    from it. The BE/entity/player scopes landed with sub-03's attach wave
+    (each cell's own attachment API, no Mixin — see Stage E); still open here
+    are `*ApiLookup` fallback registration, the `PlayerEvent.Clone`/`COPY_FROM`
+    policy hooks and invalidation forwarding. The SPI shape does not change
+    when they do.
+- **Acceptance:** TCK `capability_store` + `caps_driver_interop` green on
+  1.21.1-NF. (`caps.store_retrieve`, `caps.clone_copy` and `caps.invalidation`
+  were the planned ids; what shipped are those two real scenario files — the
+  cache/clone/round-trip leg sits inside `capability_store`, the driver-interop
+  leg inside `caps_driver_interop`. Invalidation forwarding is still open — see
+  Stage D's remaining seams.)
 - **Touches:** driver-1.21.1-neoforge.
 - **Bootstrap prompt:**
   > Implement `CapabilityDriver` for 1.21.1-NeoForge per
@@ -183,11 +189,14 @@ persist, world SavedData) — drivers never hand-write cap NBT.
     `VineCapabilities.flush` pushes it through the storage layer, and a *copy*
     of the item answers the native query with `value=11` — **15/15 scenarios
     PASS on both cells.**
-  - **Remaining seams (documented):** `*ApiLookup` fallbacks, BE/entity/player
-    scopes, `COPY_FROM`/`Clone` policy hooks and invalidation forwarding need
-    the Mixin/attach wave (sub-18 Stage E); `applyClone` already implements the
-    policies engine-side, so the hooks are wiring, not design.
-- **Acceptance:** same three TCK scenarios green on 1.21.1-Fabric.
+  - **Remaining seams (documented):** the BE/entity/player scopes are live via
+    sub-03's attach wave (Stage E's `CommonCapabilityDriver` answers all four
+    holder kinds); still open are `*ApiLookup` fallback registration, the
+    `COPY_FROM`/`Clone` policy hooks and invalidation forwarding — none of them
+    needs a Mixin. `applyClone` already implements the policies engine-side, so
+    the hooks are wiring, not design.
+- **Acceptance:** the same two TCK scenarios (`capability_store`,
+  `caps_driver_interop`) green on 1.21.1-Fabric.
 - **Touches:** driver-1.21.1-fabric.
 - **Bootstrap prompt:**
   > Implement `CapabilityDriver` for 1.21.1-Fabric per
@@ -253,17 +262,21 @@ persist, world SavedData) — drivers never hand-write cap NBT.
 
 TCK scenarios owned (each green on ≥2 drivers, one per loader family — §8):
 
-- `caps.store_retrieve` — each built-in type (energy/fluid/inventory) on each
-  target kind (block/entity/item/player) survives save→load.
-- `caps.custom_type` — consumer-defined type with `CapabilityCodec` round-trips.
-- `caps.clone_copy` — player death/respawn: `NONE` yields fresh state, `FULL`
-  preserves it.
-- `caps.invalidation` — chunk unload kills stale native handles; consumers see
-  `CAPABILITY_INVALIDATED`.
-- `caps.probe_degraded` — no partner mod installed: empty `Optional`, false
+- `capability_store` — the cache-stability, `FULL` clone-copy and save→load
+  round-trip legs (`capability cache stable mana=42`, `capability clone FULL
+  mana=42`, `capability roundtrip mana=42`).
+- `caps_driver_interop` — the driver seam end to end: a stateful capability
+  rides the item payload through a copy (`caps driver interop value=11`) and the
+  block/entity scopes round-trip (`block=31 entity=41`).
+- `caps_probe_degraded` — no partner mod installed: empty `Optional`, false
   `supports()`, no exceptions.
-- Golden fixtures: capability state rides sub-03's cross-cell save fixtures —
-  a capability saved on 1.21.1 reads identically on 26.x.
+- **Not yet written:** a per-built-in-type (energy/fluid/inventory) matrix, a
+  consumer-defined `CapabilityCodec` type, and invalidation forwarding. The ids
+  `caps.store_retrieve`, `caps.custom_type` and `caps.invalidation` claimed here
+  do not exist under `vine-testmod/src/main/resources/vine-tck/scenarios/`.
+- Golden fixtures: capability state rides sub-03's cross-cell fixture run
+  (`vine-tck/build/fixtures/`, build output) — a capability written on
+  1.21.1-neoforge reads back on 1.21.1-fabric; the 26.x leg activates at M4.
 
 ## 6. Agent guidance
 

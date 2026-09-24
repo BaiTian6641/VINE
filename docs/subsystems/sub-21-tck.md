@@ -39,7 +39,7 @@ public enum TckTag { SMOKE, PERSISTENCE, NETWORK, BRAIN, ANIMATION, PERF, QUARAN
   scenario start. Result: JSON-lines `{scenario, cell, steps, assertions,
   ticks, outcome}`.
 - **Harness duality:** GameTest (all cells, 1.21.1+) is primary;
-  `/vinetck run <id|all>` on the dedicated server is an equal-rank fallback
+  `/vine_test tck_run <id|all>` on the dedicated server is an equal-rank fallback
   emitting the identical result file — CI never cares which path ran.
 - **Golden fixtures:** pinned world saves, `VoxelData` binaries, `VineBrain`
   tick traces, animation timing fixtures (§5.14). Core check: cross-cell
@@ -78,7 +78,9 @@ public enum TckTag { SMOKE, PERSISTENCE, NETWORK, BRAIN, ANIMATION, PERF, QUARAN
   scenario resources (JSON data, §2); executors for the §10 M0 content set
   (registration Java+JSON, place/break, save/reload, packet echo, command) —
   capability and recipe executors land with their M1/M3 surfaces.
-- **Acceptance:** testmod-declared M0 scenarios green via both harness paths
+- **Acceptance met:** testmod-declared M0 scenarios green via both harness
+  paths on both 1.21.1 cells (33/33 per cell, 2026-09-25); new scenarios need
+  zero `tck-core` edits; loader quirks logged in §4.
 - **Landed (in-process path):** `/vine_test tck_run <id|all>` runs the *same
   scenario files* inside the running server through a testmod-side interpreter
   (a dependency-free JSON reader plus the step executors), printing the same
@@ -136,9 +138,18 @@ public enum TckTag { SMOKE, PERSISTENCE, NETWORK, BRAIN, ANIMATION, PERF, QUARAN
   feedback writes to the harness sink. It is not worth doing for semantics:
   every scenario's assertions are already served by the external runner, and the
   SKIP path exists precisely so the in-process harness never fakes a trace.
-  Determinism helpers (fixed-seed worlds, tick-locked `AdvanceTicks`) are
-  likewise still open; the goldens and cross-cell round trip they would protect
-  are already green.
+  **Landed (determinism helpers, 2026-09-25):** the runner pins the dev world's
+  `level-seed` at the same moment it wipes the world, so the terrain a run
+  generates is a function of that seed rather than of whatever the last run left
+  behind, and it gains an `AdvanceTicks` step that freezes the tick loop, steps
+  it exactly N ticks, proves game time moved by exactly N, and unfreezes — every
+  check an *effect* of the server (game time standing still, then moving by
+  exactly N) rather than a phrase from its output, and `tick step` is only legal
+  while frozen, which is why the step freezes first. The step unfreezes on every
+  exit path so it stays side-effect-free for the scenarios that follow it in the
+  same boot. `determinism_tick_barrier` drives it and then reads and writes
+  engine block state across the barrier; green on both 1.21.1 cells (33/33 each,
+  2026-09-25).
 - **Landed (partial):** the scenario runner executes the documented step
   set (commands, traces, block placement, data probes, packets, save/reload,
   file writes) on both cells with a cross-cell matrix + quarantine policy from
@@ -146,12 +157,10 @@ public enum TckTag { SMOKE, PERSISTENCE, NETWORK, BRAIN, ANIMATION, PERF, QUARAN
   *characters*, so several needles describing one output line (a value and its
   verdict) all match — the line-granular cursor silently rejected them, which is
   what made multi-fact assertions look flaky.
-  on both 1.21.1 cells; new scenarios need zero `tck-core` edits; loader
-  quirks logged in §4.
 - **Touches:** `tck-core`, driver cell adapters, testmod discovery hook.
 - **Bootstrap prompt:**
   > Execute sub-21 Stage B (A done). Result model + GameTest and
-  > `/vinetck run` adapters emitting identical files; DSL records from §2 in
+  > `/vine_test tck_run` adapters emitting identical files; DSL records from §2 in
   > `tck-core` (Java 21, vine-api only — Prime Invariant holds here too);
   > boot-time discovery from SUB-22's testmod; M0 step executors. Acceptance
   > as above; record every GameTest headless quirk hit in §4.
@@ -164,12 +173,20 @@ public enum TckTag { SMOKE, PERSISTENCE, NETWORK, BRAIN, ANIMATION, PERF, QUARAN
   activates with SUB-19).
 - **Acceptance:** two consecutive CI runs byte-identical; 1.21.1-NF ↔
   1.21.1-Fabric fixture round-trip green today as differ proof.
-  - **Progress 2026-09-24:** the 1.21.1-NF ↔ 1.21.1-Fabric round-trip half is
-    green: `:vine-tck:crossCellRoundTrip` drives NF `tck_fixture_write` →
-    Fabric `tck_fixture_read` in one JVM, comparing file digests (byte
-    identity) plus per-section semantics (VoxelData/capability/session).
-    Fixed seeds, tick-locked `AdvanceTicks`, canonical differ, and
-    repeat-run byte-identity remain open.
+  - **Progress 2026-09-25:** the fixed-seed world and the tick-locked
+    `AdvanceTicks` step landed in `ScenarioRunner` (the runner pins
+    `level-seed` at the moment it wipes the world; the step freezes the tick
+    loop, steps it exactly N ticks, proves game time moved by N, and unfreezes
+    on every exit path) — `determinism_tick_barrier` drives it green on both
+    1.21.1 cells. The 1.21.1-NF ↔ 1.21.1-Fabric round-trip half is green too:
+    `:vine-tck:crossCellRoundTrip` drives NF `tck_fixture_write` → Fabric
+    `tck_fixture_read` in one JVM, comparing file digests (byte identity) plus
+    per-section semantics (VoxelData/capability/session).
+    **Remaining:** canonical normalized dumps + differ, and the repeat-run
+    byte-identity check.
+  - **Stage order (deliberate):** D is ticked while this box is open — the
+    reporting/quarantine machinery is independent of the determinism core and
+    its own drill was runnable without it.
 - **Touches:** `tck-core`, `fixtures/`, driver tick hook.
 - **Bootstrap prompt:**
   > Execute sub-21 Stage C. Fixed seed, tick-locked stepping, seeded RNG —

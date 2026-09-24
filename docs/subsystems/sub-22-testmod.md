@@ -51,7 +51,7 @@ vine-testmod/
 | `testitem`, durability-as-data-key | sub-07, sub-03 | M0 → M1 |
 | one engine event subscriber | sub-01 | M0 |
 | `echo` packet (client→server→client) | sub-05 | M0 |
-| `/vinetest` command | sub-06 | M0 minimal (engine command, sub-06 Stage A) → M1 full |
+| `/vine_test` command | sub-06 | M0 minimal (engine command, sub-06 Stage A) → M1 full |
 | capability store/retrieve on block + entity | sub-04 | M1 |
 | multipart `testbeast` + `VineBrain` behavior + animation fixtures | sub-08, sub-09 | M2 |
 | `testrecipe` + one custom recipe type | sub-11 | M3 |

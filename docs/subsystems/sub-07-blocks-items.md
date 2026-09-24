@@ -130,11 +130,11 @@ one item type, damage as data (§5.3/§5.4).
 
 ### Stage B — flattened properties & state model
 
-- [ ] **Do:** `Property` factories, state-table flattening with the 512-state
+- [x] **Do:** `Property` factories, state-table flattening with the 512-state
   budget + diagnostic, default-state rules, state query/mutation API on the
   engine world view, blockstate datagen cooking per cell.
 - **Landed (engine half, 2026-09-25):** the whole engine-side model exists and
-  compiles, and both 1.21.1 cells are being wired to it.
+  compiles, and both 1.21.1 cells are wired to it.
   `Property<T>(name, values, type)` carries `bool` / `intRange` / `ofEnum`
   factories and validates at authoring time: the native name grammar, no
   duplicates, integers strictly ascending inside the vanilla `0..15` carrier
@@ -166,7 +166,7 @@ one item type, damage as data (§5.3/§5.4).
   `/vine_test tck_state_set` driving the API, and a deliberately over-budget
   4096-state descriptor attempted at registration so the refusal (and its
   diagnostic) is observable in a boot log rather than only in a unit test.
-- **Landed (cell half, 2026-09-25, NeoForge; Fabric in flight):** each cell turns
+- **Landed (cell half, 2026-09-25, both cells):** each cell turns
   the descriptor's axes into its own state carriers and proves the two models
   agree before a block is ever registered. Boolean → the native boolean property,
   bounded integer → the native bounded-int property (the declared values must be
@@ -186,9 +186,14 @@ one item type, damage as data (§5.3/§5.4).
   descriptor's property list is published thread-locally around construction (a
   static-by-necessity, thread-scoped seam — never a field that cannot be set yet,
   and never a second source of truth).
-- **Acceptance:** TCK: multi-property testmod block round-trips place →
-  state-change → save/load on both loaders; over-budget descriptor rejected
-  with readable error; datagen golden fixtures match.
+- **Acceptance met 2026-09-25:** the `state_roundtrip` scenario places
+  `vine_test:stateblock`, changes `level` and `mode`, restarts the server and
+  reads back `lit=true,level=3,mode=CHARGED`; its first step asserts the boot
+  line for the deliberately over-budget 4096-state descriptor
+  (`over the 512-state budget`); `:vine-tck:verifyDatagen` byte-matches each
+  cell's cooked tree against its committed goldens (4 files per cell). Green on
+  both 1.21.1 cells (`:vine-tck:runScenarios1211Fabric` /
+  `:vine-tck:runScenarios1211Neoforge`, 33/33 per cell).
 - **Touches:** vine-api, vine-core, drivers, vine-testmod, vine-tck.
 - **Bootstrap prompt:**
   > Implement SUB-07 Stage B: flattened property/state model (§5.3 — all cells
@@ -201,9 +206,14 @@ one item type, damage as data (§5.3/§5.4).
 
 ### Stage C — behavior composition + BlockEntity
 
-- **Landed (storage half):** `BlockDescriptor` carries a `blockEntity` flag
-  (defaulted in the codec, so every existing descriptor keeps its meaning): a
-  flagged block materializes with a block-entity type per cell — Fabric through
+- [ ] **Do:** `UseBehavior`/`TickBehavior`/`LootBehavior` dispatch (dormant
+  when absent), engine contexts, `BlockEntityDescriptor` with `VoxelData`
+  schema validation, batched BE ticking, BE sync via sub-05.
+- **Landed (storage half):** `BlockDescriptor` declares engine storage
+  (`blockEntity`, now `Optional<BlockEntityDescriptor>` with a schema id, a ticking
+  flag and an interval — Stage C above; it began as a plain flag, defaulted in the
+  codec so every existing descriptor kept its meaning), and a declared block
+  materializes with a block-entity type per cell — Fabric through
   `BlockEntityProvider`, NeoForge through `EntityBlock` plus a
   `RegisterEvent` pass for the block-entity registry (NeoForge forbids nesting one
   registry's registration inside another's, which the first attempt did and the
@@ -213,14 +223,51 @@ one item type, damage as data (§5.3/§5.4).
   existing yet; proven live by the placed-block probe leg (`written=417` on the
   first boot, `survived=417` after a server restart) on both 1.21.1 cells.
   **Behavior composition** (the `UseBehavior`/`TickBehavior`/`LootBehavior`
-  dispatch this stage is named for) is still open, as are Stage B's property
-  flattening and Stage D's item hooks.
-- [ ] **Do:** `UseBehavior`/`TickBehavior`/`LootBehavior` dispatch (dormant
-  when absent), engine contexts, `BlockEntityDescriptor` with `VoxelData`
-  schema validation, batched BE ticking, BE sync via sub-05.
+  dispatch this stage is named for) landed with the behaviors half below, and
+  Stage B's property flattening landed 2026-09-25; Stage D's item hooks remain
+  open. What still holds this box open is named in the `Remaining` bullet.
+- **Landed (engine half, 2026-09-25):** the behavior language and its dispatch exist
+  engine-side (`BlockBehavior` + `BehaviorDispatch`). The cell halves — wiring the
+  plan into each cell's materializer so a declared block's behaviors actually run —
+  are the open work, so the acceptance below is not met.
+  Not claimed as landed here: the working tree carries this wave uncommitted (the
+  committed baseline this pass was briefed on, `4ed5376`, predates it).
+  `BlockBehavior` is a sealed interface permitting exactly `UseBehavior`,
+  `TickBehavior` and `LootBehavior` (the families are closed; their implementations
+  are `non-sealed`, so a consumer implements them directly). The contexts are engine
+  views and carry no loader type: `BlockUseContext` (world, pos, engine state,
+  `VinePlayer`, `Hand`, `Direction`, hit `Vec3`), `BlockTickContext` (world, pos,
+  state, `TickKind` — random, scheduled and block-entity normalized — and the
+  holder's `VoxelData` tree when the block declares one), `LootContext` (with an
+  empty miner when the cell cannot name one) and `LootSink` (add drops by engine item
+  id, so a behavior never learns whether its cell expresses drops as a loot table, a
+  modifier or a direct call). `UseResult` is PASS / HANDLED / DENIED, and dispatch
+  stops at the first non-PASS.
+  `BehaviorDispatch` (vine-core `internal.content`) is the one place a descriptor's
+  ordered list becomes calls, and the one place a cell asks what to wire:
+  `plan(blockId)` reports use/tick/loot/ticking/tickInterval, and a cell that follows
+  it installs nothing for a block that declares nothing — the Minimal Footprint rule
+  made mechanical rather than conventional. The engine also counts ticking blocks as
+  they register and prints `[VINE] behaviors: ticking block entities=N` at the freeze,
+  so a cell's own installed-ticker count has something to be equal to.
+  `BlockDescriptor.blockEntity` is now `Optional<BlockEntityDescriptor>` — a schema id
+  (the same registered-schema currency `VineData` speaks), a `ticking` flag and a
+  `tickInterval` — and `behaviors` is the ordered list. The JSON codec intentionally
+  does not carry behaviors: a behavior is code, and a data form for it needs a
+  behavior registry no stage has built; pretending otherwise with a field that decodes
+  to nothing would be a lie in the format.
+  Consumer-side data access is now symmetric with behaviors: `VineWorld.dataAt(pos)`
+  opens the holder's tree through the engine's storage path (the cell supplies the
+  attach point via `WorldViewDriver.holderTarget`), so reading a placed block's tree is
+  the same object its tick behavior writes, not a copy.
 - **Acceptance:** TCK: testmod ticking counter-BE persists its count across
   save/load on both loaders; `onUse` fires with correct context; BE-less
   blocks install zero tickers (boot assertion).
+- **Remaining (named, not implied):** block-entity **sync to clients** — the
+  `Do` line's "BE sync via sub-05" — is not landed: the payload rides the storage
+  path (persist/save/reload), and pushing it to clients needs the sub-03 client
+  filtering and the sub-05 delta transport that sub-03's Stage E still lists as
+  remaining. Nothing else in this stage is open once the cell halves land.
 - **Touches:** vine-api, vine-core, vine-spi, drivers, vine-testmod.
 - **Bootstrap prompt:**
   > Implement SUB-07 Stage C: behavior composition (§5.3 composition over

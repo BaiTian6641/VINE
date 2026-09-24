@@ -157,8 +157,10 @@ contract; each executes that stage's Do + Acceptance.
   fit); drop-on-exhaustion token budget for `SpawnBudget` in vine-core;
   client-spawn packet over sub-05. **Acceptance:** TCK fx-budget (alive-count
   caps) on ≥2 drivers; 200 concurrent budgeted emitters within the weakest
-  cell's frame budget, numbers recorded. **Touches:** vine-core (FX runtime),
-  drivers, vine-tck.
+  cell's frame budget, numbers recorded. **cannot tell (no artifact):** no
+  fx-budget run exists and no cell has been chosen for it — the emitter count,
+  the cell and that cell's frame budget are fixed when Stage D runs at M5.
+  **Touches:** vine-core (FX runtime), drivers, vine-tck.
 - **Bootstrap prompt:**
   > Execute sub-17 Stage D of docs/subsystems/sub-17-client-3d.md:
   > `ParticleDescriptor` materialization (vanilla first, custom fallback),
@@ -220,7 +222,8 @@ contract; each executes that stage's Do + Acceptance.
 TCK scenarios owned (each green on ≥2 drivers, one per loader family, before
 its surface merges — §8): **probe-matrix** (per-cell truth table; all `false`
 pre-M5) · **model-cook** (Java + JSON paths, 4 cells) · **fx-budget** (caps +
-200-emitter frame run) · **camera-negotiation** (priority, tie-break, ttl,
+a 200-emitter frame run — **cannot tell (no artifact)**: no run exists and the
+cell plus its frame budget are chosen when Stage D runs at M5) · **camera-negotiation** (priority, tie-break, ttl,
 foreign-yield simulation) · **wound-overlay** (part `VoxelData` change ⇒
 texture swap). Client smoke additions per cell: animated entity plays
 server-selected animation; static models render in-world/in-hand; camera

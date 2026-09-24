@@ -1,6 +1,6 @@
 # SUB-01 — Core runtime (boot, events, probes)
 
-> **Status:** `in-progress` — one of `planning | in-progress | blocked(<reason>) | done`
+> **Status:** `done` — one of `planning | in-progress | blocked(<reason>) | done`
 > **Milestone:** M0 skeleton → M1 full · **Depends on:** SUB-00 · **Blocks:** SUB-02, SUB-03, SUB-05, SUB-06, SUB-16, SUB-18
 > **Cells:** all · **Loaders:** both
 > **Master plan:** §5.1, §5.8, §5.9, §5.12, §8, §11.4 · **Module(s):** vine-api · vine-core · vine-spi · drivers
@@ -219,10 +219,17 @@ public interface VineDriver {
     veto gating observable (`vetoed=false/true` with the NORMAL observer
     count frozen at 1 on the cancelled post), packet hook on the loopback
     frame. 10/10 scenarios PASS on NeoForge and Fabric.
-  - **Seams (documented, not silent):** Fabric binds no `blockPlace`/
-    `worldSave` source (quarantined Mixin work) — subscribing fails loudly;
-    real player-driven `blockBreak`/`worldLoad` firing needs a client and
-    lands with sub-21's client runner; content-driven slots
+  - **Landed 2026-09-25 (Fabric Mixin seams closed):** the two slots Fabric
+    has no callback for — `blockPlace`, `worldSave` — now bind the driver's
+    single Mixin config (`vine-1211-fabric.mixins.json`, sub-18 Stage E):
+    injection into vanilla's `BlockItem#place` / `ServerWorld#save` posts
+    through `MixinHookTap`, whose sink `FabricHookInstallers` sets on first
+    subscribe and clears on last close; the injection itself cannot be switched
+    off (it is applied at class load), so with zero consumers it is one null
+    check, no event allocated, vanilla untouched.
+  - **Seams (documented, not silent):** real player-driven
+    `blockBreak`/`worldLoad` firing needs a client, which no stage automates
+    yet (sub-21 owns server-side boots only); content-driven slots
     (`registryRegister`, `packetReceive`, `commandExecute`) install by
     capturing the sink their live path posts to.
 - **Acceptance:** TCK scenario: one hook per family fires with identical
