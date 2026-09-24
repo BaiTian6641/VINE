@@ -30,6 +30,20 @@ neoForge {
     }
 
     runs {
+        // The TCK's GameTest path (sub-21 Stage B): the loader's own test lifecycle
+        // around the same in-process scenarios the /vine_test tck_run command runs.
+        // The empty structure it needs ships as a real 1.21 structure NBT at
+        // data/vine/structure/empty.nbt (NeoForge resolves templates from
+        // datapacks; vanilla's gametest one is not present in dev runs).
+        gameTestServer {
+            type = 'gameTestServer'
+            dependencies {
+                additionalRuntimeClasspath project(':vine-api')
+                additionalRuntimeClasspath project(':vine-core')
+                additionalRuntimeClasspath project(':vine-spi')
+                additionalRuntimeClasspath project(':vine-testmod')
+            }
+        }
         server {
             server()
             programArgument '--nogui'
