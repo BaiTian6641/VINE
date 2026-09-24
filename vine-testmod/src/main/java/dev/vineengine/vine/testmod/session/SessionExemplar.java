@@ -35,16 +35,26 @@ public final class SessionExemplar {
     public static final VineId HUNT_TYPE = VineId.of("vine_test", "hunt");
 
     private static final VineId ILLEGAL_ACTION = VineId.of("vine_test", "illegal");
+    /** A second type whose rules publish participant states (the opt-in half). */
+    public static final VineId OPEN_TYPE = VineId.of("vine_test", "hunt_open");
     private static final VineId PARAMS_SCHEMA = VineId.of("vine_test", "hunt_params");
 
     /** Rules: deny the known-bad action; allow the rest. Pure policy. */
-    private static final class HuntRules extends SessionRules {
+    private static class HuntRules extends SessionRules {
         @Override
         protected ActionVerdict validate(SessionAction action, SessionContext ctx) {
             if (action.kind().equals(ILLEGAL_ACTION)) {
                 return ActionVerdict.deny("action not permitted in phase " + ctx.state().phase());
             }
             return ActionVerdict.ALLOW;
+        }
+    }
+
+    /** The opt-in variant: participant states are public among participants. */
+    private static final class OpenHuntRules extends HuntRules {
+        @Override
+        protected boolean publicParticipantState() {
+            return true;
         }
     }
 
@@ -65,6 +75,59 @@ public final class SessionExemplar {
                 return new HuntRules();
             }
         });
+        VineSessions.registerFactory(new SessionFactory() {
+            @Override
+            public VineId sessionType() {
+                return OPEN_TYPE;
+            }
+
+            @Override
+            public SessionRules newRules() {
+                return new OpenHuntRules();
+            }
+        });
+    }
+
+    /**
+     * The Stage-C proof (driven by {@code vine_test tck_session_join}): a late
+     * joiner receives the full snapshot for an ACTIVE session — public state,
+     * their own participant state and nothing else by default; a type that opts
+     * in publishes every participant's state. The snapshot is the engine's own
+     * encoded payload, decoded here exactly as a client would.
+     */
+    public static String lateJoinProof() {
+        SessionManager manager = VineSessions.manager();
+        VoxelData params = VineData.create(PARAMS_SCHEMA);
+        params.put("arena", "vine_test:arena");
+        UUID owner = UUID.nameUUIDFromBytes("tck-owner".getBytes());
+        UUID joiner = UUID.nameUUIDFromBytes("tck-joiner".getBytes());
+
+        VineSession hunt = manager.create(HUNT_TYPE,
+            new SessionScope.World(VineId.of("vine_test", "latejoin")), params);
+        hunt.join(owner, null);
+        manager.transition(hunt.id(), SessionPhase.ACTIVE);
+        hunt.state().objectives().put("score", 7);
+        hunt.state().sharedFlags().put("weather", "storm");
+        hunt.join(joiner, null);  // the late join: the engine sends the snapshot here
+
+        String privateView = describe(joiner, hunt.replicationSnapshot(joiner));
+
+        VineSession open = manager.create(OPEN_TYPE,
+            new SessionScope.World(VineId.of("vine_test", "latejoin")), params);
+        open.join(owner, null);
+        manager.transition(open.id(), SessionPhase.ACTIVE);
+        open.join(joiner, null);
+        String publicView = describe(joiner, open.replicationSnapshot(joiner));
+
+        return "session late join: default[" + privateView + "] optIn[" + publicView + "]";
+    }
+
+    private static String describe(UUID viewer, byte[] snapshot) {
+        VoxelData decoded = VineData.decode(snapshot);
+        return "phase=" + decoded.getString("phase") + " score=" + decoded.getInt("objectives.score")
+            + " flag=" + decoded.getString("sharedFlags.weather")
+            + " selfIncluded=" + decoded.getInt("selfIncluded")
+            + " othersIncluded=" + decoded.getInt("othersIncluded");
     }
 
     /**

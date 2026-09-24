@@ -68,7 +68,21 @@ public final class FabricVoxelStorage extends AbstractVoxelStorage {
         return new ItemStack(item);
     }
 
-    /** The stored payload bytes on {@code stack} (capability interop carrier). */
+    /**
+     * The stored payload bytes for any holder (item stack, block entity, entity,
+     * player) — the capability driver's carrier view.
+     */
+    public static byte[] payloadOf(Object holder) {
+        if (holder instanceof ItemStack stack) {
+            return rawPayload(stack);
+        }
+        String payload = "" + (holder instanceof net.fabricmc.fabric.api.attachment.v1.AttachmentTarget target
+            ? target.getAttached(VOXEL_ATTACHMENT) : null);
+        return payload == null || payload.equals("null") ? null
+            : java.util.Base64.getDecoder().decode(payload);
+    }
+
+    /** The stored payload bytes on an item stack (capability interop carrier). */
     public static byte[] rawPayload(Object stack) {
         return decode(((ItemStack) stack).get(VOXEL_DATA));
     }

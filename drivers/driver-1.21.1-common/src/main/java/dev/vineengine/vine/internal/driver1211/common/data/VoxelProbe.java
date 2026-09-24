@@ -95,9 +95,16 @@ public final class VoxelProbe {
         VineCapabilities.register(PROBE_CAP);
         // Scope binding: stateful types answer through their state tree, so the
         // provider is never consulted — the attach marks which scopes the type
-        // serves.
-        VineCapabilities.attach(PROBE_CAP, dev.vineengine.vine.capability.CapabilityScope.ITEM,
-            target -> null);
+        // serves. All four scopes have attach points since sub-03 Stage E, so the
+        // probe claims them all and the attach legs below exercise the ones that
+        // need a holder object.
+        for (dev.vineengine.vine.capability.CapabilityScope scope : java.util.List.of(
+                dev.vineengine.vine.capability.CapabilityScope.ITEM,
+                dev.vineengine.vine.capability.CapabilityScope.BLOCK,
+                dev.vineengine.vine.capability.CapabilityScope.ENTITY,
+                dev.vineengine.vine.capability.CapabilityScope.PLAYER)) {
+            VineCapabilities.attach(PROBE_CAP, scope, target -> null);
+        }
     }
 
     /** Runs both legs; {@code stackFactory} creates a probe stack on the calling cell. */
@@ -172,6 +179,45 @@ public final class VoxelProbe {
         int entityReadBack = VineData.of(new dev.vineengine.vine.data.EntityTarget(entity),
             ROUNDTRIP_SCHEMA).getInt("mana");
         boolean entityPersisted = holders.persisted(entity);
+
+        // Two schemas on ONE holder: the bundle shape exists so a second schema
+        // (a capability state, say) cannot silently clobber the first.
+        Object shared = holders.blockEntity();
+        var sharedTarget = new dev.vineengine.vine.data.BlockEntityTarget(shared);
+        VoxelData first = VineData.of(sharedTarget, ROUNDTRIP_SCHEMA);
+        first.put("mana", 11);
+        flushTree(ROUNDTRIP_SCHEMA, sharedTarget, first);
+        VoxelData second = VineData.of(sharedTarget, NATIVE_SCHEMA);
+        second.put("damage", 22);
+        flushTree(NATIVE_SCHEMA, sharedTarget, second);
+        int firstAfter = VineData.of(sharedTarget, ROUNDTRIP_SCHEMA).getInt("mana");
+        int secondAfter = VineData.of(sharedTarget, NATIVE_SCHEMA).getInt("damage");
+        System.out.println("[VINE] voxeldata bundle cell=" + cell + " firstSchema=" + firstAfter
+            + " secondSchema=" + secondAfter);
+
+        // Capability scopes beyond items (sub-04 Stage E): the same capability
+        // state rides a block entity's and an entity's attachment payload, found
+        // and flushed through the engine API with no scope-specific consumer code.
+        var beCapTarget = new dev.vineengine.vine.capability.CapabilityTarget.BlockCapabilityTarget(
+            holders.blockEntity());
+        ProbeCap beCap = VineCapabilities.find(PROBE_CAP, beCapTarget).orElse(null);
+        int beCapValue = -1;
+        if (beCap != null) {
+            beCap.value(31);
+            VineCapabilities.flush(beCapTarget);
+            beCapValue = VineCapabilities.find(PROBE_CAP, beCapTarget).map(ProbeCap::value).orElse(-2);
+        }
+        var entityCapTarget = new dev.vineengine.vine.capability.CapabilityTarget.EntityCapabilityTarget(
+            holders.entity());
+        ProbeCap entityCap = VineCapabilities.find(PROBE_CAP, entityCapTarget).orElse(null);
+        int entityCapValue = -1;
+        if (entityCap != null) {
+            entityCap.value(41);
+            VineCapabilities.flush(entityCapTarget);
+            entityCapValue = VineCapabilities.find(PROBE_CAP, entityCapTarget).map(ProbeCap::value).orElse(-2);
+        }
+        System.out.println("[VINE] caps scopes cell=" + cell + " block=" + beCapValue
+            + " entity=" + entityCapValue);
 
         System.out.println("[VINE] voxeldata attach cell=" + cell + " holders=" + holders.describe());
         System.out.println("[VINE] voxeldata attach blockentity mana=" + beReadBack

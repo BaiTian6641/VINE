@@ -201,6 +201,23 @@ persist, world SavedData) — drivers never hand-write cap NBT.
 - [ ] **Do:** full scenario suite (§5) including `caps.probe_degraded` run with
   no partner mod installed; golden-fixture coverage via sub-03 fixtures;
   26.x implementation notes for sub-19.
+- **Landed:** every scope has a carrier since sub-03 Stage E, so exposure is no
+  longer item-only: `CommonCapabilityDriver` (was `ItemStackCapabilityDriver`)
+  answers native queries for item stacks, block entities, entities and players by
+  reading the holder's payload bundle and picking the capability's own schema
+  slice (`CapabilityStore.schemaIdFor`), which is what keeps two capabilities —
+  or a capability plus engine data — on one holder from clobbering each other.
+  Capability flushes carry the tree's recorded dirty set instead of a wildcard,
+  so a capability that was read but not changed writes nothing.
+  Proven live on both cells: the probe claims a stateful type on all four scopes
+  and round-trips `block=31 entity=41` through find → mutate → flush → find on a
+  block entity and an entity that are not item stacks. The degraded path is a
+  scenario of its own (`caps_probe_degraded`): an unserved type, a foreign id and
+  a target scope the type does not claim all answer empty with zero exceptions —
+  the "no partner mod installed" contract.
+  **Remaining:** golden-fixture coverage for capability state rides the same
+  cross-cell fixture task as sub-03; 26.x notes for sub-19 live in §2's driver
+  contract (registries and attachment APIs are the two seams that drift).
 - **Acceptance:** §5 suite green on both 1.21.1 cells (one per loader family —
   §8 satisfied); probe-degraded scenario shows empty `Optional` + false
   `supports()`, zero exceptions.

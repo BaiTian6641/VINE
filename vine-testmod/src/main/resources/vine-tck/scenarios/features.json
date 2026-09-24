@@ -1,11 +1,20 @@
 {
   "id": "vine_test:features",
-  "tags": ["SMOKE"],
+  "tags": [
+    "SMOKE"
+  ],
   "steps": [
-    { "type": "RunCommand", "command": "vine_test tck_features" },
-    { "type": "AssertTrace", "trace": "features", "expect": [
-      "features supports(unobfuscatedRuntime)=false",
-      "features supports(hasDataComponents)=true"
-    ] }
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_features"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "features",
+      "expect": [
+        "features supports(unobfuscatedRuntime)=false",
+        "features supports(hasDataComponents)=true"
+      ]
+    }
   ]
 }

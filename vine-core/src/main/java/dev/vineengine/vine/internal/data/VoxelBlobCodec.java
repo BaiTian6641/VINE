@@ -47,6 +47,15 @@ public final class VoxelBlobCodec {
      * compound that is *applied* onto a tree, never loaded as one. */
     static final byte[] DELTA_MAGIC = {'V', 'O', 'X', 'A'};
 
+    /**
+     * Holder payloads are *bundles* (sub-03 Stage E): one holder can carry trees
+     * of several schemas — an entity with engine data and a capability state, for
+     * instance — so the stored bytes are a small container keyed by schema id
+     * rather than a single tree. A single-tree payload from an older build is
+     * still read as a one-entry bundle, so nothing in the field breaks.
+     */
+    static final byte[] BUNDLE_MAGIC = {'V', 'O', 'X', 'B'};
+
     /** Header layout version; bumps only on a header-shape break, never silently. */
     static final int FORMAT_VERSION = 1;
 
@@ -189,6 +198,76 @@ public final class VoxelBlobCodec {
             }
         }
         return applied;
+    }
+
+    /** Encodes a holder payload: {@code schemaId -> tree blob}, in stable order. */
+    public static byte[] saveBundle(java.util.Map<VineId, byte[]> trees) {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream(256);
+        try {
+            DataOutputStream out = new DataOutputStream(buffer);
+            out.write(BUNDLE_MAGIC);
+            out.writeByte(FORMAT_VERSION);
+            java.util.List<VineId> ids = new java.util.ArrayList<>(trees.keySet());
+            ids.sort(java.util.Comparator.comparing(VineId::toString));
+            out.writeInt(ids.size());
+            for (VineId id : ids) {
+                out.writeUTF(id.toString());
+                byte[] blob = trees.get(id);
+                out.writeInt(blob.length);
+                out.write(blob);
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException("in-memory write cannot fail", e);
+        }
+        return buffer.toByteArray();
+    }
+
+    /**
+     * Decodes a holder payload into {@code schemaId -> tree blob}. A bare tree
+     * blob (no bundle magic) decodes as a one-entry bundle under {@code fallbackId}
+     * — the shape older builds wrote, read rather than rejected.
+     */
+    public static java.util.Map<VineId, byte[]> loadBundle(byte[] payload, VineId fallbackId) {
+        Objects.requireNonNull(payload, "payload");
+        if (!startsWith(payload, BUNDLE_MAGIC)) {
+            return java.util.Map.of(fallbackId, payload);
+        }
+        try {
+            DataInputStream in = new DataInputStream(new ByteArrayInputStream(payload));
+            byte[] magic = new byte[BUNDLE_MAGIC.length];
+            in.readFully(magic);
+            in.readByte(); // header version
+            int count = in.readInt();
+            if (count < 0 || count > 64) {
+                throw new IllegalArgumentException("bundle entry count out of range: " + count);
+            }
+            java.util.Map<VineId, byte[]> out = new java.util.LinkedHashMap<>();
+            for (int i = 0; i < count; i++) {
+                VineId id = VineId.parse(in.readUTF());
+                int length = in.readInt();
+                if (length < 0 || length > in.available()) {
+                    throw new IllegalArgumentException("bundle entry length out of range: " + length);
+                }
+                byte[] blob = new byte[length];
+                in.readFully(blob);
+                out.put(id, blob);
+            }
+            return out;
+        } catch (IOException e) {
+            throw new UncheckedIOException("in-memory read cannot fail", e);
+        }
+    }
+
+    private static boolean startsWith(byte[] bytes, byte[] prefix) {
+        if (bytes.length < prefix.length) {
+            return false;
+        }
+        for (int i = 0; i < prefix.length; i++) {
+            if (bytes[i] != prefix[i]) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static void writeCompound(DataOutputStream out, VoxelDataImpl node) throws IOException {

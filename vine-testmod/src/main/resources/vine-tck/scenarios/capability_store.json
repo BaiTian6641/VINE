@@ -1,8 +1,22 @@
 {
   "id": "vine_test:capability_store",
-  "tags": ["SMOKE", "CAPABILITY"],
+  "tags": [
+    "SMOKE",
+    "CAPABILITY"
+  ],
   "steps": [
-    { "type": "RunCommand", "command": "vine_test tck_caps" },
-    { "type": "AssertTrace", "trace": "capability", "expect": ["capability cache stable mana=42", "capability clone FULL mana=42", "capability roundtrip mana=42"] }
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_caps"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "capability",
+      "expect": [
+        "capability cache stable mana=42",
+        "capability clone FULL mana=42",
+        "capability roundtrip mana=42"
+      ]
+    }
   ]
 }

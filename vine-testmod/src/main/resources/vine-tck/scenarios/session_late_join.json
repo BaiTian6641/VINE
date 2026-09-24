@@ -1,0 +1,13 @@
+{
+  "id": "vine_test:session_late_join",
+  "tags": ["SMOKE"],
+  "steps": [
+    { "type": "RunCommand", "command": "vine_test echo warmup" },
+    { "type": "AssertTrace", "trace": "command", "expect": ["echo: warmup"] },
+    { "type": "RunCommand", "command": "vine_test tree session_late_join" },
+    { "type": "AssertTrace", "trace": "command", "expect": [
+      "session late join: default[phase=ACTIVE score=7 flag=storm selfIncluded=1 othersIncluded=0]",
+      "optIn[phase=ACTIVE score=0 flag= selfIncluded=1 othersIncluded=1]"
+    ] }
+  ]
+}

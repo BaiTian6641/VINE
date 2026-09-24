@@ -89,6 +89,12 @@ public final class Fabric1211Driver implements VineDriver {
                 net.minecraft.server.network.ServerPlayerEntity player = server.getPlayerManager().getPlayer(uuid);
                 return player == null ? null : player.getGameProfile().getName();
             });
+            // Player lookup (sub-14 Stage C): session snapshots target a UUID.
+            dev.vineengine.vine.internal.Players.install(uuid -> {
+                net.minecraft.server.network.ServerPlayerEntity player = server.getPlayerManager().getPlayer(uuid);
+                return player == null ? null : dev.vineengine.vine.internal.driver1211.fabric.command
+                    .FabricCommandFactory.playerOf(player);
+            });
             // Schemas must be registered by consumers/drivers *after* engine boot
             // (bootstrap runs inside it, where the facade is deliberately blocked)
             // and before the store freezes — this anchor is exactly that window.
@@ -112,6 +118,7 @@ public final class Fabric1211Driver implements VineDriver {
             currentServer = null;
             net.server(null);
             dev.vineengine.vine.internal.PlayerNames.install(null);
+            dev.vineengine.vine.internal.Players.install(null);
         });
 
         // Session persistence (sub-14 Stage B): mount on the first world load,
@@ -134,8 +141,8 @@ public final class Fabric1211Driver implements VineDriver {
         // Capability interop (sub-04 Stage C/D): native queries answer from the
         // same item payload the storage driver writes.
         dev.vineengine.vine.internal.capability.CapabilityDriverBinding.bind(
-            new dev.vineengine.vine.internal.driver1211.common.data.ItemStackCapabilityDriver(
-                FabricVoxelStorage::rawPayload));
+            new dev.vineengine.vine.internal.driver1211.common.data.CommonCapabilityDriver(
+                FabricVoxelStorage::payloadOf));
         ServerWorldEvents.LOAD.register((server, world) -> {
             if (mounted.compareAndSet(false, true)) {
                 // Working directory = the run/module dir in dev and the server

@@ -158,6 +158,16 @@ public final class CommandTreeExemplar {
                         ctx.feedback("reload probe: " + CommandJsonExemplar.writeReloadFixture(false));
                         return 1;
                     }))
+                .then(VineCommand.literal("session_late_join")
+                    .executes(ctx -> {
+                        ctx.feedback(dev.vineengine.vine.testmod.session.SessionExemplar.lateJoinProof());
+                        return 1;
+                    }))
+                .then(VineCommand.literal("caps_degraded")
+                    .executes(ctx -> {
+                        ctx.feedback(dev.vineengine.vine.testmod.capability.CapabilityExemplar.degradedProof());
+                        return 1;
+                    }))
                 .then(VineCommand.literal("voxel_sync_delta")
                     .executes(ctx -> {
                         ctx.feedback(dev.vineengine.vine.testmod.data.VoxelExemplar.syncDeltaProof());

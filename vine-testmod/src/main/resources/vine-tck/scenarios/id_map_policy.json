@@ -1,49 +1,150 @@
 {
   "id": "vine_test:id_map_policy",
-  "tags": ["SMOKE", "PERSISTENCE"],
+  "tags": [
+    "SMOKE",
+    "PERSISTENCE"
+  ],
   "steps": [
-    { "type": "WriteFile", "path": "vine_tck_optional.enabled", "content": "off" },
-    { "type": "WriteFile", "path": "vine_tck_optional2.enabled", "content": "off" },
-    { "type": "WriteFile", "path": "vine_tck_policy.txt", "content": "KEEP" },
-    { "type": "SaveReloadWorld" },
-    { "type": "RunCommand", "command": "vine_test tck_registry_ids" },
-    { "type": "AssertTrace", "trace": "idmap", "expect": [
-      "idmap example=0 optional=absent optional2=absent",
-      "idmap policy=KEEP"
-    ] },
-    { "type": "WriteFile", "path": "vine_tck_optional.enabled", "content": "on" },
-    { "type": "SaveReloadWorld" },
-    { "type": "RunCommand", "command": "vine_test tck_registry_ids" },
-    { "type": "AssertTrace", "trace": "idmap", "expect": [
-      "idmap example=0 optional=4 optional2=absent"
-    ] },
-    { "type": "WriteFile", "path": "vine_tck_optional.enabled", "content": "off" },
-    { "type": "WriteFile", "path": "vine_tck_optional2.enabled", "content": "on" },
-    { "type": "SaveReloadWorld" },
-    { "type": "RunCommand", "command": "vine_test tck_registry_ids" },
-    { "type": "AssertTrace", "trace": "idmap", "expect": [
-      "idmap example=0 optional=absent optional2=5"
-    ] },
-    { "type": "WriteFile", "path": "vine_tck_optional.enabled", "content": "on" },
-    { "type": "WriteFile", "path": "vine_tck_optional2.enabled", "content": "off" },
-    { "type": "SaveReloadWorld" },
-    { "type": "RunCommand", "command": "vine_test tck_registry_ids" },
-    { "type": "AssertTrace", "trace": "idmap", "expect": [
-      "idmap example=0 optional=4 optional2=absent"
-    ] },
-    { "type": "WriteFile", "path": "vine_tck_optional.enabled", "content": "off" },
-    { "type": "WriteFile", "path": "vine_tck_policy.txt", "content": "DROP" },
-    { "type": "SaveReloadWorld" },
-    { "type": "RunCommand", "command": "vine_test tck_registry_ids" },
-    { "type": "AssertTrace", "trace": "idmap", "expect": [
-      "idmap example=0 optional=absent optional2=absent",
-      "idmap policy=DROP"
-    ] },
-    { "type": "WriteFile", "path": "vine_tck_optional.enabled", "content": "on" },
-    { "type": "SaveReloadWorld" },
-    { "type": "RunCommand", "command": "vine_test tck_registry_ids" },
-    { "type": "AssertTrace", "trace": "idmap", "expect": [
-      "idmap example=0 optional=6 optional2=absent"
-    ] }
+    {
+      "type": "WriteFile",
+      "path": "vine_tck_optional.enabled",
+      "content": "off"
+    },
+    {
+      "type": "WriteFile",
+      "path": "vine_tck_optional2.enabled",
+      "content": "off"
+    },
+    {
+      "type": "WriteFile",
+      "path": "vine_tck_policy.txt",
+      "content": "KEEP"
+    },
+    {
+      "type": "SaveReloadWorld"
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_registry_ids"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "idmap",
+      "expect": [
+        "idmap example=0 optional=absent optional2=absent",
+        "idmap policy=KEEP"
+      ]
+    },
+    {
+      "type": "WriteFile",
+      "path": "vine_tck_optional.enabled",
+      "content": "on"
+    },
+    {
+      "type": "SaveReloadWorld"
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_registry_ids"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "idmap",
+      "expect": [
+        "idmap example=0 optional=4 optional2=absent"
+      ]
+    },
+    {
+      "type": "WriteFile",
+      "path": "vine_tck_optional.enabled",
+      "content": "off"
+    },
+    {
+      "type": "WriteFile",
+      "path": "vine_tck_optional2.enabled",
+      "content": "on"
+    },
+    {
+      "type": "SaveReloadWorld"
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_registry_ids"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "idmap",
+      "expect": [
+        "idmap example=0 optional=absent optional2=5"
+      ]
+    },
+    {
+      "type": "WriteFile",
+      "path": "vine_tck_optional.enabled",
+      "content": "on"
+    },
+    {
+      "type": "WriteFile",
+      "path": "vine_tck_optional2.enabled",
+      "content": "off"
+    },
+    {
+      "type": "SaveReloadWorld"
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_registry_ids"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "idmap",
+      "expect": [
+        "idmap example=0 optional=4 optional2=absent"
+      ]
+    },
+    {
+      "type": "WriteFile",
+      "path": "vine_tck_optional.enabled",
+      "content": "off"
+    },
+    {
+      "type": "WriteFile",
+      "path": "vine_tck_policy.txt",
+      "content": "DROP"
+    },
+    {
+      "type": "SaveReloadWorld"
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_registry_ids"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "idmap",
+      "expect": [
+        "idmap example=0 optional=absent optional2=absent",
+        "idmap policy=DROP"
+      ]
+    },
+    {
+      "type": "WriteFile",
+      "path": "vine_tck_optional.enabled",
+      "content": "on"
+    },
+    {
+      "type": "SaveReloadWorld"
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_registry_ids"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "idmap",
+      "expect": [
+        "idmap example=0 optional=6 optional2=absent"
+      ]
+    }
   ]
 }

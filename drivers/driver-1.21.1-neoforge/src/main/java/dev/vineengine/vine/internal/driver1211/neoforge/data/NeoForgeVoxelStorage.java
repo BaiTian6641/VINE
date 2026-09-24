@@ -53,7 +53,20 @@ public final class NeoForgeVoxelStorage extends AbstractVoxelStorage {
         return new ItemStack(item);
     }
 
-    /** The stored payload bytes on {@code stack} (capability interop carrier). */
+    /**
+     * The stored payload bytes for any holder (item stack, block entity, entity,
+     * player) — the capability driver's carrier view.
+     */
+    public static byte[] payloadOf(Object holder) {
+        if (holder instanceof ItemStack stack) {
+            return rawPayload(stack);
+        }
+        String payload = holder instanceof net.neoforged.neoforge.attachment.IAttachmentHolder attachment
+            ? attachment.getExistingDataOrNull(voxelAttachment.get()) : null;
+        return payload == null ? null : java.util.Base64.getDecoder().decode(payload);
+    }
+
+    /** The stored payload bytes on an item stack (capability interop carrier). */
     public static byte[] rawPayload(Object stack) {
         String payload = ((ItemStack) stack).get(voxelData.get());
         return payload == null ? null : java.util.Base64.getDecoder().decode(payload);

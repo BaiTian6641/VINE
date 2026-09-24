@@ -12,6 +12,14 @@
         "caps driver interop cell=",
         "caps driver interop value=11"
       ]
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "log",
+      "expect": [
+        "caps scopes cell=",
+        "block=31 entity=41"
+      ]
     }
   ]
 }

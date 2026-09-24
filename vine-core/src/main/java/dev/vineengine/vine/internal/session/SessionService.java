@@ -241,6 +241,7 @@ public final class SessionService implements SessionManager {
 
     /** Registers the store schema; must run before the schema registry freezes. */
     public static synchronized void ensureStoreSchema() {
+        SessionReplication.ensureSchema();
         if (storeSchemaRegistered) {
             return;
         }
@@ -255,7 +256,7 @@ public final class SessionService implements SessionManager {
     // EngineSession
     // ------------------------------------------------------------------
 
-    private static final class EngineSession implements VineSession {
+    private static final class EngineSession implements VineSession, SessionReplication.ParticipantStates {
 
         private final VineId id;
         private final VineId type;
@@ -302,6 +303,39 @@ public final class SessionService implements SessionManager {
         }
 
         @Override
+        public ParticipantState join(UUID player, VoxelData loadout) {
+            java.util.Objects.requireNonNull(player, "player");
+            VineId schema = schemaIdFor(type);
+            ParticipantState joining = new ParticipantState(player,
+                VineData.create(schema), loadout == null ? VineData.create(schema) : loadout.copy(),
+                VineData.create(schema));
+            boolean owner;
+            synchronized (participants) {
+                owner = participants.isEmpty();
+                participants.put(player, joining);
+            }
+            rules.joined(context(), player);
+            LOG.log(System.Logger.Level.INFO,
+                "[VINE] session " + id + " participant joined " + player + (owner ? " (owner)" : ""));
+            // Late join and re-join share one path: the joiner is sent the full
+            // replication snapshot the moment they are a participant (sub-14 Stage C).
+            SessionReplication.sendSnapshot(this, player);
+            return joining;
+        }
+
+        @Override
+        public boolean isOwner(UUID player) {
+            synchronized (participants) {
+                return !participants.isEmpty() && participants.keySet().iterator().next().equals(player);
+            }
+        }
+
+        @Override
+        public byte[] replicationSnapshot(UUID player) {
+            return SessionReplication.encode(this, player, rules.participantStatesPublic());
+        }
+
+        @Override
         public Set<UUID> participants() {
             synchronized (participants) {
                 return Set.copyOf(participants.keySet());
@@ -323,6 +357,14 @@ public final class SessionService implements SessionManager {
         }
 
         /** Read-only context handed to rules callbacks. */
+        /** The live participant states, in join order (replication reads them). */
+        @Override
+        public Map<UUID, ParticipantState> participantStates() {
+            synchronized (participants) {
+                return Map.copyOf(participants);
+            }
+        }
+
         private record Context(EngineSession session) implements SessionContext {
             @Override
             public SessionState state() {

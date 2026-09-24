@@ -1,18 +1,37 @@
 {
   "id": "vine_test:session_persistence",
-  "tags": ["SMOKE", "PERSISTENCE"],
+  "tags": [
+    "SMOKE",
+    "PERSISTENCE"
+  ],
   "steps": [
-    { "type": "RunCommand", "command": "vine_test tck_sessions_persist" },
-    { "type": "AssertTrace", "trace": "persistence", "expect": [
-      "persistence created id=vine:session/",
-      "persistence flushed live="
-    ] },
-    { "type": "SaveReloadWorld" },
-    { "type": "RunCommand", "command": "vine_test tck_sessions_restored" },
-    { "type": "AssertTrace", "trace": "persistence", "expect": [
-      "persistence restored live=",
-      "restored session id=vine:session/",
-      "persistence active-check score=12 present=true"
-    ] }
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_sessions_persist"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "persistence",
+      "expect": [
+        "persistence created id=vine:session/",
+        "persistence flushed live="
+      ]
+    },
+    {
+      "type": "SaveReloadWorld"
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_sessions_restored"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "persistence",
+      "expect": [
+        "persistence restored live=",
+        "restored session id=vine:session/",
+        "persistence active-check score=12 present=true"
+      ]
+    }
   ]
 }

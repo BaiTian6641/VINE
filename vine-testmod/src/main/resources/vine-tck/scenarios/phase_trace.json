@@ -1,7 +1,19 @@
 {
   "id": "vine_test:phase_trace",
-  "tags": ["SMOKE"],
+  "tags": [
+    "SMOKE"
+  ],
   "steps": [
-    { "type": "AssertTrace", "trace": "phases", "expect": ["VINE_BOOT", "REGISTRIES_OPEN", "REGISTRIES_FROZEN", "WORLD_LOAD", "SERVER_UP"] }
+    {
+      "type": "AssertTrace",
+      "trace": "phases",
+      "expect": [
+        "VINE_BOOT",
+        "REGISTRIES_OPEN",
+        "REGISTRIES_FROZEN",
+        "WORLD_LOAD",
+        "SERVER_UP"
+      ]
+    }
   ]
 }

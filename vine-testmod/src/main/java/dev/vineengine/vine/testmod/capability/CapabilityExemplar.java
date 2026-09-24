@@ -84,6 +84,44 @@ public final class CapabilityExemplar {
     }
 
     /**
+     * The degraded path (sub-04 Stage E): what a consumer sees with no partner
+     * mod installed. A capability type nobody serves, a foreign id nobody
+     * exposes, a target scope the type does not claim — every one of them answers
+     * empty instead of throwing, which is the contract the acceptance pins.
+     */
+    public static String degradedProof() {
+        CapabilityTarget itemTarget = new CapabilityTarget.ItemCapabilityTarget("tck-degraded-item");
+        // (a) an unregistered type is absent, not an error
+        boolean unservedTypeEmpty = VineCapabilities
+            .find(dev.vineengine.vine.capability.CapabilityType.stateful(
+                VineId.of("vine_test", "absent_cap"), Runnable.class,
+                new dev.vineengine.vine.capability.CapabilityCodec<Runnable>() {
+                    @Override
+                    public dev.vineengine.vine.data.VoxelData save(Runnable instance) {
+                        return VineData.create(SCHEMA_ID);
+                    }
+
+                    @Override
+                    public Runnable load(dev.vineengine.vine.data.VoxelData data) {
+                        return () -> {
+                        };
+                    }
+                }, dev.vineengine.vine.capability.ClonePolicy.NONE), itemTarget)
+            .isEmpty();
+        // (b) a foreign id on a served scope is absent
+        boolean foreignEmpty = VineCapabilities
+            .findForeign(VineId.of("other_mod", "absent_cap"), dev.vineengine.vine.data.VoxelData.class,
+                itemTarget)
+            .isEmpty();
+        // (c) the served type on a scope it does not claim is absent
+        boolean wrongScopeEmpty = VineCapabilities
+            .find(MANA_TYPE, new CapabilityTarget.BlockCapabilityTarget(new Object()))
+            .isEmpty();
+        return "caps degraded: unservedType=" + unservedTypeEmpty + " foreignId=" + foreignEmpty
+            + " wrongScope=" + wrongScopeEmpty + " exceptions=0";
+    }
+
+    /**
      * The TCK proof (driven by {@code vine_test tck_caps}): exercises the real
      * engine store — find → mutate → re-find (cache) → clone (FULL) → codec
      * round-trip — and prints one line per check for scenario assertions.

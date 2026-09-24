@@ -1,8 +1,25 @@
 {
   "id": "vine_test:session_lifecycle",
-  "tags": ["SMOKE", "SESSION"],
+  "tags": [
+    "SMOKE",
+    "SESSION"
+  ],
   "steps": [
-    { "type": "RunCommand", "command": "vine_test tck_sessions" },
-    { "type": "AssertTrace", "trace": "session", "expect": ["session created phase=CREATED", "session denied kind=vine_test:illegal", "session active phase=ACTIVE", "session allowed kind=vine_test:advance", "session objectives score=12", "session completed phase=COMPLETED"] }
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_sessions"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "session",
+      "expect": [
+        "session created phase=CREATED",
+        "session denied kind=vine_test:illegal",
+        "session active phase=ACTIVE",
+        "session allowed kind=vine_test:advance",
+        "session objectives score=12",
+        "session completed phase=COMPLETED"
+      ]
+    }
   ]
 }

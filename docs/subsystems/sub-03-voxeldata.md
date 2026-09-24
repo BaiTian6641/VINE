@@ -192,6 +192,11 @@ public interface VoxelStorageDriver {
   Proven live: a 34-field tree, one field changed — delta 52B of 467B whole,
   `applied=1`, the peer's untouched fields intact, and the listener's recorded
   set is exactly `[stats.mana, stats]` (path + ancestor).
+- **Holder payloads are bundles:** a holder stores `{schemaId → tree blob}`
+  (magic `VOXB`), so an entity can carry engine data *and* a capability state
+  without one write destroying the other; a bare single-tree payload from an
+  earlier build still reads as a one-entry bundle. Proven live: two schemas on
+  one block entity keep `firstSchema=11 secondSchema=22` after both flushes.
 - **Landed (attach wave):** block entities, entities and players attach through
   each cell's own data-attachment mechanism under the engine key
   `vine:voxel_data` — Fabric `AttachmentRegistry.createPersistent` (its API is

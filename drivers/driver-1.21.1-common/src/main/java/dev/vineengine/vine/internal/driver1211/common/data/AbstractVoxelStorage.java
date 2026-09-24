@@ -13,6 +13,7 @@ import dev.vineengine.vine.data.ItemStackTarget;
 import dev.vineengine.vine.data.PlayerTarget;
 import dev.vineengine.vine.data.VoxelData;
 import dev.vineengine.vine.data.VoxelTarget;
+import dev.vineengine.vine.internal.data.VoxelBlobCodec;
 import dev.vineengine.vine.internal.data.VoxelStorageBinding.EngineVoxels;
 import dev.vineengine.vine.internal.spi.VoxelStorageDriver;
 import dev.vineengine.vine.registry.VineId;
@@ -67,8 +68,11 @@ public abstract class AbstractVoxelStorage implements VoxelStorageDriver {
     @Override
     public VoxelData open(VoxelTarget target, VineId schemaId) {
         Object stack = holderOf(target);
-        byte[] blob = storedBlob(stack);
-        VoxelData tree = blob == null ? voxels().create(schemaId) : voxels().load(blob);
+        // Holder payloads are bundles: several schemas can share one holder (an
+        // entity carrying engine data *and* a capability state), so a schema's
+        // tree is one entry, never the whole payload.
+        byte[] slice = bundleOf(stack).get(schemaId);
+        VoxelData tree = slice == null ? voxels().create(schemaId) : voxels().load(slice);
         voxels().nativeFields(schemaId).forEach((path, componentId) -> {
             int nativeValue = readNativeInt(stack, componentId);
             if (nativeValue != Integer.MIN_VALUE) {
@@ -101,7 +105,18 @@ public abstract class AbstractVoxelStorage implements VoxelStorageDriver {
                     componentId, path);
             }
         });
-        storeBlob(stack, voxels().save(tree));
+        // Read-modify-write of the bundle keeps the holder's other schemas intact —
+        // the failure this shape exists to prevent.
+        java.util.Map<VineId, byte[]> bundle = new java.util.LinkedHashMap<>(bundleOf(stack));
+        bundle.put(schemaId, voxels().save(tree));
+        storeBlob(stack, VoxelBlobCodec.saveBundle(bundle));
+    }
+
+    /** The holder's decoded payload bundle (empty when the holder stores nothing yet). */
+    private java.util.Map<VineId, byte[]> bundleOf(Object holder) {
+        byte[] payload = storedBlob(holder);
+        return payload == null ? java.util.Map.of()
+            : VoxelBlobCodec.loadBundle(payload, VineId.of("vine", "legacy_single"));
     }
 
     /**

@@ -21,6 +21,15 @@ public abstract class SessionRules {
     protected void onParticipantJoined(SessionContext ctx, UUID player) {
     }
 
+    /**
+     * Whether participant states are public among participants (sub-14 §2). The
+     * default keeps them owner-only: a co-op hunt shows the leader's plan, not
+     * every participant's private progress.
+     */
+    protected boolean publicParticipantState() {
+        return false;
+    }
+
     /** A lifecycle transition happened; {@code next} is the new phase. */
     protected void onPhaseAdvanced(SessionContext ctx, SessionPhase next) {
     }
@@ -42,6 +51,11 @@ public abstract class SessionRules {
     /** @see #onParticipantJoined(SessionContext, UUID) */
     public final void joined(SessionContext ctx, UUID player) {
         onParticipantJoined(ctx, player);
+    }
+
+    /** @see #publicParticipantState() */
+    public final boolean participantStatesPublic() {
+        return publicParticipantState();
     }
 
     /** @see #onPhaseAdvanced(SessionContext, SessionPhase) */

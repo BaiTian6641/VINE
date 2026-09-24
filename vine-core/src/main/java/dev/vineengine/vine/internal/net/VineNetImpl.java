@@ -53,11 +53,43 @@ public final class VineNetImpl implements VineNet {
         // registered messages, so every cell's driver moves them unchanged.
         channel(CHUNK_SPEC).message(VineId.of("chunk", "frame"), ChunkFrame.class, CHUNK_CODEC,
             Endpoint.SERVER, (frame, context) -> reassemble(frame, context.sender()));
+        // Session snapshots (sub-14 Stage C): the sender targets one participant,
+        // and the payload is the same engine blob a consumer can inspect locally.
+        channel(SESSION_SPEC).message(VineId.of("session", "snapshot"), SessionSnapshot.class,
+            SESSION_CODEC, Endpoint.CLIENT, (snapshot, context) -> {
+                // Server-authoritative: a client never sends a snapshot back.
+            });
+        dev.vineengine.vine.internal.session.SessionReplication.sender((sessionId, player, payload) -> {
+            VinePlayer target = dev.vineengine.vine.internal.Players.byId(player);
+            if (target != null) {
+                sendPayload(transport, target, VineId.of("vine", "session/snapshot"),
+                    encodeEntry(registry.byWireId(VineId.of("vine", "session/snapshot")),
+                        new SessionSnapshot(sessionId.toString(), payload)));
+            }
+        });
         NetTransportBinding.onBind(bound -> {
             transport = bound;
             registry.pushTo(bound);
         });
     }
+    // ------------------------------------------------------------------
+
+    private static final ChannelSpec SESSION_SPEC =
+        new ChannelSpec(VineId.of("vine", "session"), 1, VersionPolicy.OPTIONAL);
+
+    /**
+     * One replication snapshot addressed to a participant: the session it belongs
+     * to and the engine-encoded payload (the same bytes
+     * {@code VineSession#replicationSnapshot} returns, so what a client receives
+     * is exactly what a consumer can inspect locally).
+     */
+    public record SessionSnapshot(String sessionId, byte[] payload) {
+    }
+
+    private static final PayloadCodec<SessionSnapshot> SESSION_CODEC = VineCodecs.<SessionSnapshot>record()
+        .field("session", VineCodecs.UTF, SessionSnapshot::sessionId)
+        .field("payload", VineCodecs.BYTES, SessionSnapshot::payload)
+        .build(values -> new SessionSnapshot((String) values[0], (byte[]) values[1]));
 
     // ------------------------------------------------------------------
     // Chunk transport (sub-05 Stage E)

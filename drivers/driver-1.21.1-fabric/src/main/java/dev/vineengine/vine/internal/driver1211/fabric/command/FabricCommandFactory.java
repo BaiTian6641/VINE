@@ -197,7 +197,7 @@ public final class FabricCommandFactory implements EngineCommands.NativeFactory<
     }
 
     /** The engine's player facade over a native player (argument values, suggestions). */
-    static dev.vineengine.vine.VinePlayer playerOf(net.minecraft.server.network.ServerPlayerEntity player) {
+    public static dev.vineengine.vine.VinePlayer playerOf(net.minecraft.server.network.ServerPlayerEntity player) {
         return new dev.vineengine.vine.VinePlayer() {
             @Override
             public java.util.UUID uniqueId() {

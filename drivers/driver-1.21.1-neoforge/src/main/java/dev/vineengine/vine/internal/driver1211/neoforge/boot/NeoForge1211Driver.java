@@ -106,8 +106,10 @@ public final class NeoForge1211Driver implements VineDriver {
         new NeoForgeDesignMaterializer(modBus, ctx);
         NeoForge.EVENT_BUS.addListener(ServerAboutToStartEvent.class,
             event -> ctx.advancePhase(EnginePhase.WORLD_LOAD));
-        NeoForge.EVENT_BUS.addListener(net.neoforged.neoforge.event.server.ServerStoppedEvent.class,
-            event -> dev.vineengine.vine.internal.PlayerNames.install(null));
+        NeoForge.EVENT_BUS.addListener(net.neoforged.neoforge.event.server.ServerStoppedEvent.class, event -> {
+            dev.vineengine.vine.internal.PlayerNames.install(null);
+            dev.vineengine.vine.internal.Players.install(null);
+        });
         NeoForge.EVENT_BUS.addListener(ServerStartedEvent.class, event -> {
             currentServer = event.getServer();
             // Player-name lookup (sub-06 Stage C): the engine knows session
@@ -116,6 +118,12 @@ public final class NeoForge1211Driver implements VineDriver {
             dev.vineengine.vine.internal.PlayerNames.install(uuid -> {
                 var player = server.getPlayerList().getPlayer(uuid);
                 return player == null ? null : player.getGameProfile().getName();
+            });
+            // Player lookup (sub-14 Stage C): session snapshots target a UUID.
+            dev.vineengine.vine.internal.Players.install(uuid -> {
+                var player = server.getPlayerList().getPlayer(uuid);
+                return player == null ? null : dev.vineengine.vine.internal.driver1211.neoforge.command
+                    .NeoForgeCommandFactory.playerOf(player);
             });
             ctx.advancePhase(EnginePhase.SERVER_UP);
             VoxelProbe.run(NeoForgeVoxelStorage::probeStack, NeoForgeVoxelStorage.probeAccess(), "1.21.1-neoforge", NeoForgeVoxelStorage.probeHolders());
@@ -135,8 +143,8 @@ public final class NeoForge1211Driver implements VineDriver {
         // Capability interop (sub-04 Stage C/D): native queries answer from the
         // same item payload the storage driver writes.
         dev.vineengine.vine.internal.capability.CapabilityDriverBinding.bind(
-            new dev.vineengine.vine.internal.driver1211.common.data.ItemStackCapabilityDriver(
-                NeoForgeVoxelStorage::rawPayload));
+            new dev.vineengine.vine.internal.driver1211.common.data.CommonCapabilityDriver(
+                NeoForgeVoxelStorage::payloadOf));
         // Session persistence (sub-14 Stage B): mount on the first world load,
         // flush on every level save (NF has a real save event).
         java.util.concurrent.atomic.AtomicBoolean mounted = new java.util.concurrent.atomic.AtomicBoolean();

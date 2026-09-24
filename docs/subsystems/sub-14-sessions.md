@@ -157,6 +157,27 @@ sub-01 normalized hooks. No per-cell API-shape difference.
 - **Acceptance:** TCK `session_late_join`: joiner of an ACTIVE session gets a
   full snapshot before consumer content ticks; owner-only field invisible to
   a second participant.
+- **Landed (snapshot half):** `VineSession.join(player, loadout)` adds or re-adds
+  a participant (the first joiner owns the session; `isOwner` answers), calls the
+  rules' join chord, and triggers the engine's snapshot for that player — join,
+  late join and reconnect share exactly one path. `VineSession.replicationSnapshot(viewer)`
+  encodes the payload a client receives (schema `vine:session_repl`): session
+  id/type, phase, ticks, objectives, shared flags, plus the viewer's own
+  participant state and — only when the type opts in through
+  `SessionRules.publicParticipantState()` — every other participant's state. Owner
+  -only is the default because private progress is the common case. The snapshot
+  travels the engine-owned `vine:session` channel as a `session/snapshot` message
+  (OPTIONAL policy, server-authoritative) and is logged with its size, and the
+  engine resolves a participant through the `Players` UUID→`VinePlayer` seam the
+  drivers install at server start.
+- **Acceptance met (snapshot half):** TCK `session_late_join` — a joiner of an
+  ACTIVE session decodes the payload it would receive: `phase=ACTIVE score=7
+  flag=storm selfIncluded=1 othersIncluded=0` for the default type, and
+  `othersIncluded=1` for the opted-in type, on both 1.21.1 cells; the send log
+  shows the snapshot leaving for the joining participant.
+  **Remaining:** change-driven re-sends (a transition or a state write currently
+  does not push a fresh snapshot to participants), and real client receipt, which
+  needs the client runner — the payload is the same bytes this scenario decodes.
 - **Touches:** `vine-core` replication, sub-05 channel, driver login hooks.
 - **Bootstrap prompt:**
   > Implement SUB-14 Stage C over the sub-05 channel API: replicate per the §2

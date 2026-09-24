@@ -1,9 +1,23 @@
 {
   "id": "vine_test:voxeldata_attach_all",
-  "tags": ["SMOKE"],
+  "tags": [
+    "SMOKE"
+  ],
   "steps": [
-    { "type": "AssertTrace", "trace": "log", "expect": [
-      "voxeldata attach blockentity mana=77 persisted=true entity mana=88 persisted=true"
-    ]}
+    {
+      "type": "AssertTrace",
+      "trace": "log",
+      "expect": [
+        "voxeldata attach blockentity mana=77 persisted=true entity mana=88 persisted=true"
+      ]
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "log",
+      "expect": [
+        "voxeldata bundle cell=",
+        "firstSchema=11 secondSchema=22"
+      ]
+    }
   ]
 }

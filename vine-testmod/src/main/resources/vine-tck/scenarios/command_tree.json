@@ -1,73 +1,177 @@
 {
   "id": "vine_test:command_tree",
-  "tags": ["SMOKE"],
+  "tags": [
+    "SMOKE"
+  ],
   "steps": [
-    { "type": "AssertTrace", "trace": "log", "expect": [
-      "[vine-testmod] greedy placement probe: rejected"
-    ]},
-    { "type": "AssertTrace", "trace": "log", "expect": [
-      "command alias '/vt_dead' targets unregistered root literal 'vine_test_absent' — alias dropped",
-      "command alias cycle: vt_cycle_a -> vt_cycle_b -> vt_cycle_a — every alias in the cycle is dropped"
-    ]},
-    { "type": "AssertTrace", "trace": "log", "expect": [
-      "[VINE] command conflict: 'vine_test > tree > int > num' claimed by both vinetest:vine_test (argument int) and vine_test:tree_conflict (argument string)",
-      "[VINE] command conflict: 'vine_test > echo' claimed by both vinetest:vine_test (literal) and vine_test:tree_conflict (argument string)"
-    ]},
-    { "type": "RunCommand", "command": "vine_test tree int 42" },
-    { "type": "RunCommand", "command": "vine_test tree long 9007199254740993" },
-    { "type": "RunCommand", "command": "vine_test tree bool false" },
-    { "type": "RunCommand", "command": "vine_test tree double 1.5" },
-    { "type": "RunCommand", "command": "vine_test tree enum auto" },
-    { "type": "RunCommand", "command": "vine_test tree greedy two words here" },
-    { "type": "RunCommand", "command": "vine_test tree suggest o" },
-    { "type": "RunCommand", "command": "vine_test tree gated" },
-    { "type": "RunCommand", "command": "vine_test tree open" },
-    { "type": "RunCommand", "command": "vine_test second" },
-    { "type": "RunCommand", "command": "vinequest start" },
-    { "type": "RunCommand", "command": "vinequest start hunt" },
-    { "type": "RunCommand", "command": "vinequest status" },
-    { "type": "RunCommand", "command": "vinequest vt echo jsonaliased" },
-    { "type": "RunCommand", "command": "vine_test tree id vine_test:testblock" },
-    { "type": "RunCommand", "command": "vine_test tree path shared.hunt.phase" },
-    { "type": "RunCommand", "command": "vine_test tree id minecraft:stone" },
-    { "type": "RunCommand", "command": "vine_test tree badpath Bad.Path" },
-    { "type": "RunCommand", "command": "vine_test tree suggestid vine_test" },
-    { "type": "RunCommand", "command": "vine_test tree sessionplayers" },
-    { "type": "RunCommand", "command": "vt echo aliased" },
-    { "type": "RunCommand", "command": "vt tree int 7" },
-    { "type": "AssertTrace", "trace": "command", "expect": [
-      "You do not meet this command's requirements."
-    ]},
-    { "type": "AssertTrace", "trace": "command", "expect": [
-      "tree int=42",
-      "tree long=9007199254740993",
-      "tree bool=false",
-      "tree double=1.5",
-      "tree enum=AUTO",
-      "tree greedy=two words here",
-      "suggest: ON,OFF",
-      "tree open ok",
-      "second ok"
-    ]},
-    { "type": "AssertTrace", "trace": "command", "expect": [
-      "tree id=vine_test:testblock",
-      "tree path=shared.hunt.phase",
-      "tree id=minecraft:stone"
-    ]},
-    { "type": "AssertTrace", "trace": "command", "expect": [
-      "Invalid value: voxel path 'Bad.Path' has an invalid segment 'Bad'",
-      "suggestid: vine_test:testblock",
-      "sessionplayers: none"
-    ]},
-    { "type": "AssertTrace", "trace": "command", "expect": [
-      "quest json: started",
-      "quest json: mode=HUNT",
-      "quest json: status ok",
-      "echo: jsonaliased"
-    ]},
-    { "type": "AssertTrace", "trace": "command", "expect": [
-      "echo: aliased",
-      "tree int=7"
-    ]}
+    {
+      "type": "AssertTrace",
+      "trace": "log",
+      "expect": [
+        "[vine-testmod] greedy placement probe: rejected"
+      ]
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "log",
+      "expect": [
+        "command alias '/vt_dead' targets unregistered root literal 'vine_test_absent'",
+        "command alias cycle: vt_cycle_a -> vt_cycle_b -> vt_cycle_a"
+      ]
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "log",
+      "expect": [
+        "[VINE] command conflict: 'vine_test > tree > int > num' claimed by both vinetest:vine_test (argument int) and vine_test:tree_conflict (argument string)",
+        "[VINE] command conflict: 'vine_test > echo' claimed by both vinetest:vine_test (literal) and vine_test:tree_conflict (argument string)"
+      ]
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tree int 42"
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tree long 9007199254740993"
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tree bool false"
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tree double 1.5"
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tree enum auto"
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tree greedy two words here"
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tree suggest o"
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tree gated"
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tree open"
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test second"
+    },
+    {
+      "type": "RunCommand",
+      "command": "vinequest start"
+    },
+    {
+      "type": "RunCommand",
+      "command": "vinequest start hunt"
+    },
+    {
+      "type": "RunCommand",
+      "command": "vinequest status"
+    },
+    {
+      "type": "RunCommand",
+      "command": "vinequest vt echo jsonaliased"
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tree id vine_test:testblock"
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tree path shared.hunt.phase"
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tree id minecraft:stone"
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tree badpath Bad.Path"
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tree suggestid vine_test"
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tree sessionplayers"
+    },
+    {
+      "type": "RunCommand",
+      "command": "vt echo aliased"
+    },
+    {
+      "type": "RunCommand",
+      "command": "vt tree int 7"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "command",
+      "expect": [
+        "You do not meet this command's requirements."
+      ]
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "command",
+      "expect": [
+        "tree int=42",
+        "tree long=9007199254740993",
+        "tree bool=false",
+        "tree double=1.5",
+        "tree enum=AUTO",
+        "tree greedy=two words here",
+        "suggest: ON,OFF",
+        "tree open ok",
+        "second ok"
+      ]
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "command",
+      "expect": [
+        "tree id=vine_test:testblock",
+        "tree path=shared.hunt.phase",
+        "tree id=minecraft:stone"
+      ]
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "command",
+      "expect": [
+        "Invalid value: voxel path 'Bad.Path' has an invalid segment 'Bad'",
+        "suggestid: vine_test:testblock",
+        "sessionplayers: none"
+      ]
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "command",
+      "expect": [
+        "quest json: started",
+        "quest json: mode=HUNT",
+        "quest json: status ok",
+        "echo: jsonaliased"
+      ]
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "command",
+      "expect": [
+        "echo: aliased",
+        "tree int=7"
+      ]
+    }
   ]
 }

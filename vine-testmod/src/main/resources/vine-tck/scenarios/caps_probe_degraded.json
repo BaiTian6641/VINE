@@ -1,5 +1,5 @@
 {
-  "id": "vine_test:voxeldata_sync_delta",
+  "id": "vine_test:caps_probe_degraded",
   "tags": [
     "SMOKE"
   ],
@@ -17,16 +17,13 @@
     },
     {
       "type": "RunCommand",
-      "command": "vine_test tree voxel_sync_delta"
+      "command": "vine_test tree caps_degraded"
     },
     {
       "type": "AssertTrace",
       "trace": "command",
       "expect": [
-        "voxel sync delta:",
-        "smaller=true",
-        "peerMatches=true",
-        "listenerPaths=[stats.mana, stats]"
+        "caps degraded: unservedType=true foreignId=true wrongScope=true exceptions=0"
       ]
     }
   ]

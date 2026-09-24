@@ -57,12 +57,16 @@ public final class CapabilityStore implements CapabilityBackend {
     }
 
     /** The engine-owned schema id backing a stateful type's instances. */
-    static VineId schemaIdFor(CapabilityType<?> type) {
+    public static VineId schemaIdFor(CapabilityType<?> type) {
         return schemaIdFor(type.id());
     }
 
-    /** Schema id derived from a capability type id (flushes and trees key by id). */
-    static VineId schemaIdFor(VineId typeId) {
+    /**
+     * Schema id derived from a capability type id (flushes and trees key by id) —
+     * public because the driver-side native query needs it to pick a capability's
+     * slice out of a holder's payload bundle.
+     */
+    public static VineId schemaIdFor(VineId typeId) {
         return VineId.of("vine", "cap/" + typeId.namespace() + "/" + typeId.path());
     }
 
@@ -164,7 +168,11 @@ public final class CapabilityStore implements CapabilityBackend {
         for (Map.Entry<VineId, VoxelData> entry : byType.entrySet()) {
             VineId schemaId = schemaIdFor(entry.getKey());
             try {
-                storage.flushDirty(voxelTarget, schemaId, Set.of("*"));
+                // The tree's own dirty record (sub-03 Stage E), never a wildcard:
+                // a capability that was read but not changed writes nothing.
+                var engine = dev.vineengine.vine.internal.data.VoxelStorageBinding.engine();
+                Set<String> dirty = engine == null ? Set.of("*") : engine.drainDirty(entry.getValue());
+                storage.flushDirty(voxelTarget, schemaId, dirty);
             } catch (RuntimeException e) {
                 LOG.log(System.Logger.Level.WARNING,
                     "[VINE] capability flush failed for " + entry.getKey() + " (continuing): " + e);
