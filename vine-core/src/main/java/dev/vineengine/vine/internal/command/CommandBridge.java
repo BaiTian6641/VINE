@@ -80,6 +80,45 @@ public final class CommandBridge {
      * @return the executor's Brigadier-style result, or {@code 0} after an
      *         isolated executor failure
      */
+    /**
+     * Evaluates a node's extra requirements (sub-06 Stage B) against the source:
+     * a {@code false} predicate denies with an error feedback and the executor
+     * never runs. Predicates are consumer code — a throw is a denial, never a
+     * dispatcher failure.
+     */
+    /**
+     * The engine source facade for a native source adapter — what requirement
+     * predicates and suggestion sources see, so no native type reaches consumer
+     * code.
+     */
+    public static dev.vineengine.vine.command.CommandSourceRef sourceRef(NativeSource source) {
+        return new EngineCommandContext(source, Map.of()).source();
+    }
+
+    public static boolean requirementsMet(
+            List<java.util.function.Predicate<dev.vineengine.vine.command.CommandSourceRef>> requirements,
+            NativeSource source) {
+        if (requirements.isEmpty()) {
+            return true;
+        }
+        dev.vineengine.vine.command.CommandSourceRef ref = new EngineCommandContext(source, Map.of()).source();
+        for (java.util.function.Predicate<dev.vineengine.vine.command.CommandSourceRef> requirement : requirements) {
+            boolean allowed;
+            try {
+                allowed = requirement.test(ref);
+            } catch (RuntimeException e) {
+                LOG.log(System.Logger.Level.WARNING, "[VINE] command requirement threw for source '"
+                    + source.name() + "' — denied: " + e);
+                allowed = false;
+            }
+            if (!allowed) {
+                source.sendError("You do not meet this command's requirements.");
+                return false;
+            }
+        }
+        return true;
+    }
+
     public static int execute(VineCommandExecutor executor, Map<String, ?> arguments, NativeSource source) {
         Objects.requireNonNull(executor, "executor");
         Objects.requireNonNull(arguments, "arguments");

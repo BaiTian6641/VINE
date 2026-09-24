@@ -1,0 +1,37 @@
+{
+  "id": "vine_test:command_tree",
+  "tags": ["SMOKE"],
+  "steps": [
+    { "type": "AssertTrace", "trace": "log", "expect": [
+      "[vine-testmod] greedy placement probe: rejected"
+    ]},
+    { "type": "AssertTrace", "trace": "log", "expect": [
+      "[VINE] command conflict: 'vine_test > tree > int > num' claimed by both vinetest:vine_test (argument int) and vine_test:tree_conflict (argument string)",
+      "[VINE] command conflict: 'vine_test > echo' claimed by both vinetest:vine_test (literal) and vine_test:tree_conflict (argument string)"
+    ]},
+    { "type": "RunCommand", "command": "vine_test tree int 42" },
+    { "type": "RunCommand", "command": "vine_test tree long 9007199254740993" },
+    { "type": "RunCommand", "command": "vine_test tree bool false" },
+    { "type": "RunCommand", "command": "vine_test tree double 1.5" },
+    { "type": "RunCommand", "command": "vine_test tree enum auto" },
+    { "type": "RunCommand", "command": "vine_test tree greedy two words here" },
+    { "type": "RunCommand", "command": "vine_test tree suggest o" },
+    { "type": "RunCommand", "command": "vine_test tree gated" },
+    { "type": "RunCommand", "command": "vine_test tree open" },
+    { "type": "RunCommand", "command": "vine_test second" },
+    { "type": "AssertTrace", "trace": "command", "expect": [
+      "You do not meet this command's requirements."
+    ]},
+    { "type": "AssertTrace", "trace": "command", "expect": [
+      "tree int=42",
+      "tree long=9007199254740993",
+      "tree bool=false",
+      "tree double=1.5",
+      "tree enum=AUTO",
+      "tree greedy=two words here",
+      "suggest: ON,OFF",
+      "tree open ok",
+      "second ok"
+    ]}
+  ]
+}

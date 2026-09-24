@@ -15,6 +15,7 @@ import com.mojang.brigadier.context.CommandContext;
 
 import org.slf4j.Logger;
 
+import dev.vineengine.vine.command.ArgumentTypeRef;
 import dev.vineengine.vine.command.CommandDescriptor;
 import dev.vineengine.vine.command.VineArgumentTypes;
 import dev.vineengine.vine.command.VineCommandExecutor;
@@ -50,14 +51,20 @@ public final class EngineCommands {
         /** A native literal builder. */
         LiteralArgumentBuilder<S> literal(String name);
 
-        /** A native single-word string argument builder (Stage A's only argument type). */
-        RequiredArgumentBuilder<S, String> stringArgument(String name);
+        /**
+         * A native argument builder for one engine argument type (sub-06 Stage B:
+         * every vanilla mirror plus engine enums), with the engine's completion
+         * source attached when the descriptor declared one — suggestions are
+         * computed server-side so vanilla clients tab-complete unchanged.
+         */
+        ArgumentBuilder<S, ?> argument(String name, ArgumentTypeRef<?> type,
+            dev.vineengine.vine.command.SuggestionSource suggestions);
 
         /** A native op-level gate predicate. */
         Predicate<S> hasPermission(int level);
 
-        /** Reads a declared string argument from a native context. */
-        String getStringArg(CommandContext<S> context, String name);
+        /** Reads a declared argument from a native context, typed by the engine declaration. */
+        Object getArg(CommandContext<S> context, String name, ArgumentTypeRef<?> type);
 
         /** Adapts the native source for the engine bridge. */
         CommandBridge.NativeSource adapt(S source);
@@ -91,29 +98,31 @@ public final class EngineCommands {
     }
 
     private static <S> LiteralArgumentBuilder<S> buildLiteral(CommandDescriptor.Literal node,
-                                                              NativeFactory<S> factory, List<String> pathArgs) {
+                                                              NativeFactory<S> factory,
+                                                              List<ArgumentSpec> pathArgs) {
         LiteralArgumentBuilder<S> builder = factory.literal(node.name());
         decorate(node, builder, factory, pathArgs);
         return builder;
     }
 
-    private static <S> RequiredArgumentBuilder<S, String> buildArgument(CommandDescriptor.Argument node,
-                                                                        NativeFactory<S> factory, List<String> pathArgs) {
-        if (node.type() != VineArgumentTypes.STRING) {
-            // The engine compiler rejects non-Stage-A types at registration; a
-            // descriptor reaching here with one means engine/driver skew.
-            throw new IllegalStateException("driver cannot map argument type " + node.type()
-                + " — Stage A supports VineArgumentTypes.STRING only");
-        }
-        RequiredArgumentBuilder<S, String> builder = factory.stringArgument(node.name());
-        List<String> args = new ArrayList<>(pathArgs);
-        args.add(node.name());
+    /** One argument on the path to an executor: its name and declared engine type. */
+    private record ArgumentSpec(String name, ArgumentTypeRef<?> type) {
+    }
+
+    private static <S> ArgumentBuilder<S, ?> buildArgument(CommandDescriptor.Argument node,
+                                                           NativeFactory<S> factory,
+                                                           List<ArgumentSpec> pathArgs) {
+        // The factory owns native mapping for every mirror; unknown types never
+        // reach here (the engine rejects them at registration).
+        ArgumentBuilder<S, ?> builder = factory.argument(node.name(), node.type(), node.suggestions());
+        List<ArgumentSpec> args = new ArrayList<>(pathArgs);
+        args.add(new ArgumentSpec(node.name(), node.type()));
         decorate(node, builder, factory, List.copyOf(args));
         return builder;
     }
 
     private static <S> void decorate(CommandDescriptor.Node node, ArgumentBuilder<S, ?> builder,
-                                     NativeFactory<S> factory, List<String> pathArgs) {
+                                     NativeFactory<S> factory, List<ArgumentSpec> pathArgs) {
         switch (node.permission()) {
             case null -> {
             }
@@ -121,12 +130,18 @@ public final class EngineCommands {
         }
         VineCommandExecutor executor = node.executor();
         if (executor != null) {
+            java.util.List<java.util.function.Predicate<dev.vineengine.vine.command.CommandSourceRef>>
+                requirements = node.requirements();
             builder.executes(context -> {
                 Map<String, Object> arguments = new HashMap<>();
-                for (String name : pathArgs) {
-                    arguments.put(name, factory.getStringArg(context, name));
+                for (ArgumentSpec spec : pathArgs) {
+                    arguments.put(spec.name(), factory.getArg(context, spec.name(), spec.type()));
                 }
                 CommandBridge.NativeSource source = factory.adapt(context.getSource());
+                if (!CommandBridge.requirementsMet(requirements, source)) {
+                    // Stage B gates: denied before any engine code sees the call.
+                    return 0;
+                }
                 Consumer<HookEvents.CommandExecute> hook = executeHook;
                 if (hook != null) {
                     HookEvents.CommandExecute event =

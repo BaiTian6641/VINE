@@ -18,4 +18,32 @@ public final class VineArgumentTypes {
 
     /** A single-word string argument (Brigadier {@code string()} semantics on every cell). */
     public static final ArgumentTypeRef<String> STRING = new ArgumentTypeRef<>("string", String.class);
+
+    /** A 32-bit signed integer (Brigadier {@code integer()} semantics). */
+    public static final ArgumentTypeRef<Integer> INT = new ArgumentTypeRef<>("int", Integer.class);
+
+    /** A 64-bit signed integer (Brigadier {@code longArg()} semantics). */
+    public static final ArgumentTypeRef<Long> LONG = new ArgumentTypeRef<>("long", Long.class);
+
+    /** A double-precision number (Brigadier {@code doubleArg()} semantics). */
+    public static final ArgumentTypeRef<Double> DOUBLE = new ArgumentTypeRef<>("double", Double.class);
+
+    /** A boolean literal {@code true}/{@code false}. */
+    public static final ArgumentTypeRef<Boolean> BOOL = new ArgumentTypeRef<>("bool", Boolean.class);
+
+    /** The rest of the line as one string (Brigadier {@code greedyString()} semantics). */
+    public static final ArgumentTypeRef<String> GREEDY = new ArgumentTypeRef<>("greedy", String.class);
+
+    /**
+     * An enumeration of {@code type}'s constants, in declaration order — the
+     * compiler maps it to the native enum argument and parses by constant name
+     * (case-insensitive), so consumers get a typed value and suggest nothing by
+     * default (mirror-enums are self-suggesting on every cell).
+     */
+    public static <E extends Enum<E>> ArgumentTypeRef<E> enumeration(Class<E> type) {
+        java.util.List<String> values = java.util.Arrays.stream(type.getEnumConstants())
+            .map(Enum::name)
+            .toList();
+        return new ArgumentTypeRef<>("enum:" + type.getSimpleName(), type, values);
+    }
 }

@@ -43,26 +43,38 @@ public record CommandDescriptor(VineId id, Literal root) {
 
         /** Child nodes; immutable, registration order preserved. */
         List<Node> children();
+
+        /**
+         * Extra gates evaluated before this node's executor runs (sub-06 Stage B),
+         * after the permission check. A predicate returning {@code false} denies
+         * the command with an error feedback; predicates run server-side only.
+         */
+        List<java.util.function.Predicate<CommandSourceRef>> requirements();
     }
 
     /** A literal node — matches its {@link #name()} verbatim. */
     public record Literal(String name, VinePermission permission, VineCommandExecutor executor,
-                          List<Node> children) implements Node {
+                          List<Node> children,
+                          List<java.util.function.Predicate<CommandSourceRef>> requirements) implements Node {
 
         public Literal {
             checkName("literal", name);
             children = List.copyOf(Objects.requireNonNull(children, "children"));
+            requirements = List.copyOf(Objects.requireNonNull(requirements, "requirements"));
         }
     }
 
     /** An argument node — parses one token of {@link #type()} into a named value. */
     public record Argument(String name, ArgumentTypeRef<?> type, VinePermission permission,
-                           VineCommandExecutor executor, List<Node> children) implements Node {
+                           VineCommandExecutor executor, List<Node> children,
+                           List<java.util.function.Predicate<CommandSourceRef>> requirements,
+                           SuggestionSource suggestions) implements Node {
 
         public Argument {
             checkName("argument", name);
             Objects.requireNonNull(type, "type");
             children = List.copyOf(Objects.requireNonNull(children, "children"));
+            requirements = List.copyOf(Objects.requireNonNull(requirements, "requirements"));
         }
     }
 

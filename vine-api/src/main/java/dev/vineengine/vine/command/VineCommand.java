@@ -54,6 +54,8 @@ public final class VineCommand {
         private final List<Builder> children = new ArrayList<>();
         private VinePermission permission;
         private VineCommandExecutor executor;
+        private final List<java.util.function.Predicate<CommandSourceRef>> requirements = new ArrayList<>();
+        private SuggestionSource suggestions;
 
         private Builder(String name, ArgumentTypeRef<?> type) {
             // Reject-at-construction (same convention as VineId): an invalid node
@@ -67,6 +69,30 @@ public final class VineCommand {
             this.permission = Objects.requireNonNull(permission, "permission");
             return this;
         }
+        /**
+         * Adds an extra gate (sub-06 Stage B): evaluated server-side after the
+         * permission check, before this node's executor. A {@code false} denies
+         * with an error feedback and never runs the executor.
+         */
+        public Builder requires(java.util.function.Predicate<CommandSourceRef> requirement) {
+            requirements.add(Objects.requireNonNull(requirement, "requirement"));
+            return this;
+        }
+
+        /**
+         * Attaches completion candidates (argument nodes only; sub-06 Stage B).
+         * The engine computes them server-side, so vanilla clients tab-complete
+         * without a client mod.
+         */
+        public Builder suggests(SuggestionSource source) {
+            if (type == null) {
+                throw new IllegalStateException(
+                    "suggests() applies to argument nodes — literal '" + name + "' has nothing to complete");
+            }
+            this.suggestions = Objects.requireNonNull(source, "source");
+            return this;
+        }
+
         /** Appends a child node. */
         public Builder then(Builder child) {
             children.add(Objects.requireNonNull(child, "child"));
@@ -101,9 +127,10 @@ public final class VineCommand {
                 built.add(child.buildNode());
             }
             if (type != null) {
-                return new CommandDescriptor.Argument(name, type, permission, executor, built);
+                return new CommandDescriptor.Argument(name, type, permission, executor, built,
+                    requirements, suggestions);
             }
-            return new CommandDescriptor.Literal(name, permission, executor, built);
+            return new CommandDescriptor.Literal(name, permission, executor, built, requirements);
         }
     }
 }

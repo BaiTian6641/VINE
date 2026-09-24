@@ -16,9 +16,12 @@ import static dev.vineengine.vine.testmod.VineTestmod.MOD_ID;
  * the engine's C2S path (sub-21 Stage B — the scenario runner invokes it on a
  * headless server launched with {@code vine.tck.loopback}).
  *
- * <p>One root, one descriptor: the engine's merge policy is first-registered-
- * wins on root literals (sub-06 §4), so every {@code vine_test} child lives in
- * THIS tree — a second root-literal descriptor would be dropped as a conflict.
+ * <p>The engine's merge policy (sub-06 §2) merges descriptors that claim the
+ * same root literal child-by-child and keeps the first-registered shape on a
+ * clash, so several consumers can extend one root; this tree is the first
+ * {@code vine_test} descriptor and therefore owns every name it declares
+ * (the merge/conflict cases live in
+ * {@link CommandTreeExemplar}).
  */
 public final class EchoCommand {
 

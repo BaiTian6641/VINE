@@ -22,10 +22,21 @@ public final class ArgumentTypeRef<T> {
 
     private final String id;
     private final Class<T> type;
+    private final java.util.List<String> enumValues;
 
     ArgumentTypeRef(String id, Class<T> type) {
+        this(id, type, java.util.List.of());
+    }
+
+    ArgumentTypeRef(String id, Class<T> type, java.util.List<String> enumValues) {
         this.id = Objects.requireNonNull(id, "id");
         this.type = Objects.requireNonNull(type, "type");
+        this.enumValues = java.util.List.copyOf(enumValues);
+    }
+
+    /** Enum constants for {@code enum(...)} types, in declaration order (empty otherwise). */
+    public java.util.List<String> enumValues() {
+        return enumValues;
     }
 
     /** Stable engine id of the argument type (diagnostics, conflict reports, JSON descriptors). */

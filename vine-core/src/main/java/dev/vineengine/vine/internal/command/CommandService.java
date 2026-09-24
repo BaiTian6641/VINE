@@ -1,6 +1,7 @@
 package dev.vineengine.vine.internal.command;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -68,17 +69,70 @@ public final class CommandService implements VineCommands {
     public synchronized List<CommandDescriptor> snapshotForNativePass() {
         if (resolved == null) {
             Map<String, CommandDescriptor> byRootLiteral = new LinkedHashMap<>();
+            Map<String, VineId> claimerOfRoot = new HashMap<>();
             for (CommandDescriptor descriptor : descriptors.values()) {
-                CommandDescriptor first = byRootLiteral.putIfAbsent(descriptor.root().name(), descriptor);
-                if (first != null) {
-                    LOG.log(System.Logger.Level.WARNING,
-                        "[VINE] command conflict: root literal '" + descriptor.root().name() + "' claimed by both "
-                            + first.id() + " and " + descriptor.id()
-                            + " — first-registered wins (sub-06 §2 merge policy)");
+                String root = descriptor.root().name();
+                CommandDescriptor first = byRootLiteral.get(root);
+                if (first == null) {
+                    byRootLiteral.put(root, descriptor);
+                    claimerOfRoot.put(root, descriptor.id());
+                    continue;
                 }
+                // Merge policy (sub-06 §2): same root literal merges children;
+                // a conflicting argument shape keeps the first and reports both
+                // ids. Build continues either way.
+                CommandDescriptor.Literal merged = (CommandDescriptor.Literal) merge(
+                    first.root(), descriptor.root(), root, claimerOfRoot.get(root), descriptor.id());
+                byRootLiteral.put(root, new CommandDescriptor(first.id(), merged));
             }
             resolved = List.copyOf(byRootLiteral.values());
         }
         return resolved;
+    }
+
+    /** Merges two nodes by name: literals merge recursively, arguments keep the first of a shape clash. */
+    private CommandDescriptor.Node merge(CommandDescriptor.Node first, CommandDescriptor.Node second, String path,
+                                         VineId firstId, VineId secondId) {
+        if (!first.getClass().equals(second.getClass())) {
+            conflict(path, first, second, firstId, secondId);
+            return first;
+        }
+        if (first instanceof CommandDescriptor.Argument a && second instanceof CommandDescriptor.Argument b
+            && a.type() != b.type()) {
+            conflict(path, first, second, firstId, secondId);
+            return first;
+        }
+        // Same shape: recursive child merge, registration order preserved
+        // (the later consumer's new children append after the first's).
+        Map<String, CommandDescriptor.Node> children = new LinkedHashMap<>();
+        for (CommandDescriptor.Node child : first.children()) {
+            children.put(child.name(), child);
+        }
+        for (CommandDescriptor.Node child : second.children()) {
+            CommandDescriptor.Node existing = children.get(child.name());
+            children.put(child.name(), existing == null
+                ? child
+                : merge(existing, child, path + " > " + child.name(), firstId, secondId));
+        }
+        if (first instanceof CommandDescriptor.Argument a) {
+            return new CommandDescriptor.Argument(a.name(), a.type(), a.permission(), a.executor(),
+                List.copyOf(children.values()), a.requirements(), a.suggestions());
+        }
+        CommandDescriptor.Literal literal = (CommandDescriptor.Literal) first;
+        return new CommandDescriptor.Literal(literal.name(), literal.permission(), literal.executor(),
+            List.copyOf(children.values()), literal.requirements());
+    }
+
+    private void conflict(String path, CommandDescriptor.Node first, CommandDescriptor.Node second,
+                          VineId firstId, VineId secondId) {
+        LOG.log(System.Logger.Level.WARNING,
+            "[VINE] command conflict: '" + path + "' claimed by both " + firstId + " (" + shape(first)
+                + ") and " + secondId + " (" + shape(second) + ") — first-registered wins, build continues");
+    }
+
+    private static String shape(CommandDescriptor.Node node) {
+        return node instanceof CommandDescriptor.Argument argument
+            ? "argument " + argument.type().id()
+            : "literal";
     }
 }

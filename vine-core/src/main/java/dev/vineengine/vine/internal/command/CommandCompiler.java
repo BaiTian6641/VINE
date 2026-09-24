@@ -3,6 +3,7 @@ package dev.vineengine.vine.internal.command;
 import java.util.HashSet;
 import java.util.Set;
 
+import dev.vineengine.vine.command.ArgumentTypeRef;
 import dev.vineengine.vine.command.CommandDescriptor;
 import dev.vineengine.vine.command.VineArgumentTypes;
 
@@ -33,15 +34,32 @@ final class CommandCompiler {
     }
 
     private static void validateNode(CommandDescriptor descriptor, CommandDescriptor.Node node, String path) {
-        if (node instanceof CommandDescriptor.Argument argument
-            && argument.type() != VineArgumentTypes.STRING) {
+        if (node instanceof CommandDescriptor.Argument argument && !isSupportedType(argument.type())) {
             throw new IllegalArgumentException("command '" + descriptor.id() + "': argument type '"
                 + argument.type().id() + "' at " + path
-                + " is not supported at Stage A — VineArgumentTypes.STRING only;"
-                + " the remaining vanilla mirrors land with sub-06 Stage B, engine types with Stage C");
+                + " is not supported — the vanilla mirrors (string/int/long/double/bool/greedy/enum) are "
+                + "Stage B, the engine types (VINE_ID/VOXEL_PATH/PLAYER_IN_SESSION) land with Stage C");
         }
         Set<String> siblingNames = new HashSet<>();
-        for (CommandDescriptor.Node child : node.children()) {
+        for (int i = 0; i < node.children().size(); i++) {
+            CommandDescriptor.Node child = node.children().get(i);
+            if (child instanceof CommandDescriptor.Argument greedy && greedy.type() == VineArgumentTypes.GREEDY) {
+                // A greedy argument consumes the rest of the line: it can never
+                // have children, and a sibling declared after it is unreachable
+                // (Brigadier resolves the greedy postfix first). Reject at
+                // registration, not at dispatch.
+                if (!greedy.children().isEmpty()) {
+                    throw new IllegalArgumentException("command '" + descriptor.id()
+                        + "': greedy argument '" + path + "/" + greedy.name()
+                        + "' must not declare children — it captures the rest of the line");
+                }
+                if (i != node.children().size() - 1) {
+                    throw new IllegalArgumentException("command '" + descriptor.id()
+                        + "': greedy argument '" + path + "/" + greedy.name()
+                        + "' must be the last child of '" + path + "' — siblings declared after it are"
+                        + " unreachable (the greedy postfix consumes the line)");
+                }
+            }
             if (!siblingNames.add(child.name())) {
                 throw new IllegalArgumentException("command '" + descriptor.id()
                     + "': duplicate sibling '" + child.name() + "' at " + path
@@ -49,5 +67,16 @@ final class CommandCompiler {
             }
             validateNode(descriptor, child, path + "/" + child.name());
         }
+    }
+
+    /**
+     * Whether the current stage can map this argument type. Engine types
+     * (sub-06 Stage C) fail here — explicitly at registration, never at
+     * dispatch.
+     */
+    static boolean isSupportedType(ArgumentTypeRef<?> type) {
+        String id = type.id();
+        return id.equals("string") || id.equals("int") || id.equals("long") || id.equals("double")
+            || id.equals("bool") || id.equals("greedy") || id.startsWith("enum:");
     }
 }
