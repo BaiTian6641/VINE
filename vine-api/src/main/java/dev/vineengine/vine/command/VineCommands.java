@@ -55,6 +55,15 @@ public interface VineCommands {
     void registerExecutor(dev.vineengine.vine.registry.VineId executorId, VineCommandExecutor executor);
 
     /**
+     * Installs the engine's permission bridge (sub-06 Stage D) — consulted for
+     * every {@link VinePermission.Node} gate before any cell-native provider.
+     * One bridge at a time (a plugin owns node policy, or nobody does);
+     * {@code null} clears it and gates fall back to the native provider and then
+     * the node's own fallback level.
+     */
+    void registerPermissionBridge(VinePermissionBridge bridge);
+
+    /**
      * Applies the JSON descriptor layer (sub-06 Stage B): replaces the previously
      * applied set, recomputes the merged snapshot, and is deliberately NOT gated
      * by {@code REGISTRIES_FROZEN} — this layer is what {@code /reload} re-runs

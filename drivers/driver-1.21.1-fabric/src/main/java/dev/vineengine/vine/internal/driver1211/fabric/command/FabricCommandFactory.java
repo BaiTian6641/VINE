@@ -138,6 +138,64 @@ public final class FabricCommandFactory implements EngineCommands.NativeFactory<
         return source -> source.hasPermissionLevel(level);
     }
 
+
+    /**
+     * fabric-permissions-api is optional (sub-06 Stage D): resolved reflectively
+     * once, so VINE never hard-depends on it and a server without the mod keeps
+     * working through the descriptor's fallback op level. The API is stable
+     * across its releases ({@code Permissions.check(ServerCommandSource, String, int)}),
+     * which is exactly the seam the engine's gate policy expects — a
+     * {@code null} result means "this provider has no opinion about that node".
+     */
+    private static final class FabricNodePermission implements EngineCommands.NativeNodePermission<ServerCommandSource> {
+
+        private final java.lang.reflect.Method check;
+        private final String source;
+
+        FabricNodePermission(java.lang.reflect.Method check, String source) {
+            this.check = check;
+            this.source = source;
+        }
+
+        @Override
+        public Boolean has(ServerCommandSource commandSource, String node, int fallbackLevel) {
+            try {
+                // A provider returning the fallback means "no explicit entry" —
+                // report no opinion so the engine's own fallback check runs (they
+                // agree by construction, but the engine path stays the owner of
+                // op-level semantics).
+                boolean granted = (Boolean) check.invoke(null, commandSource, node, fallbackLevel);
+                boolean fallback = commandSource.hasPermissionLevel(fallbackLevel);
+                return granted == fallback ? null : granted;
+            } catch (ReflectiveOperationException | RuntimeException unavailable) {
+                return null;
+            }
+        }
+
+        @Override
+        public String toString() {
+            return source;
+        }
+    }
+
+    private static final EngineCommands.NativeNodePermission<ServerCommandSource> NODE_PERMISSION = probe();
+
+    private static EngineCommands.NativeNodePermission<ServerCommandSource> probe() {
+        try {
+            Class<?> permissions = Class.forName("net.fabricmc.fabric.api.permissions.v1.Permissions");
+            java.lang.reflect.Method check = permissions.getMethod("check",
+                net.minecraft.server.command.ServerCommandSource.class, String.class, int.class);
+            return new FabricNodePermission(check, "fabric-permissions-api");
+        } catch (ClassNotFoundException | NoSuchMethodException absent) {
+            return null;
+        }
+    }
+
+    @Override
+    public EngineCommands.NativeNodePermission<ServerCommandSource> nodePermission() {
+        return NODE_PERMISSION;
+    }
+
     /** The engine's player facade over a native player (argument values, suggestions). */
     static dev.vineengine.vine.VinePlayer playerOf(net.minecraft.server.network.ServerPlayerEntity player) {
         return new dev.vineengine.vine.VinePlayer() {

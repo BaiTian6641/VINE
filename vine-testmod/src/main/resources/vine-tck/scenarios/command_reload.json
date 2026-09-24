@@ -1,0 +1,23 @@
+{
+  "id": "vine_test:command_reload",
+  "tags": ["SMOKE"],
+  "steps": [
+    { "type": "RunCommand", "command": "vine_test tree tck_json_write" },
+    { "type": "AssertTrace", "trace": "command", "expect": [
+      "reload probe: reload fixture written"
+    ]},
+    { "type": "RunCommand", "command": "reload" },
+    { "type": "AssertTrace", "trace": "log", "expect": [
+      "JSON descriptor(s) reloaded for this dispatcher build"
+    ]},
+    { "type": "RunCommand", "command": "vinereLoadProbe run" },
+    { "type": "AssertTrace", "trace": "command", "expect": [
+      "reload probe: descriptor live"
+    ]},
+    { "type": "RunCommand", "command": "vine_test tree tck_json_remove" },
+    { "type": "RunCommand", "command": "reload" },
+    { "type": "AssertTrace", "trace": "command", "expect": [
+      "reload probe: reload fixture removed"
+    ]}
+  ]
+}

@@ -71,16 +71,22 @@ public final class ConsumerInitializers {
                 continue;
             }
             try {
-                java.nio.file.Path path = java.nio.file.Path.of(source.getLocation().toURI());
+                // Loaders wrap the same checkout in different URL schemes; the
+                // helper resolves all of them (file/jar/union) to a real path.
+                java.nio.file.Path path = dev.vineengine.vine.internal.DevPaths
+                    .fileOf(source.getLocation());
+                if (path == null) {
+                    continue;
+                }
                 out.add(path);
-                // Dev classpaths split classes and resources into siblings.
-                if (path.endsWith(java.nio.file.Path.of("classes", "java", "main"))) {
-                    java.nio.file.Path module = path.getParent().getParent().getParent().getParent();
-                    java.nio.file.Path resources =
-                        module.resolve(java.nio.file.Path.of("build", "resources", "main"));
-                    if (java.nio.file.Files.isDirectory(resources)) {
-                        out.add(resources);
-                    }
+                // Dev classpaths split artifacts and resources: an edited data
+                // file lives in the module's resource output, and the JSON reload
+                // layer must see it (Loom's remapped copies hide that dir from
+                // classloader resource lookup entirely).
+                java.nio.file.Path resources = dev.vineengine.vine.internal.DevPaths
+                    .resourceOutputSibling(path);
+                if (resources != null) {
+                    out.add(resources);
                 }
             } catch (Exception e) {
                 // unlocatable consumer: skip

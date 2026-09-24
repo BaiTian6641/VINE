@@ -48,10 +48,12 @@ public final class CommandJsonLoader {
     public static Result load(CommandService service, ClassLoader loader, List<Path> consumerRoots) {
         Map<String, String> found = new LinkedHashMap<>();  // resource path -> json
         for (java.net.URL url : resources(loader, "data")) {
+            LOG.log(System.Logger.Level.INFO, "[VINE] command json root: " + url);
             collectFromUrl(url, found);
         }
         for (Path root : consumerRoots) {
             try {
+                LOG.log(System.Logger.Level.INFO, "[VINE] command json consumer root: " + root);
                 if (Files.isDirectory(root)) {
                     collectFromDirectory(root.resolve("data"), found);
                 } else if (Files.isRegularFile(root)) {
@@ -151,7 +153,25 @@ public final class CommandJsonLoader {
         }
     }
 
+    /**
+     * A dev-run jar sits at {@code <module>/build/libs/<name>.jar} with its
+     * resource output at {@code <module>/build/resources/main} — where an edited
+     * descriptor lands before any rebuild (Loom's remapped copy hides that dir
+     * from every classloader view, so without this a reload would replay the jar
+     * contents).
+     */
     private static void collectFromJar(Path jar, Map<String, String> out) throws IOException {
+        if (jar.getFileName() != null && jar.getFileName().toString().endsWith(".jar")
+            && jar.getParent() != null && jar.getParent().getFileName() != null
+            && "libs".equals(jar.getParent().getFileName().toString())
+            && jar.getParent().getParent() != null && jar.getParent().getParent().getFileName() != null
+            && "build".equals(jar.getParent().getParent().getFileName().toString())
+            && jar.getParent().getParent().getParent() != null) {
+            Path resources = jar.getParent().getParent().getParent().resolve("build/resources/main/data");
+            if (Files.isDirectory(resources)) {
+                collectFromDirectory(resources, out);
+            }
+        }
         try (JarFile file = new JarFile(jar.toFile())) {
             var entries = file.entries();
             while (entries.hasMoreElements()) {

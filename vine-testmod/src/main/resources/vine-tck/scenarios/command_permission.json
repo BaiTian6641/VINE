@@ -1,0 +1,34 @@
+{
+  "id": "vine_test:command_permission",
+  "tags": ["SMOKE"],
+  "steps": [
+    { "type": "AssertTrace", "trace": "log", "expect": [
+      "[VINE] commands: node permissions via "
+    ]},
+    { "type": "RunCommand", "command": "vine_test perm tck_policy" },
+    { "type": "RunCommand", "command": "vine_test perm grant" },
+    { "type": "RunCommand", "command": "vine_test perm fallback" },
+    { "type": "AssertTrace", "trace": "command", "expect": [
+      "policy: bridge=true nativeAllow=true nativeDeny=false fallbackAllow=true fallbackDeny=false",
+      "perm grant ok",
+      "perm fallback ok"
+    ]},
+    { "type": "RunCommand", "command": "vine_test perm tck_bridge_install" },
+    { "type": "RunCommand", "command": "vine_test perm grant" },
+    { "type": "RunCommand", "command": "vine_test perm deny" },
+    { "type": "RunCommand", "command": "vine_test perm stats" },
+    { "type": "AssertTrace", "trace": "command", "expect": [
+      "perm bridge installed",
+      "perm grant ok",
+      "perm bridge: calls=2 last=vine_test.perm.deny verdict=false"
+    ]},
+    { "type": "RunCommand", "command": "vine_test perm tck_bridge_clear" },
+    { "type": "RunCommand", "command": "vine_test perm fallback" },
+    { "type": "RunCommand", "command": "vine_test perm stats" },
+    { "type": "AssertTrace", "trace": "command", "expect": [
+      "perm bridge cleared",
+      "perm fallback ok",
+      "perm bridge: calls=2 last=vine_test.perm.deny verdict=false"
+    ]}
+  ]
+}

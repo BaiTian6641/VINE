@@ -87,6 +87,29 @@ public final class CommandBridge {
      * dispatcher failure.
      */
     /**
+     * Re-reads the JSON command layer from the consumer code sources (sub-06
+     * Stage E). Drivers call this immediately before every native dispatcher
+     * build — the boot initializer pass and each {@code /reload} — so an edited
+     * descriptor file takes effect without a restart, and the tree the server
+     * sends is the tree the engine just compiled.
+     *
+     * @return the number of JSON descriptors applied
+     */
+    public static int reloadJsonCommands() {
+        CommandJsonLoader.Result result = CommandJsonLoader.load(service(),
+            Thread.currentThread().getContextClassLoader() != null
+                ? Thread.currentThread().getContextClassLoader()
+                : CommandBridge.class.getClassLoader(),
+            dev.vineengine.vine.internal.core.ConsumerInitializers.codeSources());
+        return result.descriptors();
+    }
+
+    /** The installed permission bridge, or {@code null} — the driver-side gate policy reads it. */
+    public static dev.vineengine.vine.command.VinePermissionBridge permissionBridge() {
+        return service().permissionBridge();
+    }
+
+    /**
      * The engine source facade for a native source adapter — what requirement
      * predicates and suggestion sources see, so no native type reaches consumer
      * code.

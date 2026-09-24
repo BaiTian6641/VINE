@@ -63,6 +63,18 @@ public final class EngineCommands {
         /** A native op-level gate predicate. */
         Predicate<S> hasPermission(int level);
 
+        /**
+         * The cell's native node-permission probe (sub-06 Stage D), or
+         * {@code null} when the cell has no usable string-node provider.
+         *
+         * <p>{@code null} is a first-class answer, not a failure: NeoForge 1.21
+         * dropped string nodes for typed registered ones, and a Fabric runtime
+         * without fabric-permissions-api simply has no provider. The engine's
+         * permission-bridge policy then honors the descriptor's fallback level
+         * (and, on Fabric, consults a provider when the mod is present).
+         */
+        NativeNodePermission<S> nodePermission();
+
         /** Reads a declared argument from a native context, typed by the engine declaration. */
         Object getArg(CommandContext<S> context, String name, ArgumentTypeRef<?> type);
 
@@ -91,7 +103,20 @@ public final class EngineCommands {
      * line per descriptor.
      */
     public static <S> void attach(CommandDispatcher<S> dispatcher, NativeFactory<S> factory, Logger log) {
+        // JSON descriptors first (sub-06 Stage E): every dispatcher build — boot
+        // and each /reload — re-reads the consumer data files, so an edited
+        // descriptor takes effect without a restart and with no ordering guess
+        // between the reload event and command registration.
+        int jsonDescriptors = CommandBridge.reloadJsonCommands();
         List<CommandDescriptor> descriptors = CommandBridge.commandsForNativePass();
+        if (jsonDescriptors > 0) {
+            log.info("[VINE] commands: {} JSON descriptor(s) reloaded for this dispatcher build", jsonDescriptors);
+        }
+        // Node-permission path (sub-06 Stage D): logged once per dispatcher build
+        // so the TCK (and a server operator) can see which provider is active.
+        log.info("[VINE] commands: node permissions via {}",
+            factory.nodePermission() == null
+                ? "engine bridge, else op-level fallback" : factory.nodePermission().toString());
         // Aliases (redirect nodes, sub-06 Stage B) need their target registered
         // before the alias builder is built: Brigadier bakes the redirect node at
         // build time. The engine already resolved targets and cycles, so plain
@@ -160,6 +185,31 @@ public final class EngineCommands {
         return builder;
     }
 
+    /**
+     * The gate predicate for a node permission (sub-06 Stage D): engine bridge
+     * first (a plugin owns policy), then the cell's native provider when one
+     * exists, then the descriptor's fallback op level. Evaluated server-side on
+     * the native source, so a denied source never reaches engine code.
+     */
+    private static <S> Predicate<S> gate(NativeFactory<S> factory, VinePermission.Node gate) {
+        NativeNodePermission<S> nativeProbe = factory.nodePermission();
+        return source -> dev.vineengine.vine.command.PermissionGates.decide(gate,
+            CommandBridge.permissionBridge(),
+            CommandBridge.sourceRef(factory.adapt(source)),
+            nativeProbe == null ? null : nativeProbe.has(source, gate.node(), gate.fallbackLevel()),
+            () -> factory.hasPermission(gate.fallbackLevel()).test(source));
+    }
+
+    /**
+     * A cell's native node-permission check: {@code null} result means "no
+     * opinion" (the provider did not resolve this node), which lets the policy
+     * fall through to the descriptor's fallback level.
+     */
+    public interface NativeNodePermission<S> {
+
+        Boolean has(S source, String node, int fallbackLevel);
+    }
+
     /** One argument on the path to an executor: its name and declared engine type. */
     private record ArgumentSpec(String name, ArgumentTypeRef<?> type) {
     }
@@ -184,6 +234,7 @@ public final class EngineCommands {
             case null -> {
             }
             case VinePermission.Level level -> builder.requires(factory.hasPermission(level.level()));
+            case VinePermission.Node gate -> builder.requires(gate(factory, gate));
         }
         VineCommandExecutor executor = node.executor();
         if (executor != null) {

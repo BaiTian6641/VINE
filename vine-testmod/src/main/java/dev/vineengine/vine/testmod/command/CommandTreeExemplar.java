@@ -49,6 +49,7 @@ public final class CommandTreeExemplar {
     }
 
     /** Registers the tree + conflict descriptors with the engine. */
+
     public static void register() {
         VineCommands.get().register(VineCommand.literal(MOD_ID)
             .permission(VinePermission.level(2))
@@ -147,6 +148,16 @@ public final class CommandTreeExemplar {
                                 dev.vineengine.vine.command.VoxelPath.class));
                             return 1;
                         })))
+                .then(VineCommand.literal("tck_json_write")
+                    .executes(ctx -> {
+                        ctx.feedback("reload probe: " + CommandJsonExemplar.writeReloadFixture(true));
+                        return 1;
+                    }))
+                .then(VineCommand.literal("tck_json_remove")
+                    .executes(ctx -> {
+                        ctx.feedback("reload probe: " + CommandJsonExemplar.writeReloadFixture(false));
+                        return 1;
+                    }))
                 .then(VineCommand.literal("sessionplayers")
                     .executes(ctx -> {
                         // Degradation path, exercised live: a console source has no

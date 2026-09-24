@@ -41,6 +41,7 @@ public final class CommandService implements VineCommands {
     private final Map<VineId, CommandDescriptor> jsonDescriptors = new LinkedHashMap<>();
     private boolean frozen;
     private List<CommandDescriptor> resolved;
+    private volatile dev.vineengine.vine.command.VinePermissionBridge permissionBridge;
 
     /**
      * Registers one descriptor after engine compilation ({@link CommandCompiler}).
@@ -68,6 +69,15 @@ public final class CommandService implements VineCommands {
     }
 
     @Override
+    public void registerPermissionBridge(dev.vineengine.vine.command.VinePermissionBridge bridge) {
+        // Not frozen-gated: a permission plugin may install (or a server may
+        // clear) its bridge while running; gates read it per dispatch.
+        permissionBridge = bridge;
+        LOG.log(System.Logger.Level.INFO, "[VINE] command permission bridge: "
+            + (bridge == null ? "cleared" : bridge.getClass().getName()));
+    }
+
+    @Override
     public synchronized void registerExecutor(VineId executorId, VineCommandExecutor executor) {
         Objects.requireNonNull(executorId, "executorId");
         Objects.requireNonNull(executor, "executor");
@@ -77,6 +87,11 @@ public final class CommandService implements VineCommands {
         if (executors.putIfAbsent(executorId, executor) != null) {
             throw new IllegalStateException("duplicate command executor id '" + executorId + "'");
         }
+    }
+
+    /** The installed permission bridge, or {@code null} (sub-06 Stage D). */
+    public dev.vineengine.vine.command.VinePermissionBridge permissionBridge() {
+        return permissionBridge;
     }
 
     /** The named executor, or {@code null} — the lookup the JSON codec resolves references with. */

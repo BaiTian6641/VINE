@@ -138,6 +138,24 @@ public final class NeoForgeCommandFactory implements EngineCommands.NativeFactor
         return source -> source.hasPermission(level);
     }
 
+
+    /**
+     * NeoForge's permission API has no string-node lookup to offer (sub-06 Stage
+     * D): 1.21 replaced string nodes with typed {@code PermissionNode}s that
+     * consumers register at startup
+     * ({@code PermissionAPI.getRegisteredNodes()}), addressed by an active
+     * handler id ({@code getActivePermissionHandler()}). Consumers under the
+     * Prime Invariant are loader-free and cannot mint those types, so this cell
+     * reports "no provider" and node gates resolve through the engine's
+     * permission bridge (a plugin installs one) or the descriptor's fallback op
+     * level. Pretending to check an unregistered node string here would silently
+     * deny every gate — the failure mode this design exists to avoid.
+     */
+    @Override
+    public EngineCommands.NativeNodePermission<CommandSourceStack> nodePermission() {
+        return null;
+    }
+
     /** The engine's player facade over a native player (argument values, suggestions). */
     static dev.vineengine.vine.VinePlayer playerOf(ServerPlayer player) {
         return new dev.vineengine.vine.VinePlayer() {
