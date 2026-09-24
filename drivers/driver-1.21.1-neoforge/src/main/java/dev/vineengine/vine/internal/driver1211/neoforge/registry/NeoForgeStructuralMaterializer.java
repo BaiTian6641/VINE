@@ -110,6 +110,9 @@ public final class NeoForgeStructuralMaterializer implements RegistryDriver {
         if (itemType != null && event.getRegistryKey().equals(Registries.ITEM)) {
             NeoForgeContentMaterializer.registerItems(event, itemType);
         }
+        if (blockType != null && event.getRegistryKey().equals(Registries.BLOCK_ENTITY_TYPE)) {
+            NeoForgeContentMaterializer.registerBlockEntities(event, blockType);
+        }
         StructuralRegistryView.StructuralType type = pending.remove(event.getRegistryKey().location());
         if (type == null) {
             return; // a vanilla or foreign registry's firing — not ours

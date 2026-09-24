@@ -49,10 +49,107 @@ public final class NeoForgeContentMaterializer {
             for (Holder<?> holder : type.entries()) {
                 BlockDescriptor descriptor = (BlockDescriptor) holder.value();
                 requireMatchingIds(holder, descriptor.id());
-                helper.register(location(descriptor.id()), new Block(BlockBehaviour.Properties.of()
-                    .strength(descriptor.tuning().hardness(), descriptor.tuning().resistance())));
+                BlockBehaviour.Properties properties = BlockBehaviour.Properties.of()
+                    .strength(descriptor.tuning().hardness(), descriptor.tuning().resistance());
+                Block block;
+                if (descriptor.blockEntity()) {
+                    // A flagged block gets a block-entity type whose instances are
+                    // the engine carrier (sub-07 Stage C, minimal): the payload rides
+                    // NeoForge's attachment, so persistence applies with no behavior
+                    // code. The type itself is registered in ITS OWN registry's
+                    // pass ({@link #registerBlockEntities}) — NeoForge forbids
+                    // nesting one registry's registration inside another's, and the
+                    // block must exist first anyway.
+                    EngineBlockEntityBlock engineBlock = new EngineBlockEntityBlock(properties, descriptor.id());
+                    block = engineBlock;
+                    PENDING_BLOCK_ENTITIES.put(descriptor.id(), engineBlock);
+                } else {
+                    block = new Block(properties);
+                }
+                helper.register(location(descriptor.id()), block);
+                BLOCKS.put(descriptor.id(), block);
                 RegistryHookTap.dispatch(type.type().registryId().toString(), descriptor.id().toString());
                 LOG.info("vine: materialized block {} (model={})", descriptor.id(), descriptor.model().kind());
+            }
+        });
+    }
+
+    /**
+     * The engine's block: a vanilla block that provides the engine's carrier
+     * ({@code EntityBlock.newBlockEntity} is the Mojmap hook that owns block-entity
+     * creation).
+     */
+    public static final class EngineBlockEntityBlock extends Block
+            implements net.minecraft.world.level.block.EntityBlock {
+
+        private final VineId id;
+        volatile net.minecraft.world.level.block.entity.BlockEntityType<EngineBlockEntity> vineType;
+
+        EngineBlockEntityBlock(BlockBehaviour.Properties properties, VineId id) {
+            super(properties);
+            this.id = id;
+        }
+
+        @Override
+        public net.minecraft.world.level.block.entity.BlockEntity newBlockEntity(net.minecraft.core.BlockPos pos,
+                net.minecraft.world.level.block.state.BlockState state) {
+            net.minecraft.world.level.block.entity.BlockEntityType<EngineBlockEntity> type = vineType;
+            return type == null ? null : new EngineBlockEntity(type, pos, state);
+        }
+
+        public VineId vineId() {
+            return id;
+        }
+    }
+
+    /** The engine's block entity: no behavior, just the attachment-carried payload. */
+    public static final class EngineBlockEntity extends net.minecraft.world.level.block.entity.BlockEntity {
+
+        public EngineBlockEntity(net.minecraft.world.level.block.entity.BlockEntityType<?> type,
+                net.minecraft.core.BlockPos pos, net.minecraft.world.level.block.state.BlockState state) {
+            super(type, pos, state);
+        }
+    }
+
+    /** The materialized block for {@code id}, or null when none was. */
+    public static Block blockFor(VineId id) {
+        return BLOCKS.get(id);
+    }
+
+    private static final java.util.Map<VineId, Block> BLOCKS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Flagged blocks waiting for the block-entity pass, in materialization order. */
+    private static final java.util.Map<VineId, EngineBlockEntityBlock> PENDING_BLOCK_ENTITIES =
+        new java.util.LinkedHashMap<>();
+
+    /**
+     * Fills the vanilla block-entity registry for every flagged block
+     * ({@code RegisterEvent} for {@code Registries.BLOCK_ENTITY_TYPE}, which fires
+     * after the block pass).
+     */
+    public static void registerBlockEntities(RegisterEvent event,
+            StructuralRegistryView.StructuralType type) {
+        event.register(Registries.BLOCK_ENTITY_TYPE, helper -> {
+            for (Holder<?> holder : type.entries()) {
+                BlockDescriptor descriptor = (BlockDescriptor) holder.value();
+                if (!descriptor.blockEntity()) {
+                    continue;
+                }
+                EngineBlockEntityBlock block = PENDING_BLOCK_ENTITIES.get(descriptor.id());
+                if (block == null) {
+                    LOG.warn("vine: block entity requested for {} before its block materialized — skipped",
+                        descriptor.id());
+                    continue;
+                }
+                net.minecraft.world.level.block.entity.BlockEntityType<EngineBlockEntity> beType =
+                    net.minecraft.world.level.block.entity.BlockEntityType.Builder
+                        .of((pos, state) -> new EngineBlockEntity(block.vineType, pos, state), block)
+                        .build(null);
+                helper.register(location(descriptor.id()), beType);
+                block.vineType = beType;
+                dev.vineengine.vine.internal.driver1211.common.data.VineBlockEntity
+                    .register(descriptor.id(), beType);
+                LOG.info("vine: materialized block entity type for {} (NeoForge)", descriptor.id());
             }
         });
     }

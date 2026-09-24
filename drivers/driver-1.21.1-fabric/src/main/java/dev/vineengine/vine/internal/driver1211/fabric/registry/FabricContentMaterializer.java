@@ -47,12 +47,77 @@ public final class FabricContentMaterializer {
         for (Holder<?> holder : type.entries()) {
             BlockDescriptor descriptor = (BlockDescriptor) holder.value();
             requireMatchingIds(holder, descriptor.id());
-            Registry.register(Registries.BLOCK, identifier(descriptor.id()), new Block(AbstractBlock.Settings.create()
-                .strength(descriptor.tuning().hardness(), descriptor.tuning().resistance())));
+            AbstractBlock.Settings settings = AbstractBlock.Settings.create()
+                .strength(descriptor.tuning().hardness(), descriptor.tuning().resistance());
+            Block block;
+            if (descriptor.blockEntity()) {
+                // A flagged block gets a block-entity type whose instances are the
+                // engine carrier (sub-07 Stage C, minimal): the payload rides the
+                // cell's attachment, so persistence applies with no behavior code.
+                // The block holds its type in a setter because the type's factory
+                // needs the block — the one circularity the vanilla API forces.
+                EngineBlockEntityBlock engineBlock = new EngineBlockEntityBlock(settings, descriptor.id());
+                block = engineBlock;
+                net.minecraft.block.entity.BlockEntityType<EngineBlockEntity> beType =
+                    net.minecraft.block.entity.BlockEntityType.Builder
+                        .create((pos, state) -> new EngineBlockEntity(engineBlock.vineType, pos, state), block)
+                        .build();
+                Registry.register(Registries.BLOCK_ENTITY_TYPE, identifier(descriptor.id()), beType);
+                engineBlock.vineType = beType;
+                LOG.info("vine: materialized block entity type for {} (Fabric)", descriptor.id());
+            } else {
+                block = new Block(settings);
+            }
+            Registry.register(Registries.BLOCK, identifier(descriptor.id()), block);
+            BLOCKS.put(descriptor.id(), block);
             RegistryHookTap.dispatch(type.type().registryId().toString(), descriptor.id().toString());
             LOG.info("vine: materialized block {} (model={})", descriptor.id(), descriptor.model().kind());
         }
     }
+
+    /**
+     * The engine's block: a vanilla block that provides the engine's carrier
+     * (Fabric's {@code BlockEntityProvider} is the interface that owns block-entity
+     * creation — a block without it can never have one).
+     */
+    public static final class EngineBlockEntityBlock extends Block
+            implements net.minecraft.block.BlockEntityProvider {
+
+        private final VineId id;
+        volatile net.minecraft.block.entity.BlockEntityType<EngineBlockEntity> vineType;
+
+        EngineBlockEntityBlock(AbstractBlock.Settings settings, VineId id) {
+            super(settings);
+            this.id = id;
+        }
+
+        @Override
+        public net.minecraft.block.entity.BlockEntity createBlockEntity(net.minecraft.util.math.BlockPos pos,
+                net.minecraft.block.BlockState state) {
+            net.minecraft.block.entity.BlockEntityType<EngineBlockEntity> type = vineType;
+            return type == null ? null : new EngineBlockEntity(type, pos, state);
+        }
+
+        public VineId vineId() {
+            return id;
+        }
+    }
+
+    /** The engine's block entity: no behavior, just the attachment-carried payload. */
+    public static final class EngineBlockEntity extends net.minecraft.block.entity.BlockEntity {
+
+        public EngineBlockEntity(net.minecraft.block.entity.BlockEntityType<?> type,
+                net.minecraft.util.math.BlockPos pos, net.minecraft.block.BlockState state) {
+            super(type, pos, state);
+        }
+    }
+
+    /** The materialized block for {@code id}, or null when none was. */
+    public static Block blockFor(VineId id) {
+        return BLOCKS.get(id);
+    }
+
+    private static final java.util.Map<VineId, Block> BLOCKS = new java.util.concurrent.ConcurrentHashMap<>();
 
     /** Materialized items by descriptor id — the voxel probe's attach targets. */
     private static final java.util.Map<VineId, Item> ITEMS = new java.util.concurrent.ConcurrentHashMap<>();

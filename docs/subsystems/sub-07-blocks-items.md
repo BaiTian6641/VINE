@@ -148,6 +148,20 @@ one item type, damage as data (§5.3/§5.4).
 
 ### Stage C — behavior composition + BlockEntity
 
+- **Landed (storage half):** `BlockDescriptor` carries a `blockEntity` flag
+  (defaulted in the codec, so every existing descriptor keeps its meaning): a
+  flagged block materializes with a block-entity type per cell — Fabric through
+  `BlockEntityProvider`, NeoForge through `EntityBlock` plus a
+  `RegisterEvent` pass for the block-entity registry (NeoForge forbids nesting one
+  registry's registration inside another's, which the first attempt did and the
+  placed-block probe caught) — and the entity's payload is the same
+  `VoxelData` attach point items, entities and players use. So a placed block
+  persists an engine tree across save/reload today, with no behavior language
+  existing yet; proven live by the placed-block probe leg (`written=417` on the
+  first boot, `survived=417` after a server restart) on both 1.21.1 cells.
+  **Behavior composition** (the `UseBehavior`/`TickBehavior`/`LootBehavior`
+  dispatch this stage is named for) is still open, as are Stage B's property
+  flattening and Stage D's item hooks.
 - [ ] **Do:** `UseBehavior`/`TickBehavior`/`LootBehavior` dispatch (dormant
   when absent), engine contexts, `BlockEntityDescriptor` with `VoxelData`
   schema validation, batched BE ticking, BE sync via sub-05.

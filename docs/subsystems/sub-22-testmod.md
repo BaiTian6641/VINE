@@ -101,6 +101,20 @@ vine-testmod/
   as a data key; capability store/retrieve on both block and entity;
   `VineSession` basics exemplar. All as SUB-21 scenarios feeding the
   golden-fixture store.
+- **Landed:** `testblock` is now flagged as an engine-storage block (sub-07
+  Stage C's storage half) and the placed-block probe walks the whole acceptance
+  path in the world itself: place → write `payload.marks=417` → server restart →
+  read back `survived=417`, asserted by `voxeldata_placed_block` on both cells.
+  Durability is a data key by construction rather than by a tuning field —
+  `ItemTuning` deliberately excludes it and the item payload's native mapping
+  mirrors vanilla `minecraft:damage`, which the probe's native leg proves
+  (`damage=7` written through the tree, read from the component). Capability
+  store/retrieve covers block and entity scopes since sub-03's attach wave
+  (`caps scopes ... block=31 entity=41`), and session basics are the lifecycle,
+  persistence and late-join scenarios.
+  **Remaining:** golden-fixture dumping of these exemplars (the cross-cell task
+  covers VoxelData/registry payloads today; wiring the placed-block and
+  capability payloads into it is the follow-up).
 - **Acceptance:** round-trip scenarios green on both 1.21.1 cells; fixture
   dumps land in SUB-21's store and diff clean across loaders.
 - **Touches:** `vine-testmod` content + scenarios.

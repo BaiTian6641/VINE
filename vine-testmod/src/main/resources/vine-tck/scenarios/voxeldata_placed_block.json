@@ -1,0 +1,14 @@
+{
+  "id": "vine_test:voxeldata_placed_block",
+  "tags": ["SMOKE"],
+  "steps": [
+    { "type": "AssertTrace", "trace": "log", "expect": [
+      "voxeldata placed block cell=",
+      "=417"
+    ] },
+    { "type": "SaveReloadWorld" },
+    { "type": "AssertTrace", "trace": "log", "expect": [
+      "survived=417"
+    ] }
+  ]
+}

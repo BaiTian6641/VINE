@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import dev.vineengine.vine.internal.data.VoxelStorageBinding.EngineVoxels;
+import dev.vineengine.vine.registry.VineId;
 import dev.vineengine.vine.internal.driver1211.common.data.AbstractVoxelStorage;
 import dev.vineengine.vine.internal.driver1211.common.data.VoxelProbe;
 
@@ -113,8 +114,8 @@ public final class FabricVoxelStorage extends AbstractVoxelStorage {
      * disturb a save. The testmod's own block entity arrives with sub-22 Stage B;
      * attach is exercised here on holders that exist in every cell.
      */
-    public static VoxelProbe.AttachmentHolders probeHolders() {
-        return new VoxelProbe.AttachmentHolders() {
+    public static VoxelProbe.PlacedBlockHolders probeHolders() {
+        return new VoxelProbe.PlacedBlockHolders() {
             @Override
             public Object blockEntity() {
                 return new net.minecraft.block.entity.ChestBlockEntity(
@@ -159,8 +160,34 @@ public final class FabricVoxelStorage extends AbstractVoxelStorage {
             }
 
             @Override
+            public Object placedBlockEntity(VineId blockId) {
+                // A fixed, flat spot in the dev world: the block is placed once and
+                // its entity is read back on every later boot, which is the
+                // place -> write -> save/reload -> assert path.
+                net.minecraft.server.MinecraftServer server =
+                    dev.vineengine.vine.internal.driver1211.fabric.boot.Fabric1211Driver.currentServer();
+                if (server == null) {
+                    return null;
+                }
+                net.minecraft.server.world.ServerWorld world = server.getOverworld();
+                net.minecraft.util.math.BlockPos pos = new net.minecraft.util.math.BlockPos(0, 100, 0);
+                net.minecraft.block.Block block =
+                    dev.vineengine.vine.internal.driver1211.fabric.registry.FabricContentMaterializer
+                        .blockFor(blockId);
+                if (block == null) {
+                    return null;
+                }
+                if (!world.getBlockState(pos).isOf(block)) {
+                    // Placed once and left in place: the world's own persistence is
+                    // what the next boot's read verifies.
+                    world.setBlockState(pos, block.getDefaultState(), net.minecraft.block.Block.NOTIFY_ALL);
+                }
+                return world.getBlockEntity(pos);
+            }
+
+            @Override
             public String describe() {
-                return "vanilla chest be + pig entity (fabric attachments)";
+                return "vanilla chest be + pig entity + placed testblock (fabric attachments)";
             }
         };
     }

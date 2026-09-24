@@ -45,8 +45,11 @@ public final class TestContent {
      * setup (same contract as the marker exemplar).
      */
     public static void register(VineEngine engine) {
+        // The block carries engine storage (sub-07 Stage C / sub-22 Stage B): its
+        // block entity is the same attach point every other holder uses, so a
+        // placed block persists a tree across save/reload.
         VineRegistries.register(VineContent.BLOCK_TYPE, TESTBLOCK_ID,
-            new BlockDescriptor(TESTBLOCK_ID, BlockTuning.STONE_LIKE, ModelHint.cubeAll()));
+            new BlockDescriptor(TESTBLOCK_ID, BlockTuning.STONE_LIKE, ModelHint.cubeAll(), true));
         VineRegistries.register(VineContent.ITEM_TYPE, TESTITEM_ID,
             new ItemDescriptor(TESTITEM_ID, new ItemTuning(64), ModelHint.generated()));
         engine.onPhase(EnginePhase.REGISTRIES_FROZEN, change -> {

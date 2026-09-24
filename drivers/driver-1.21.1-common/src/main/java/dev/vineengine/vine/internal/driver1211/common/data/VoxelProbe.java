@@ -36,6 +36,17 @@ public final class VoxelProbe {
      * reports whether the holder's own save data carries the engine payload,
      * which is the property that makes a tree survive a save/reload.
      */
+    /**
+     * A placed-block round-trip leg: the cell places the testmod's block, resolves
+     * its block entity from the world, writes a tree through the engine API and —
+     * on the next boot of the same world — reports the value that survived.
+     */
+    public interface PlacedBlockHolders extends AttachmentHolders {
+
+        /** Places the testmod block if absent; returns the block entity, or null. */
+        Object placedBlockEntity(VineId blockId);
+    }
+
     public interface AttachmentHolders {
 
         Object blockEntity();
@@ -92,6 +103,7 @@ public final class VoxelProbe {
         VineData.registerSchema(new VoxelSchema(NATIVE_SCHEMA, 1, Codec.unit(null)), java.util.List.of());
         VineData.registerNativeField(NATIVE_SCHEMA, "damage", NATIVE_DAMAGE);
         VineData.registerSchema(new VoxelSchema(CAP_SCHEMA, 1, Codec.unit(null)), java.util.List.of());
+        PlacedBlockRoundTrip.registerSchema();
         VineCapabilities.register(PROBE_CAP);
         // Scope binding: stateful types answer through their state tree, so the
         // provider is never consulted — the attach marks which scopes the type
@@ -218,6 +230,13 @@ public final class VoxelProbe {
         }
         System.out.println("[VINE] caps scopes cell=" + cell + " block=" + beCapValue
             + " entity=" + entityCapValue);
+
+        // Placed-block leg (sub-07 Stage C / sub-22 Stage B): write through a real
+        // block entity in the world, and on a later boot report what survived —
+        // the acceptance's place -> write -> save/reload -> assert path, run
+        // across two server runs.
+        System.out.println("[VINE] voxeldata placed block cell=" + cell + " "
+            + PlacedBlockRoundTrip.run(holders));
 
         System.out.println("[VINE] voxeldata attach cell=" + cell + " holders=" + holders.describe());
         System.out.println("[VINE] voxeldata attach blockentity mana=" + beReadBack

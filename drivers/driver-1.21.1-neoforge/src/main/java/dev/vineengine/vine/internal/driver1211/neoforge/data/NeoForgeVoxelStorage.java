@@ -15,6 +15,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import dev.vineengine.vine.internal.data.VoxelStorageBinding.EngineVoxels;
+import dev.vineengine.vine.registry.VineId;
 import dev.vineengine.vine.internal.driver1211.common.data.AbstractVoxelStorage;
 import dev.vineengine.vine.internal.driver1211.common.data.VoxelProbe;
 
@@ -98,8 +99,8 @@ public final class NeoForgeVoxelStorage extends AbstractVoxelStorage {
      * created for the probe and never placed in the world, so a probe can never
      * disturb a save. The testmod's own block entity arrives with sub-22 Stage B.
      */
-    public static VoxelProbe.AttachmentHolders probeHolders() {
-        return new VoxelProbe.AttachmentHolders() {
+    public static VoxelProbe.PlacedBlockHolders probeHolders() {
+        return new VoxelProbe.PlacedBlockHolders() {
             @Override
             public Object blockEntity() {
                 var type = net.minecraft.world.level.block.entity.BlockEntityType.CHEST;
@@ -145,8 +146,31 @@ public final class NeoForgeVoxelStorage extends AbstractVoxelStorage {
             }
 
             @Override
+            public Object placedBlockEntity(VineId blockId) {
+                net.minecraft.server.MinecraftServer server =
+                    dev.vineengine.vine.internal.driver1211.neoforge.boot.NeoForge1211Driver.currentServer();
+                if (server == null) {
+                    return null;
+                }
+                net.minecraft.server.level.ServerLevel level = server.overworld();
+                net.minecraft.core.BlockPos pos = new net.minecraft.core.BlockPos(0, 100, 0);
+                net.minecraft.world.level.block.Block block =
+                    dev.vineengine.vine.internal.driver1211.neoforge.registry.NeoForgeContentMaterializer
+                        .blockFor(blockId);
+                if (block == null) {
+                    return null;
+                }
+                if (!level.getBlockState(pos).is(block)) {
+                    // Placed once and left in place: the world's own persistence is
+                    // what the next boot's read verifies.
+                    level.setBlockAndUpdate(pos, block.defaultBlockState());
+                }
+                return level.getBlockEntity(pos);
+            }
+
+            @Override
             public String describe() {
-                return "vanilla chest be + pig entity (neoforge attachments)";
+                return "vanilla chest be + pig entity + placed testblock (neoforge attachments)";
             }
         };
     }
