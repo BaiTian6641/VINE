@@ -2,7 +2,10 @@ package dev.vineengine.vine.internal.command;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -85,9 +88,86 @@ public final class CommandService implements VineCommands {
                     first.root(), descriptor.root(), root, claimerOfRoot.get(root), descriptor.id());
                 byRootLiteral.put(root, new CommandDescriptor(first.id(), merged));
             }
-            resolved = List.copyOf(byRootLiteral.values());
+            List<CommandDescriptor> merged = List.copyOf(byRootLiteral.values());
+            Set<String> roots = new LinkedHashSet<>();
+            for (CommandDescriptor descriptor : merged) {
+                roots.add(descriptor.root().name());
+            }
+            resolved = resolveRedirects(merged, roots);
         }
         return resolved;
+    }
+
+    /**
+     * Resolves every redirect against the merged root set: an alias whose target
+     * is missing (or ends in a cycle) is reported and degrades to a plain
+     * literal, so the dispatcher build never depends on consumer ordering.
+     */
+    private List<CommandDescriptor> resolveRedirects(List<CommandDescriptor> merged, Set<String> roots) {
+        // Registration order (not hash order): the conflict/alias reports a
+        // scenario asserts on must be deterministic across runs and cells.
+        Map<String, String> redirects = new LinkedHashMap<>();
+        for (CommandDescriptor descriptor : merged) {
+            // A redirect lives either on the root itself (the alias root *is* the
+            // alias: /vt forwards to /vine_test) or on a child literal of the
+            // root's tree.
+            if (descriptor.root().redirect() != null) {
+                redirects.put(descriptor.root().name(), descriptor.root().redirect());
+            }
+            for (CommandDescriptor.Node node : descriptor.root().children()) {
+                if (node instanceof CommandDescriptor.Literal literal && literal.redirect() != null) {
+                    redirects.put(literal.name(), literal.redirect());
+                }
+            }
+        }
+        Set<String> dead = new HashSet<>();
+        for (Map.Entry<String, String> entry : redirects.entrySet()) {
+            if (dead.contains(entry.getKey())) {
+                // Already reported as part of a cycle it belongs to.
+                continue;
+            }
+            if (!roots.contains(entry.getValue())) {
+                LOG.log(System.Logger.Level.WARNING,
+                    "[VINE] command alias '/" + entry.getKey() + "' targets unregistered root literal '"
+                        + entry.getValue() + "' — alias dropped, build continues");
+                dead.add(entry.getKey());
+                continue;
+            }
+            // Cycle check: walk the chain of aliases (only aliases chain; a real
+            // root ends it).
+            Set<String> seen = new LinkedHashSet<>();
+            String at = entry.getKey();
+            while (redirects.containsKey(at)) {
+                if (!seen.add(at)) {
+                    LOG.log(System.Logger.Level.WARNING,
+                        "[VINE] command alias cycle: " + String.join(" -> ", seen) + " -> " + at
+                            + " — every alias in the cycle is dropped, build continues");
+                    dead.addAll(seen);
+                    break;
+                }
+                at = redirects.get(at);
+            }
+        }
+        if (dead.isEmpty()) {
+            return merged;
+        }
+        List<CommandDescriptor> out = new ArrayList<>(merged.size());
+        for (CommandDescriptor descriptor : merged) {
+            List<CommandDescriptor.Node> children = new ArrayList<>();
+            for (CommandDescriptor.Node node : descriptor.root().children()) {
+                if (node instanceof CommandDescriptor.Literal literal && dead.contains(literal.name())) {
+                    children.add(new CommandDescriptor.Literal(literal.name(), literal.permission(),
+                        literal.executor(), literal.children(), literal.requirements(), null));
+                } else {
+                    children.add(node);
+                }
+            }
+            CommandDescriptor.Literal root = descriptor.root();
+            out.add(new CommandDescriptor(descriptor.id(), new CommandDescriptor.Literal(root.name(),
+                root.permission(), root.executor(), children, root.requirements(),
+                dead.contains(root.name()) ? null : root.redirect())));
+        }
+        return List.copyOf(out);
     }
 
     /** Merges two nodes by name: literals merge recursively, arguments keep the first of a shape clash. */
@@ -119,8 +199,16 @@ public final class CommandService implements VineCommands {
                 List.copyOf(children.values()), a.requirements(), a.suggestions());
         }
         CommandDescriptor.Literal literal = (CommandDescriptor.Literal) first;
+        String redirect = literal.redirect();
+        if (redirect != null && children.size() > literal.children().size()) {
+            // A later consumer attached children to a redirect node — the
+            // redirect would make them unreachable, so the children win and the
+            // alias is reported as dropped.
+            conflict(path, literal, second, firstId, secondId);
+            redirect = null;
+        }
         return new CommandDescriptor.Literal(literal.name(), literal.permission(), literal.executor(),
-            List.copyOf(children.values()), literal.requirements());
+            List.copyOf(children.values()), literal.requirements(), redirect);
     }
 
     private void conflict(String path, CommandDescriptor.Node first, CommandDescriptor.Node second,

@@ -145,6 +145,27 @@ public final class CommandTreeExemplar {
                 }))
             .build(CONFLICT_ID));
 
+        // Alias exemplar (sub-06 Stage B): /vt is the same tree as /vine_test, so
+        // /vt echo hi behaves exactly as /vine_test echo hi — permissions,
+        // suggestions and executors included. A dead target and a cycle are
+        // resolved (and reported) by the engine at snapshot time.
+        VineCommands.get().register(VineCommand.literal("vt")
+            .permission(VinePermission.level(2))
+            .redirect(MOD_ID)
+            .build(VineId.of(MOD_ID, "alias")));
+        VineCommands.get().register(VineCommand.literal("vt_dead")
+            .permission(VinePermission.level(2))
+            .redirect("vine_test_absent")
+            .build(VineId.of(MOD_ID, "alias_dead")));
+        VineCommands.get().register(VineCommand.literal("vt_cycle_a")
+            .permission(VinePermission.level(2))
+            .redirect("vt_cycle_b")
+            .build(VineId.of(MOD_ID, "alias_cycle_a")));
+        VineCommands.get().register(VineCommand.literal("vt_cycle_b")
+            .permission(VinePermission.level(2))
+            .redirect("vt_cycle_a")
+            .build(VineId.of(MOD_ID, "alias_cycle_b")));
+
         // Rejection probe (registration-time validation): a descriptor whose
         // greedy argument has a declared sibling after it must be refused by the
         // engine compiler — never accepted and then silently shadowed at dispatch.

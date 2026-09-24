@@ -56,6 +56,7 @@ public final class VineCommand {
         private VineCommandExecutor executor;
         private final List<java.util.function.Predicate<CommandSourceRef>> requirements = new ArrayList<>();
         private SuggestionSource suggestions;
+        private String redirect;
 
         private Builder(String name, ArgumentTypeRef<?> type) {
             // Reject-at-construction (same convention as VineId): an invalid node
@@ -69,6 +70,27 @@ public final class VineCommand {
             this.permission = Objects.requireNonNull(permission, "permission");
             return this;
         }
+        /**
+         * Forwards the rest of the line to another registered root literal's tree
+         * (sub-06 Stage B) — an alias, {@code /vt echo hi} behaves exactly as
+         * {@code /vine_test echo hi}, including permissions and suggestions.
+         *
+         * <p>Literal nodes only, and the node must stay childless and
+         * executor-free: everything after the alias name is parsed by the target
+         * tree, so local children could never be reached. The target is resolved
+         * across all registered descriptors when the engine resolves the merged
+         * snapshot; an unknown target or a redirect cycle is reported and this
+         * node degrades to a plain literal (never a dispatcher failure).
+         */
+        public Builder redirect(String targetRootLiteral) {
+            if (type != null) {
+                throw new IllegalStateException(
+                    "redirect() applies to literal nodes — argument '" + name + "' cannot alias a tree");
+            }
+            this.redirect = Objects.requireNonNull(targetRootLiteral, "targetRootLiteral");
+            return this;
+        }
+
         /**
          * Adds an extra gate (sub-06 Stage B): evaluated server-side after the
          * permission check, before this node's executor. A {@code false} denies
@@ -130,7 +152,7 @@ public final class VineCommand {
                 return new CommandDescriptor.Argument(name, type, permission, executor, built,
                     requirements, suggestions);
             }
-            return new CommandDescriptor.Literal(name, permission, executor, built, requirements);
+            return new CommandDescriptor.Literal(name, permission, executor, built, requirements, redirect);
         }
     }
 }

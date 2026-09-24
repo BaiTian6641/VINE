@@ -91,17 +91,72 @@ public final class EngineCommands {
      * line per descriptor.
      */
     public static <S> void attach(CommandDispatcher<S> dispatcher, NativeFactory<S> factory, Logger log) {
-        for (CommandDescriptor descriptor : CommandBridge.commandsForNativePass()) {
-            dispatcher.register(buildLiteral(descriptor.root(), factory, List.of()));
+        List<CommandDescriptor> descriptors = CommandBridge.commandsForNativePass();
+        // Aliases (redirect nodes, sub-06 Stage B) need their target registered
+        // before the alias builder is built: Brigadier bakes the redirect node at
+        // build time. The engine already resolved targets and cycles, so plain
+        // roots go first and alias roots resolve against what is registered.
+        List<CommandDescriptor> plain = new ArrayList<>(descriptors.size());
+        List<CommandDescriptor> aliases = new ArrayList<>();
+        for (CommandDescriptor descriptor : descriptors) {
+            if (hasAlias(descriptor.root())) {
+                aliases.add(descriptor);
+            } else {
+                plain.add(descriptor);
+            }
+        }
+        BuildContext<S> rootContext = new BuildContext<>(factory, name -> null);
+        for (CommandDescriptor descriptor : plain) {
+            dispatcher.register(buildLiteral(descriptor.root(), rootContext, List.of()));
+            log.info("[VINE] command attached: {} (/{})", descriptor.id(), descriptor.root().name());
+        }
+        BuildContext<S> aliasContext = new BuildContext<>(factory, dispatcher.getRoot()::getChild);
+        for (CommandDescriptor descriptor : aliases) {
+            for (CommandDescriptor.Node node : descriptor.root().children()) {
+                if (node instanceof CommandDescriptor.Literal literal && literal.redirect() != null
+                    && dispatcher.getRoot().getChild(literal.redirect()) == null) {
+                    // The engine only emits aliases whose target is registered;
+                    // reaching here means engine/driver skew — the alias attaches
+                    // as a plain literal instead of failing the dispatcher build.
+                    log.warn("[VINE] redirect target '{}' missing for '/{}' — alias attached as a literal",
+                        literal.redirect(), literal.name());
+                }
+            }
+            dispatcher.register(buildLiteral(descriptor.root(), aliasContext, List.of()));
             log.info("[VINE] command attached: {} (/{})", descriptor.id(), descriptor.root().name());
         }
     }
 
+    /** Whether any node in this subtree is a redirect alias. */
+    private static boolean hasAlias(CommandDescriptor.Node node) {
+        if (node instanceof CommandDescriptor.Literal literal && literal.redirect() != null) {
+            return true;
+        }
+        for (CommandDescriptor.Node child : node.children()) {
+            if (hasAlias(child)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Per-build state: the cell's native factory plus alias-target resolution. */
+    private record BuildContext<S>(NativeFactory<S> factory,
+                                   java.util.function.Function<String, com.mojang.brigadier.tree.CommandNode<S>>
+                                       redirects) {
+    }
+
     private static <S> LiteralArgumentBuilder<S> buildLiteral(CommandDescriptor.Literal node,
-                                                              NativeFactory<S> factory,
+                                                              BuildContext<S> context,
                                                               List<ArgumentSpec> pathArgs) {
-        LiteralArgumentBuilder<S> builder = factory.literal(node.name());
-        decorate(node, builder, factory, pathArgs);
+        LiteralArgumentBuilder<S> builder = context.factory().literal(node.name());
+        if (node.redirect() != null) {
+            com.mojang.brigadier.tree.CommandNode<S> target = context.redirects().apply(node.redirect());
+            if (target != null) {
+                builder.redirect(target);
+            }
+        }
+        decorate(node, builder, context, pathArgs);
         return builder;
     }
 
@@ -110,19 +165,21 @@ public final class EngineCommands {
     }
 
     private static <S> ArgumentBuilder<S, ?> buildArgument(CommandDescriptor.Argument node,
-                                                           NativeFactory<S> factory,
+                                                           BuildContext<S> context,
                                                            List<ArgumentSpec> pathArgs) {
+        NativeFactory<S> factory = context.factory();
         // The factory owns native mapping for every mirror; unknown types never
         // reach here (the engine rejects them at registration).
         ArgumentBuilder<S, ?> builder = factory.argument(node.name(), node.type(), node.suggestions());
         List<ArgumentSpec> args = new ArrayList<>(pathArgs);
         args.add(new ArgumentSpec(node.name(), node.type()));
-        decorate(node, builder, factory, List.copyOf(args));
+        decorate(node, builder, context, List.copyOf(args));
         return builder;
     }
 
     private static <S> void decorate(CommandDescriptor.Node node, ArgumentBuilder<S, ?> builder,
-                                     NativeFactory<S> factory, List<ArgumentSpec> pathArgs) {
+                                     BuildContext<S> buildCtx, List<ArgumentSpec> pathArgs) {
+        NativeFactory<S> factory = buildCtx.factory();
         switch (node.permission()) {
             case null -> {
             }
@@ -158,9 +215,9 @@ public final class EngineCommands {
         }
         for (CommandDescriptor.Node child : node.children()) {
             if (child instanceof CommandDescriptor.Literal literal) {
-                builder.then(buildLiteral(literal, factory, pathArgs));
+                builder.then(buildLiteral(literal, buildCtx, pathArgs));
             } else {
-                builder.then(buildArgument((CommandDescriptor.Argument) child, factory, pathArgs));
+                builder.then(buildArgument((CommandDescriptor.Argument) child, buildCtx, pathArgs));
             }
         }
     }

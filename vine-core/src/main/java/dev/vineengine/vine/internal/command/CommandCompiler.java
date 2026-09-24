@@ -40,6 +40,19 @@ final class CommandCompiler {
                 + " is not supported — the vanilla mirrors (string/int/long/double/bool/greedy/enum) are "
                 + "Stage B, the engine types (VINE_ID/VOXEL_PATH/PLAYER_IN_SESSION) land with Stage C");
         }
+        if (node instanceof CommandDescriptor.Literal literal && literal.redirect() != null) {
+            // An alias forwards the whole remainder: local children and a local
+            // executor could never run, so their presence is a descriptor bug,
+            // not a runtime surprise.
+            if (!literal.children().isEmpty()) {
+                throw new IllegalArgumentException("command '" + descriptor.id() + "': redirect node '"
+                    + path + "' must not declare children — the target tree parses the rest of the line");
+            }
+            if (literal.executor() != null) {
+                throw new IllegalArgumentException("command '" + descriptor.id() + "': redirect node '"
+                    + path + "' must not declare an executor — the target tree's nodes execute");
+            }
+        }
         Set<String> siblingNames = new HashSet<>();
         for (int i = 0; i < node.children().size(); i++) {
             CommandDescriptor.Node child = node.children().get(i);

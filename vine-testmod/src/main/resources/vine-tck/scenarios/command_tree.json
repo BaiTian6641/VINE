@@ -6,6 +6,10 @@
       "[vine-testmod] greedy placement probe: rejected"
     ]},
     { "type": "AssertTrace", "trace": "log", "expect": [
+      "command alias '/vt_dead' targets unregistered root literal 'vine_test_absent' — alias dropped",
+      "command alias cycle: vt_cycle_a -> vt_cycle_b -> vt_cycle_a — every alias in the cycle is dropped"
+    ]},
+    { "type": "AssertTrace", "trace": "log", "expect": [
       "[VINE] command conflict: 'vine_test > tree > int > num' claimed by both vinetest:vine_test (argument int) and vine_test:tree_conflict (argument string)",
       "[VINE] command conflict: 'vine_test > echo' claimed by both vinetest:vine_test (literal) and vine_test:tree_conflict (argument string)"
     ]},
@@ -19,6 +23,8 @@
     { "type": "RunCommand", "command": "vine_test tree gated" },
     { "type": "RunCommand", "command": "vine_test tree open" },
     { "type": "RunCommand", "command": "vine_test second" },
+    { "type": "RunCommand", "command": "vt echo aliased" },
+    { "type": "RunCommand", "command": "vt tree int 7" },
     { "type": "AssertTrace", "trace": "command", "expect": [
       "You do not meet this command's requirements."
     ]},
@@ -31,7 +37,9 @@
       "tree greedy=two words here",
       "suggest: ON,OFF",
       "tree open ok",
-      "second ok"
+      "second ok",
+      "echo: aliased",
+      "tree int=7"
     ]}
   ]
 }

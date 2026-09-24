@@ -55,10 +55,14 @@ public record CommandDescriptor(VineId id, Literal root) {
     /** A literal node — matches its {@link #name()} verbatim. */
     public record Literal(String name, VinePermission permission, VineCommandExecutor executor,
                           List<Node> children,
-                          List<java.util.function.Predicate<CommandSourceRef>> requirements) implements Node {
+                          List<java.util.function.Predicate<CommandSourceRef>> requirements,
+                          String redirect) implements Node {
 
         public Literal {
             checkName("literal", name);
+            if (redirect != null) {
+                checkName("redirect target", redirect);
+            }
             children = List.copyOf(Objects.requireNonNull(children, "children"));
             requirements = List.copyOf(Objects.requireNonNull(requirements, "requirements"));
         }
