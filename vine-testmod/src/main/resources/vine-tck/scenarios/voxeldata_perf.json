@@ -1,0 +1,11 @@
+{
+  "id": "vine_test:voxeldata_perf",
+  "tags": ["SMOKE"],
+  "steps": [
+    { "type": "RunCommand", "command": "vine_test tree voxel_perf" },
+    { "type": "AssertTrace", "trace": "command", "expect": [
+      "voxel perf: get=",
+      "withinBudget=true"
+    ] }
+  ]
+}

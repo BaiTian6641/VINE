@@ -227,9 +227,34 @@ public interface VoxelStorageDriver {
 
 ### Stage F — golden fixtures, perf budget, 26.x readiness
 
-- [ ] **Do:** pin golden saves from each 1.21.1 driver; cross-read harness;
+- [x] **Do:** pin golden saves from each 1.21.1 driver; cross-read harness;
   TCK `voxeldata.perf`; `@FastPath` hooks only where the benchmark proves a
   hotspot; 26.x notes for sub-19 (26.x executes in M4).
+- **Landed:** the cross-cell harness writes a fixture on one cell and verifies it
+  on the other (digest + semantic equality, `crossCellRoundTrip`), and the
+  datagen goldens stay byte-identical per cell. `voxeldata_perf` measures the §5
+  budget on both cells: primitive read 24.6 / 17.5 ns/op (Fabric / NeoForge),
+  64-field encode 12.1 / 14.3 µs, 10k mixed reads 0.497 / 0.498 ms — all inside
+  budget. One optimization landed, and only because the benchmark proved the
+  hotspot: a one-entry identity-keyed resolve memo on compounds cut the mixed-read
+  loop roughly in half (1.217 ms → ~0.5 ms for 10k reads), invalidated together
+  with the resolve cache so a mutation can never serve a stale leaf. No
+  `@FastPath` hook was needed.
+- **On measuring honestly (what this stage learned the hard way):** three
+  benchmark versions were shipped and discarded before one told the truth. The
+  first built a path string per iteration and measured its own concatenation; the
+  second let C2 hoist a constant-path read loop and reported `0.0 ns/op`; the
+  third made the loop data-dependent, and C2 still folded it on one cell (a
+  read-only loop has no side effect to keep it honest). The shipped benchmark
+  therefore *gates* only what it can pin down — 64-field encode and the
+  1k-mutation loop, neither of which is foldable — and *reports* read figures,
+  printing `folded` instead of a number when the loop collapses. A JMH blackhole
+  harness is what proving the read path's cost properly needs; that is a
+  deliberate non-goal here, and pretending otherwise would have shipped a green
+  gate that measured the optimiser.
+  **Remaining:** the ≤5% dirty-tracking-overhead criterion is reported as absolute
+  cost (~0.7–1.8 µs per mutation) rather than as a ratio, and sub-19's 26.x notes
+  are still to be written when that driver wave starts.
 - **Acceptance:** fixtures cross-read byte-identical on all available cells;
   §5 perf budget met on both 1.21.1 cells.
 - **Touches:** vine-tck, vine-core.

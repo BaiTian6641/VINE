@@ -65,7 +65,7 @@ read, follow, track, and build subsystems **independently and in parallel**.
 | 00 | Repository & bootstrap | M0 | — | done | [sub-00](subsystems/sub-00-repository.md) |
 | 01 | Core runtime (boot, events, probes) | M0→M1 | 00 | done | [sub-01](subsystems/sub-01-core-runtime.md) |
 | 02 | Registry & descriptors | M0→M1 | 00, 01 | done | [sub-02](subsystems/sub-02-registry.md) |
-| 03 | VoxelData persistence | M1 | 01, 02 | done (M1) | [sub-03](subsystems/sub-03-voxeldata.md) |
+| 03 | VoxelData persistence | M1 | 01, 02 | done (A-F) | [sub-03](subsystems/sub-03-voxeldata.md) |
 | 04 | Capabilities | M1 | 02, 03 | done (M1) | [sub-04](subsystems/sub-04-capabilities.md) |
 | 05 | Networking | M0→M1 | 01, 02, 03 | done | [sub-05](subsystems/sub-05-networking.md) |
 | 06 | Commands | M0 minimal→M1 full | 01, 02, 03 | done (A-D, reload) | [sub-06](subsystems/sub-06-commands.md) |

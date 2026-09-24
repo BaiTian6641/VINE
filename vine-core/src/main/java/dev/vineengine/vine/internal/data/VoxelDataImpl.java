@@ -37,6 +37,8 @@ final class VoxelDataImpl extends VoxelNode implements VoxelData {
 
     private final LinkedHashMap<String, VoxelNode> children = new LinkedHashMap<>();
     private final LinkedHashMap<String, VoxelNode> resolveCache = new LinkedHashMap<>();
+    private String memoPath;
+    private VoxelNode memoLeaf;
 
     /** Fresh node with its own state; ownership fields are assigned on attach. */
     VoxelDataImpl(TreeState tree) {
@@ -273,8 +275,17 @@ final class VoxelDataImpl extends VoxelNode implements VoxelData {
     /** Resolve a dot-path relative to this compound; {@code null} when absent. */
     VoxelNode resolve(String path) {
         Objects.requireNonNull(path, "path");
+        // One-entry inline memo (sub-03 Stage F): tick loops re-read a handful of
+        // constant paths, and this hits on the caller's own String instance before
+        // any hashing. Invalidated with the resolve cache, so a mutation can never
+        // serve a stale leaf.
+        if (path == memoPath) {
+            return memoLeaf;
+        }
         VoxelNode cached = resolveCache.get(path);
         if (cached != null) {
+            memoPath = path;
+            memoLeaf = cached;
             return cached;
         }
         validatePath(path);
@@ -480,6 +491,8 @@ final class VoxelDataImpl extends VoxelNode implements VoxelData {
         for (VoxelNode node = from; node != null; node = node.parent) {
             if (node instanceof VoxelDataImpl compound) {
                 compound.resolveCache.clear();
+                compound.memoPath = null;
+                compound.memoLeaf = null;
             }
         }
     }

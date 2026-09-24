@@ -168,6 +168,11 @@ public final class CommandTreeExemplar {
                         ctx.feedback(dev.vineengine.vine.testmod.capability.CapabilityExemplar.degradedProof());
                         return 1;
                     }))
+                .then(VineCommand.literal("voxel_perf")
+                    .executes(ctx -> {
+                        ctx.feedback(dev.vineengine.vine.testmod.data.VoxelExemplar.perfProof());
+                        return 1;
+                    }))
                 .then(VineCommand.literal("voxel_sync_delta")
                     .executes(ctx -> {
                         ctx.feedback(dev.vineengine.vine.testmod.data.VoxelExemplar.syncDeltaProof());
