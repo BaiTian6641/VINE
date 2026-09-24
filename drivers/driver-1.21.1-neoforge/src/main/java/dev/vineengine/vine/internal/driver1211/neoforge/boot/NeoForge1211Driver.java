@@ -25,6 +25,7 @@ import dev.vineengine.vine.internal.data.VoxelStorageBinding;
 import dev.vineengine.vine.internal.driver1211.common.data.VoxelProbe;
 import dev.vineengine.vine.internal.driver1211.common.persistence.FileWorldStore;
 import dev.vineengine.vine.internal.driver1211.neoforge.data.NeoForgeVoxelStorage;
+import dev.vineengine.vine.internal.driver1211.neoforge.data.NeoForgeWorldView;
 import dev.vineengine.vine.internal.driver1211.common.DriverRuntime;
 import dev.vineengine.vine.internal.driver1211.common.command.EngineCommands;
 import dev.vineengine.vine.internal.driver1211.neoforge.command.NeoForgeCommandFactory;
@@ -33,6 +34,7 @@ import dev.vineengine.vine.internal.driver1211.neoforge.net.NeoForgeNetDriver;
 import dev.vineengine.vine.internal.driver1211.neoforge.registry.NeoForgeDesignMaterializer;
 import dev.vineengine.vine.internal.driver1211.neoforge.registry.NeoForgeStructuralMaterializer;
 import dev.vineengine.vine.internal.spi.VineDriver;
+import dev.vineengine.vine.internal.world.WorldViewBinding;
 
 /**
  * The 1.21.1 NeoForge {@link VineDriver} (ServiceLoader-bound, one per cell).
@@ -107,6 +109,11 @@ public final class NeoForge1211Driver implements VineDriver {
         NeoForge.EVENT_BUS.addListener(ServerAboutToStartEvent.class,
             event -> ctx.advancePhase(EnginePhase.WORLD_LOAD));
         NeoForge.EVENT_BUS.addListener(net.neoforged.neoforge.event.server.ServerStoppedEvent.class, event -> {
+            // The lifecycle contract this field's javadoc states ("null before start
+            // / after stop") has to hold for readers of {@link #currentServer()}: the
+            // world view answers "is this dimension loaded right now?" from it, and a
+            // stopped server's levels are not loaded.
+            currentServer = null;
             dev.vineengine.vine.internal.PlayerNames.install(null);
             dev.vineengine.vine.internal.Players.install(null);
         });
@@ -185,6 +192,10 @@ public final class NeoForge1211Driver implements VineDriver {
         NeoForgeVoxelStorage.registerComponent(modBus);
         NeoForgeVoxelStorage voxelStorage = new NeoForgeVoxelStorage();
         voxelStorage.engine(VoxelStorageBinding.bind(voxelStorage));
+        // World view (sub-07 Stage B): the engine's block-state read/write path onto
+        // this cell's live levels — bound once here, next to the storage seam it
+        // mirrors, and reading the server the lifecycle listeners above track.
+        WorldViewBinding.bind(new NeoForgeWorldView());
         // Capability interop (sub-04 Stage C/D): native queries answer from the
         // same item payload the storage driver writes.
         dev.vineengine.vine.internal.capability.CapabilityDriverBinding.bind(

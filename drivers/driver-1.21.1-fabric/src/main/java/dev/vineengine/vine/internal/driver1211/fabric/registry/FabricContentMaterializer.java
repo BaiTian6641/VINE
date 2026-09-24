@@ -2,9 +2,11 @@ package dev.vineengine.vine.internal.driver1211.fabric.registry;
 
 import net.minecraft.block.AbstractBlock;
 import net.minecraft.block.Block;
+import net.minecraft.block.BlockState;
 import net.minecraft.item.Item;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
+import net.minecraft.state.StateManager;
 import net.minecraft.util.Identifier;
 
 import org.slf4j.Logger;
@@ -30,10 +32,12 @@ import dev.vineengine.vine.registry.VineId;
  * {@code Registry.register} during mod init, immediately after consumer
  * initializers have populated the descriptor store.
  *
- * <p>Stage A shape: one default-state block per BlockDescriptor (tuning mapped
- * 1:1 onto {@code AbstractBlock.Settings}), one item per ItemDescriptor. No
- * behaviors, states, or block entities exist yet — none are installed
- * (Minimal Footprint).
+ * <p>Shape: one block per BlockDescriptor (tuning mapped 1:1 onto
+ * {@code AbstractBlock.Settings}) whose state manager is the descriptor's
+ * flattened state model (sub-07 Stage B, {@link FabricBlockStates}), one item per
+ * ItemDescriptor. Behaviors do not exist yet — none are installed (Minimal
+ * Footprint); a flagged descriptor's block materializes with a block-entity type
+ * carrying the engine storage (sub-07 Stage C).
  */
 public final class FabricContentMaterializer {
 
@@ -56,7 +60,7 @@ public final class FabricContentMaterializer {
                 // cell's attachment, so persistence applies with no behavior code.
                 // The block holds its type in a setter because the type's factory
                 // needs the block — the one circularity the vanilla API forces.
-                EngineBlockEntityBlock engineBlock = new EngineBlockEntityBlock(settings, descriptor.id());
+                EngineBlockEntityBlock engineBlock = EngineBlockEntityBlock.materialize(descriptor, settings);
                 block = engineBlock;
                 net.minecraft.block.entity.BlockEntityType<EngineBlockEntity> beType =
                     net.minecraft.block.entity.BlockEntityType.Builder
@@ -66,8 +70,13 @@ public final class FabricContentMaterializer {
                 engineBlock.vineType = beType;
                 LOG.info("vine: materialized block entity type for {} (Fabric)", descriptor.id());
             } else {
-                block = new Block(settings);
+                block = EngineBlock.materialize(descriptor, settings);
             }
+            // The native default state must be the engine's default state
+            // (sub-07 Stage B): checked before the block reaches the registry, so a
+            // carrier that disagrees with the descriptor fails the boot instead of
+            // becoming a "freshly placed" state nobody can compare.
+            FabricBlockStates.requireDefaultState(descriptor, block);
             Registry.register(Registries.BLOCK, identifier(descriptor.id()), block);
             BLOCKS.put(descriptor.id(), block);
             RegistryHookTap.dispatch(type.type().registryId().toString(), descriptor.id().toString());
@@ -76,19 +85,57 @@ public final class FabricContentMaterializer {
     }
 
     /**
-     * The engine's block: a vanilla block that provides the engine's carrier
-     * (Fabric's {@code BlockEntityProvider} is the interface that owns block-entity
-     * creation — a block without it can never have one).
+     * The engine's block: a vanilla block carrying one descriptor's flattened
+     * state model (sub-07 Stage B), constructed through
+     * {@link FabricBlockStates#withStateModel} because the state manager is built
+     * inside the {@code Block} constructor — before this class's fields can hold
+     * the descriptor's properties.
      */
-    public static final class EngineBlockEntityBlock extends Block
-            implements net.minecraft.block.BlockEntityProvider {
+    public static class EngineBlock extends Block {
 
         private final VineId id;
+
+        EngineBlock(AbstractBlock.Settings settings, VineId id) {
+            super(settings);
+            this.id = id;
+        }
+
+        /** Constructs the block for {@code descriptor}, its state model installed. */
+        static EngineBlock materialize(BlockDescriptor descriptor, AbstractBlock.Settings settings) {
+            return FabricBlockStates.withStateModel(descriptor.properties(),
+                () -> new EngineBlock(settings, descriptor.id()));
+        }
+
+        @Override
+        protected void appendProperties(StateManager.Builder<Block, BlockState> builder) {
+            FabricBlockStates.installStateModel(builder);
+        }
+
+        /** The engine block descriptor this native block was materialized for. */
+        public VineId vineId() {
+            return id;
+        }
+    }
+
+    /**
+     * The engine's block with the block-entity facet: Fabric's
+     * {@code BlockEntityProvider} is the interface that owns block-entity creation
+     * (sub-07 Stage C), and the state model is the same one {@link EngineBlock}
+     * carries.
+     */
+    public static final class EngineBlockEntityBlock extends EngineBlock
+            implements net.minecraft.block.BlockEntityProvider {
+
         volatile net.minecraft.block.entity.BlockEntityType<EngineBlockEntity> vineType;
 
         EngineBlockEntityBlock(AbstractBlock.Settings settings, VineId id) {
-            super(settings);
-            this.id = id;
+            super(settings, id);
+        }
+
+        /** Constructs the block for a flagged {@code descriptor}, its state model installed. */
+        static EngineBlockEntityBlock materialize(BlockDescriptor descriptor, AbstractBlock.Settings settings) {
+            return FabricBlockStates.withStateModel(descriptor.properties(),
+                () -> new EngineBlockEntityBlock(settings, descriptor.id()));
         }
 
         @Override
@@ -96,10 +143,6 @@ public final class FabricContentMaterializer {
                 net.minecraft.block.BlockState state) {
             net.minecraft.block.entity.BlockEntityType<EngineBlockEntity> type = vineType;
             return type == null ? null : new EngineBlockEntity(type, pos, state);
-        }
-
-        public VineId vineId() {
-            return id;
         }
     }
 

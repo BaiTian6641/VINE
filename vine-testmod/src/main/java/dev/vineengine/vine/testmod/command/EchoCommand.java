@@ -48,6 +48,32 @@ public final class EchoCommand {
                             ctx.feedback("tck: sent echo number=" + number + " text=" + text);
                             return 1;
                         }))))
+            .then(VineCommand.literal("tck_state_get")
+                .then(VineCommand.argument("x", VineArgumentTypes.INT)
+                    .then(VineCommand.argument("y", VineArgumentTypes.INT)
+                        .then(VineCommand.argument("z", VineArgumentTypes.INT)
+                            .executes(ctx -> {
+                                dev.vineengine.vine.testmod.content.BlockStateExemplar.read(
+                                    ctx.argument("x", Integer.class),
+                                    ctx.argument("y", Integer.class),
+                                    ctx.argument("z", Integer.class));
+                                return 1;
+                            })))))
+            .then(VineCommand.literal("tck_state_set")
+                .then(VineCommand.argument("x", VineArgumentTypes.INT)
+                    .then(VineCommand.argument("y", VineArgumentTypes.INT)
+                        .then(VineCommand.argument("z", VineArgumentTypes.INT)
+                            .then(VineCommand.argument("property", VineArgumentTypes.STRING)
+                                .then(VineCommand.argument("value", VineArgumentTypes.STRING)
+                                    .executes(ctx -> {
+                                        dev.vineengine.vine.testmod.content.BlockStateExemplar.set(
+                                            ctx.argument("x", Integer.class),
+                                            ctx.argument("y", Integer.class),
+                                            ctx.argument("z", Integer.class),
+                                            ctx.argument("property", String.class),
+                                            ctx.argument("value", String.class));
+                                        return 1;
+                                    })))))))
             .then(VineCommand.literal("tck_caps")
                 .executes(ctx -> {
                     dev.vineengine.vine.testmod.capability.CapabilityExemplar.runProof();

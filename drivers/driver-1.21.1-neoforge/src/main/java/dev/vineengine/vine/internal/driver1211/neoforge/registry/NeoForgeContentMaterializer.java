@@ -5,6 +5,8 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockBehaviour;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.StateDefinition;
 import net.neoforged.neoforge.registries.RegisterEvent;
 
 import org.slf4j.Logger;
@@ -31,10 +33,12 @@ import dev.vineengine.vine.registry.VineId;
  * {@link NeoForgeStructuralMaterializer} at the BLOCK and ITEM events, after
  * the store snapshot has been captured.
  *
- * <p>Stage A shape: one default-state block per BlockDescriptor (tuning mapped
- * 1:1 onto {@code BlockBehaviour.Properties}), one item per ItemDescriptor. No
- * behaviors, states, or block entities exist yet — none are installed
- * (Minimal Footprint).
+ * <p>Shape: one block per BlockDescriptor (tuning mapped 1:1 onto
+ * {@code BlockBehaviour.Properties}) whose state definition is the descriptor's
+ * flattened state model (sub-07 Stage B, {@link NeoForgeBlockStates}), one item
+ * per ItemDescriptor. Behaviors do not exist yet — none are installed (Minimal
+ * Footprint); a flagged descriptor's block materializes with a block-entity type
+ * carrying the engine storage (sub-07 Stage C).
  */
 public final class NeoForgeContentMaterializer {
 
@@ -60,12 +64,17 @@ public final class NeoForgeContentMaterializer {
                     // pass ({@link #registerBlockEntities}) — NeoForge forbids
                     // nesting one registry's registration inside another's, and the
                     // block must exist first anyway.
-                    EngineBlockEntityBlock engineBlock = new EngineBlockEntityBlock(properties, descriptor.id());
+                    EngineBlockEntityBlock engineBlock = EngineBlockEntityBlock.materialize(descriptor, properties);
                     block = engineBlock;
                     PENDING_BLOCK_ENTITIES.put(descriptor.id(), engineBlock);
                 } else {
-                    block = new Block(properties);
+                    block = EngineBlock.materialize(descriptor, properties);
                 }
+                // The native default state must be the engine's default state
+                // (sub-07 Stage B): checked before the block reaches the registry,
+                // so a carrier that disagrees with the descriptor fails the boot
+                // instead of becoming a "freshly placed" state nobody can compare.
+                NeoForgeBlockStates.requireDefaultState(descriptor, block);
                 helper.register(location(descriptor.id()), block);
                 BLOCKS.put(descriptor.id(), block);
                 RegistryHookTap.dispatch(type.type().registryId().toString(), descriptor.id().toString());
@@ -75,30 +84,63 @@ public final class NeoForgeContentMaterializer {
     }
 
     /**
-     * The engine's block: a vanilla block that provides the engine's carrier
-     * ({@code EntityBlock.newBlockEntity} is the Mojmap hook that owns block-entity
-     * creation).
+     * The engine's block: a vanilla block carrying one descriptor's flattened
+     * state model (sub-07 Stage B), constructed through
+     * {@link NeoForgeBlockStates#withStateModel} because the state definition is
+     * built inside the {@code Block} constructor — before this class's fields can
+     * hold the descriptor's properties.
      */
-    public static final class EngineBlockEntityBlock extends Block
-            implements net.minecraft.world.level.block.EntityBlock {
+    public static class EngineBlock extends Block {
 
         private final VineId id;
-        volatile net.minecraft.world.level.block.entity.BlockEntityType<EngineBlockEntity> vineType;
 
-        EngineBlockEntityBlock(BlockBehaviour.Properties properties, VineId id) {
+        EngineBlock(BlockBehaviour.Properties properties, VineId id) {
             super(properties);
             this.id = id;
         }
 
-        @Override
-        public net.minecraft.world.level.block.entity.BlockEntity newBlockEntity(net.minecraft.core.BlockPos pos,
-                net.minecraft.world.level.block.state.BlockState state) {
-            net.minecraft.world.level.block.entity.BlockEntityType<EngineBlockEntity> type = vineType;
-            return type == null ? null : new EngineBlockEntity(type, pos, state);
+        /** Constructs the block for {@code descriptor}, its state model installed. */
+        static EngineBlock materialize(BlockDescriptor descriptor, BlockBehaviour.Properties properties) {
+            return NeoForgeBlockStates.withStateModel(descriptor.properties(),
+                () -> new EngineBlock(properties, descriptor.id()));
         }
 
+        @Override
+        protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
+            NeoForgeBlockStates.installStateModel(builder);
+        }
+
+        /** The engine block descriptor this native block was materialized for. */
         public VineId vineId() {
             return id;
+        }
+    }
+
+    /**
+     * The engine's block with the block-entity facet: {@code EntityBlock.newBlockEntity}
+     * is the Mojmap hook that owns block-entity creation, and the state model is
+     * the same one {@link EngineBlock} carries.
+     */
+    public static final class EngineBlockEntityBlock extends EngineBlock
+            implements net.minecraft.world.level.block.EntityBlock {
+
+        volatile net.minecraft.world.level.block.entity.BlockEntityType<EngineBlockEntity> vineType;
+
+        EngineBlockEntityBlock(BlockBehaviour.Properties properties, VineId id) {
+            super(properties, id);
+        }
+
+        /** Constructs the block for a flagged {@code descriptor}, its state model installed. */
+        static EngineBlockEntityBlock materialize(BlockDescriptor descriptor, BlockBehaviour.Properties properties) {
+            return NeoForgeBlockStates.withStateModel(descriptor.properties(),
+                () -> new EngineBlockEntityBlock(properties, descriptor.id()));
+        }
+
+        @Override
+        public net.minecraft.world.level.block.entity.BlockEntity newBlockEntity(net.minecraft.core.BlockPos pos,
+                BlockState state) {
+            net.minecraft.world.level.block.entity.BlockEntityType<EngineBlockEntity> type = vineType;
+            return type == null ? null : new EngineBlockEntity(type, pos, state);
         }
     }
 

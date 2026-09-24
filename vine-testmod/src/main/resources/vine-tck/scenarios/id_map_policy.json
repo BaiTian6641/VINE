@@ -51,7 +51,7 @@
       "type": "AssertTrace",
       "trace": "idmap",
       "expect": [
-        "idmap example=0 optional=4 optional2=absent"
+        "idmap example=0 optional=5 optional2=absent"
       ]
     },
     {
@@ -75,7 +75,7 @@
       "type": "AssertTrace",
       "trace": "idmap",
       "expect": [
-        "idmap example=0 optional=absent optional2=5"
+        "idmap example=0 optional=absent optional2=6"
       ]
     },
     {
@@ -99,7 +99,7 @@
       "type": "AssertTrace",
       "trace": "idmap",
       "expect": [
-        "idmap example=0 optional=4 optional2=absent"
+        "idmap example=0 optional=5 optional2=absent"
       ]
     },
     {
@@ -143,7 +143,7 @@
       "type": "AssertTrace",
       "trace": "idmap",
       "expect": [
-        "idmap example=0 optional=6 optional2=absent"
+        "idmap example=0 optional=7 optional2=absent"
       ]
     }
   ]

@@ -133,6 +133,59 @@ one item type, damage as data (§5.3/§5.4).
 - [ ] **Do:** `Property` factories, state-table flattening with the 512-state
   budget + diagnostic, default-state rules, state query/mutation API on the
   engine world view, blockstate datagen cooking per cell.
+- **Landed (engine half, 2026-09-25):** the whole engine-side model exists and
+  compiles, and both 1.21.1 cells are being wired to it.
+  `Property<T>(name, values, type)` carries `bool` / `intRange` / `ofEnum`
+  factories and validates at authoring time: the native name grammar, no
+  duplicates, integers strictly ascending inside the vanilla `0..15` carrier
+  bound, enum values in declaration order (a subset is legal, a reorder is not —
+  it would silently change state identity). Its codec names the value kind
+  explicitly (`bool`/`int`/`enum` + `enumClass` for the third), so JSON never
+  guesses a type. `BlockDescriptor.properties()` is the descriptor's second
+  component, defaulted to empty in the codec, so every Stage-A descriptor keeps
+  its exact meaning.
+  `BlockStateTable` (vine-core `internal.content`) builds the cartesian product,
+  indexes states row-major (first property most significant, last varying
+  fastest) and is the single place the 512-state budget is enforced: an
+  over-budget descriptor throws from `VineEngineImpl.register` with a diagnostic
+  that names every product term and the total
+  (`block X declares 3 properties with a state product of 4096 states, over the
+  512-state budget (terms: a(16) × b(16) × c(16))`). The default state is the
+  first declared value of each property — the same rule every cell materializes
+  natively, so "freshly placed" means the same state on both sides.
+  The state API is on an engine world view: `VineWorlds.overworld()` →
+  `VineWorld` (`stateAt`, `setState`, `isLoaded`) → the cell's
+  `WorldViewDriver`, bound once per process through `WorldViewBinding` exactly
+  like the storage seam. Engine-side policy (only registered blocks are
+  addressable, a state's schema must equal the descriptor's declared properties,
+  a driver reporting an unregistered block is a bug and is thrown as one) sits in
+  `EngineWorldView`, so every cell enforces identical rules; native mapping is
+  the driver's.
+  The testmod's exemplar is `vine_test:stateblock` — `lit` (bool), `level`
+  (int 0..3), `mode` (an enum) = 24 states — with `/vine_test tck_state_get` and
+  `/vine_test tck_state_set` driving the API, and a deliberately over-budget
+  4096-state descriptor attempted at registration so the refusal (and its
+  diagnostic) is observable in a boot log rather than only in a unit test.
+- **Landed (cell half, 2026-09-25, NeoForge; Fabric in flight):** each cell turns
+  the descriptor's axes into its own state carriers and proves the two models
+  agree before a block is ever registered. Boolean → the native boolean property,
+  bounded integer → the native bounded-int property (the declared values must be
+  one contiguous ascending run — anything else has no native carrier and fails
+  loudly naming property and values), enum → a small cell-owned
+  `Property<E>` subclass, because vanilla's enum property is bound to
+  `Enum<T> & StringRepresentable` and an engine enum is a plain enum. The native
+  value spelling is the lowercased constant name while the engine's state fragment
+  keeps the declared spelling (`mode=IDLE`), and the mapping back goes through the
+  declared constant by value, never by name — so the two directions cannot drift.
+  The invariant the whole cell rests on — the native default state *is* the
+  engine's default state (`BlockState.defaultState`) — is checked in both
+  directions at materialization (`requireDefaultState`), so a carrier whose
+  default disagrees fails the boot naming the block instead of silently redefining
+  what "freshly placed" means. Construction plumbing: a block's state definition
+  is built inside its constructor, before any subclass field exists, so the
+  descriptor's property list is published thread-locally around construction (a
+  static-by-necessity, thread-scoped seam — never a field that cannot be set yet,
+  and never a second source of truth).
 - **Acceptance:** TCK: multi-property testmod block round-trips place →
   state-change → save/load on both loaders; over-budget descriptor rejected
   with readable error; datagen golden fixtures match.

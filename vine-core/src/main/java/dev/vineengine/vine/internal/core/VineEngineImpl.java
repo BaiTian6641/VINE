@@ -18,6 +18,7 @@ import dev.vineengine.vine.capability.CapabilityScope;
 import dev.vineengine.vine.capability.CapabilityTarget;
 import dev.vineengine.vine.capability.CapabilityType;
 import dev.vineengine.vine.command.VineCommands;
+import dev.vineengine.vine.content.BlockDescriptor;
 import dev.vineengine.vine.content.VineContent;
 import dev.vineengine.vine.data.VoxelData;
 import dev.vineengine.vine.data.VoxelDataFixer;
@@ -30,8 +31,10 @@ import dev.vineengine.vine.internal.NetBackend;
 import dev.vineengine.vine.internal.RegistryBackend;
 import dev.vineengine.vine.internal.SessionBackend;
 import dev.vineengine.vine.internal.VoxelBackend;
+import dev.vineengine.vine.internal.WorldBackend;
 import dev.vineengine.vine.internal.capability.CapabilityStore;
 import dev.vineengine.vine.internal.command.CommandService;
+import dev.vineengine.vine.internal.content.BlockStateTable;
 import dev.vineengine.vine.internal.config.ConfigService;
 import dev.vineengine.vine.internal.data.NativeFields;
 import dev.vineengine.vine.internal.data.SchemaRegistry;
@@ -43,10 +46,13 @@ import dev.vineengine.vine.internal.registry.StructuralJsonLoader;
 import dev.vineengine.vine.internal.net.VineNetImpl;
 import dev.vineengine.vine.internal.registry.DescriptorStore;
 import dev.vineengine.vine.internal.session.SessionService;
+import dev.vineengine.vine.internal.world.EngineWorldView;
+import dev.vineengine.vine.internal.world.WorldViewBinding;
 import dev.vineengine.vine.internal.spi.VineDriver;
 import dev.vineengine.vine.internal.spi.VoxelStorageDriver;
 import dev.vineengine.vine.net.VineNet;
 import dev.vineengine.vine.registry.DescriptorType;
+import dev.vineengine.vine.world.VineWorld;
 import dev.vineengine.vine.registry.Holder;
 import dev.vineengine.vine.registry.VineId;
 import dev.vineengine.vine.session.SessionFactory;
@@ -74,7 +80,7 @@ import dev.vineengine.vine.session.SessionManager;
  * real drivers exist.
  */
 final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, CommandBackend,
-        VoxelBackend, CapabilityBackend, SessionBackend, ConfigBackend {
+        VoxelBackend, CapabilityBackend, SessionBackend, ConfigBackend, WorldBackend {
 
     private static final System.Logger LOG = System.getLogger(PhaseMachine.LOG_NAME);
 
@@ -191,7 +197,19 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
 
     @Override
     public <D> Holder<D> register(DescriptorType<D> type, VineId id, D data) {
+        // Block descriptors carry a flattened state model whose budget is a hard
+        // registration-time limit (sub-07 Stage B): an over-budget model cannot be
+        // materialized by any cell, so it is rejected here — naming the product
+        // terms — rather than at a cell's boot, where the author is not looking.
+        if (data instanceof BlockDescriptor block) {
+            BlockStateTable.validate(block);
+        }
         return registries.register(type, id, data);
+    }
+
+    @Override
+    public VineWorld world(VineId dimensionId) {
+        return new EngineWorldView(dimensionId, WorldViewBinding.bound());
     }
 
     @Override

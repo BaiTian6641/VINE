@@ -7,9 +7,12 @@ import dev.vineengine.vine.content.BlockTuning;
 import dev.vineengine.vine.content.ItemDescriptor;
 import dev.vineengine.vine.content.ItemTuning;
 import dev.vineengine.vine.content.ModelHint;
+import dev.vineengine.vine.content.Property;
 import dev.vineengine.vine.content.VineContent;
 import dev.vineengine.vine.registry.VineId;
 import dev.vineengine.vine.registry.VineRegistries;
+
+import java.util.List;
 
 /**
  * Block/item registration for the sub-07 Stage A exemplars: exactly one block
@@ -34,6 +37,30 @@ public final class TestContent {
     /** The single item exemplar. */
     public static final VineId TESTITEM_ID = VineId.of("vine_test", "testitem");
 
+    /**
+     * The Stage B state exemplar: one block with a three-property flattened state
+     * model, so the state table, the engine state API and the cells' native state
+     * definitions have something real to carry. 2 × 4 × 3 = 24 states — well under
+     * the 512-state budget, and every value list is declared in the order the
+     * engine then uses as the state order.
+     */
+    public static final VineId STATEBLOCK_ID = VineId.of("vine_test", "stateblock");
+
+    /** The state exemplar's properties, in flattening order — the scenarios pin this order. */
+    public static final List<Property<?>> STATEBLOCK_PROPERTIES = List.of(
+        // Default true, matching vanilla's own lit-axis convention (a campfire's
+        // default state is lit).
+        Property.bool("lit"),
+        Property.intRange("level", 0, 3),
+        Property.ofEnum("mode", TestStateMode.class));
+
+    /**
+     * The rejected descriptor's id: never registered, only attempted — the proof
+     * that an over-budget state model is refused with a diagnostic naming the
+     * product terms (sub-07 Stage B), which the scenario asserts from the boot log.
+     */
+    public static final VineId OVERBUDGET_ID = VineId.of("vine_test", "overbudget");
+
     private TestContent() {
     }
 
@@ -52,6 +79,10 @@ public final class TestContent {
             new BlockDescriptor(TESTBLOCK_ID, BlockTuning.STONE_LIKE, ModelHint.cubeAll(), true));
         VineRegistries.register(VineContent.ITEM_TYPE, TESTITEM_ID,
             new ItemDescriptor(TESTITEM_ID, new ItemTuning(64), ModelHint.generated()));
+        VineRegistries.register(VineContent.BLOCK_TYPE, STATEBLOCK_ID,
+            new BlockDescriptor(STATEBLOCK_ID, STATEBLOCK_PROPERTIES, BlockTuning.STONE_LIKE,
+                false, ModelHint.cubeAll()));
+        attemptOverBudgetRegistration();
         engine.onPhase(EnginePhase.REGISTRIES_FROZEN, change -> {
             var block = VineRegistries.get(VineContent.BLOCK_TYPE, TESTBLOCK_ID)
                 .orElseThrow(() -> new IllegalStateException(
@@ -62,5 +93,27 @@ public final class TestContent {
             System.out.println("vine-testmod: content holders resolved post-freeze block="
                 + block.id() + " item=" + item.id());
         });
+    }
+
+    /**
+     * Attempts one deliberately over-budget descriptor — three 16-valued axes make
+     * 4096 states — and reports the engine's refusal. The attempt happens here,
+     * during registration, because an over-budget model is rejected at
+     * registration time (sub-07 Stage B); after the freeze the registry would
+     * refuse on the freeze instead, which would prove nothing. Nothing is
+     * registered by this method: the engine throws before the entry exists.
+     */
+    private static void attemptOverBudgetRegistration() {
+        List<Property<?>> axes = List.of(
+            Property.intRange("a", 0, 15),
+            Property.intRange("b", 0, 15),
+            Property.intRange("c", 0, 15));
+        try {
+            VineRegistries.register(VineContent.BLOCK_TYPE, OVERBUDGET_ID,
+                new BlockDescriptor(OVERBUDGET_ID, axes, BlockTuning.STONE_LIKE, false, ModelHint.cubeAll()));
+            System.out.println("vine-testmod: over-budget descriptor was ACCEPTED — budget is not enforced");
+        } catch (IllegalArgumentException rejected) {
+            System.out.println("vine-testmod: over-budget rejected: " + rejected.getMessage());
+        }
     }
 }

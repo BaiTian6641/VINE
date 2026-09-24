@@ -21,11 +21,13 @@ import dev.vineengine.vine.internal.data.VoxelStorageBinding;
 import dev.vineengine.vine.internal.driver1211.common.data.VoxelProbe;
 import dev.vineengine.vine.internal.driver1211.common.persistence.FileWorldStore;
 import dev.vineengine.vine.internal.driver1211.fabric.data.FabricVoxelStorage;
+import dev.vineengine.vine.internal.driver1211.fabric.data.FabricWorldView;
 import dev.vineengine.vine.internal.driver1211.fabric.events.FabricHookInstallers;
 import dev.vineengine.vine.internal.driver1211.fabric.net.FabricNetDriver;
 import dev.vineengine.vine.internal.driver1211.fabric.registry.FabricDesignMaterializer;
 import dev.vineengine.vine.internal.driver1211.fabric.registry.FabricStructuralMaterializer;
 import dev.vineengine.vine.internal.spi.VineDriver;
+import dev.vineengine.vine.internal.world.WorldViewBinding;
 
 /**
  * The 1.21.1 Fabric {@link VineDriver} (ServiceLoader-bound, one per cell).
@@ -146,6 +148,10 @@ public final class Fabric1211Driver implements VineDriver {
         FabricVoxelStorage.registerComponent();
         FabricVoxelStorage voxelStorage = new FabricVoxelStorage();
         voxelStorage.engine(VoxelStorageBinding.bind(voxelStorage));
+        // World view (sub-07 Stage B): the engine's block-state read/write path onto
+        // this cell's live worlds — bound once here, next to the storage seam it
+        // mirrors, and reading the server the lifecycle listeners above track.
+        WorldViewBinding.bind(new FabricWorldView());
         // Capability interop (sub-04 Stage C/D): native queries answer from the
         // same item payload the storage driver writes.
         dev.vineengine.vine.internal.capability.CapabilityDriverBinding.bind(

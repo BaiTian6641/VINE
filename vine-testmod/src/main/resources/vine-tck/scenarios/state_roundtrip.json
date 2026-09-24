@@ -1,0 +1,85 @@
+{
+  "id": "vine_test:state_roundtrip",
+  "tags": [
+    "SMOKE",
+    "STATE"
+  ],
+  "steps": [
+    {
+      "type": "AssertTrace",
+      "trace": "log",
+      "expect": [
+        "vine-testmod: over-budget rejected:",
+        "4096",
+        "over the 512-state budget"
+      ]
+    },
+    {
+      "type": "PlaceBlock",
+      "block": "vine_test:stateblock",
+      "pos": [
+        0,
+        300,
+        0
+      ]
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_state_get 0 300 0"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "command",
+      "expect": [
+        "tck: state @0,300,0 block=vine_test:stateblock state=lit=true,level=0,mode=IDLE loaded=true"
+      ]
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_state_get 0 299 0"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "command",
+      "expect": [
+        "tck: state @0,299,0 absent"
+      ]
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_state_set 0 300 0 level 3"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "command",
+      "expect": [
+        "tck: state-set @0,300,0 property=level value=3 applied=true before=lit=true,level=0,mode=IDLE after=lit=true,level=3,mode=IDLE"
+      ]
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_state_set 0 300 0 mode CHARGED"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "command",
+      "expect": [
+        "tck: state-set @0,300,0 property=mode value=CHARGED applied=true before=lit=true,level=3,mode=IDLE after=lit=true,level=3,mode=CHARGED"
+      ]
+    },
+    {
+      "type": "SaveReloadWorld"
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_state_get 0 300 0"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "command",
+      "expect": [
+        "tck: state @0,300,0 block=vine_test:stateblock state=lit=true,level=3,mode=CHARGED loaded=true"
+      ]
+    }
+  ]
+}
