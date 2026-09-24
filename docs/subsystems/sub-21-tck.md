@@ -275,23 +275,30 @@ public enum TckTag { SMOKE, PERSISTENCE, NETWORK, BRAIN, ANIMATION, PERF, QUARAN
 - **GameTest headless quirks per loader** (batch timing, exit codes,
   template loading differ NF vs Fabric) — the command fallback is equal-rank
   precisely for this; quirks recorded here as found.
-- **One port, many servers — never share a Gradle invocation (found
-  2026-09-25):** the sweep's port lock (`usesService(tckServerLock)`) only
-  serializes the *per-scenario* child servers inside one runner, and each child
-  is a separate Gradle process. Two things then follow. (1) Two concurrent
-  Gradle invocations that each drive a cell collide: the second server reports
-  `**** FAILED TO BIND TO PORT!` and the scenario fails as
-  `server exited during boot (exit 0)`, which reads like a code bug and is not.
-  (2) A *single* invocation that also contains the GameTest tasks is not safe
-  either: `runGametest` / `runGameTestServer` do not take the sweep's lock, so
-  when the task graph reaches them while the sweep is still running its child
-  servers, the sweep's later scenarios die the same way. Observed on
-  2026-09-25: a battery that asked for `build`, both sweeps, both GameTests and
-  the fixture checks in one invocation lost three voxeldata scenarios to a
-  `FAILED TO BIND TO PORT` at the moment the GameTest child booted. The rule the
-  harness demands is therefore: **sweeps run alone, one invocation at a time;
-  GameTest runs and sweeps never overlap**. A `netstat` check for a LISTENING
-  socket on 25565 before starting a sweep is the cheap guard.
+- **One port, many servers — fixed 2026-09-25 by giving every sweep its own:** the
+  sweep's port lock (`usesService(tckServerLock)`) only serializes the
+  *per-scenario* child servers inside one runner, and each child is a separate
+  Gradle process — so two concurrent Gradle invocations that each drive a cell
+  collided (`**** FAILED TO BIND TO PORT!` → `server exited during boot (exit 0)`,
+  which reads like a code bug and is not), and a single invocation that also
+  contained the GameTest tasks collided with itself for the same reason (the
+  GameTest tasks do not take the sweep's lock). Worse, 25565 is a *shared*
+  resource beyond this repo: a developer's or another project's dev server holding
+  it broke a sweep through no fault of the code. The harness no longer competes
+  for it: `ScenarioRunner` probes a free ephemeral port per run and passes
+  `-Pvine.tck.port=<n>`, both 1.21.1 drivers honour that property on their
+  `runServer` config, and the runner drives the server over stdin so the port
+  never has to be reachable. The default remains 25565 when the property is
+  absent (a human's `runServer` is unchanged). Keeping a sweep away from any other
+  Gradle-driven run is still good manners — builds share more than a port (run
+  dirs, jar outputs) — but it is no longer a correctness requirement. The
+  GameTest run configs are the one exception: `runGametest` /
+  `runGameTestServer` do not take the property (Fabric's gametest server reads
+  `server-port` from its own gitignored run dir, and MDG's gametest run does not
+  accept the flag), so on a machine where something else holds 25565 those two
+  commands need `server-port=0` written into their run directory first. That is
+  dev-machine state, not repo state — CI has no competing server, and the
+  property-based path covers every sweep.
 - **Fixture size vs git:** saves are megabytes — store compressed
   (`.tar.zst`); git holds canonical dumps + one minimal save; full saves are
   CI artifacts. Repo-policy owner: SUB-00.

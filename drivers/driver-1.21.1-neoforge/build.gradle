@@ -47,6 +47,13 @@ neoForge {
         server {
             server()
             programArgument '--nogui'
+            // TCK ephemeral port (sub-21 Stage E): see the Fabric driver's note —
+            // a sweep gets its own port, a human's dev server keeps 25565.
+            String tckPort = providers.gradleProperty('vine.tck.port').getOrNull()
+            if (tckPort != null) {
+                programArgument '--port'
+                programArgument tckPort
+            }
             dependencies {
                 // MDG dev runs exclude ordinary library deps from the runtime
                 // classpath; the engine modules must be present when the driver

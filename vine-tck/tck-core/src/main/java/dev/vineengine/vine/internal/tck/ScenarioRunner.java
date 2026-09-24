@@ -103,6 +103,9 @@ public final class ScenarioRunner {
     private int bootCount;
     private final Path rootDir;
     private final String gradleTask;
+
+    /** The free port every server of this run binds; chosen once, on construction. */
+    private final int serverPort;
     private final Path projectCacheDir;
     private final Path scenariosDir;
     private final Duration timeout;
@@ -120,6 +123,7 @@ public final class ScenarioRunner {
         this.cell = cell;
         this.rootDir = rootDir;
         this.gradleTask = gradleTask;
+        this.serverPort = freePort();
         this.projectCacheDir = projectCacheDir;
         this.scenariosDir = scenariosDir;
         this.timeout = timeout;
@@ -748,6 +752,21 @@ public final class ScenarioRunner {
     // project cache, stdin-driven console, tree-kill fallback).
     // ------------------------------------------------------------------
 
+    /**
+     * A currently-free TCP port. The probe-bind-close window is small and the
+     * process that would have to steal it is another dev server started in the same
+     * millisecond; the alternative (a fixed port) fails every time several runs
+     * overlap, which is the failure this method exists to remove.
+     */
+    private static int freePort() {
+        try (java.net.ServerSocket probe = new java.net.ServerSocket(0)) {
+            return probe.getLocalPort();
+        } catch (IOException e) {
+            System.out.println("[TCK] could not probe a free port, falling back to 25565: " + e);
+            return 25565;
+        }
+    }
+
     private void startServer() throws IOException {
         // Fresh history per boot: boot-marker and probe awaits must only ever
         // observe the CURRENT server, never a previous incarnation.
@@ -818,6 +837,12 @@ public final class ScenarioRunner {
         cmd.add("--project-cache-dir");
         cmd.add(projectCacheDir.toString());
         cmd.add("-Pvine.tck.loopback=true");
+        // Ephemeral server port (sub-21 Stage E): 25565 is a shared resource — the
+        // developer's own dev server, another project's, another sweep's — so a
+        // scenario run asks for a free port of its own instead of competing for the
+        // default one. The runner talks to the server through stdin, so the port
+        // never has to be reachable from outside this process.
+        cmd.add("-Pvine.tck.port=" + serverPort);
         // Stale-jar pin (sub-07 wave finding): the server must run the jars
         // built by THIS invocation, never a cached older testmod.
         cmd.addAll(List.of(":vine-api:jar", ":vine-core:jar", ":vine-spi:jar", ":vine-testmod:jar"));

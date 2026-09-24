@@ -31,6 +31,14 @@ loom {
         server {
             server()
             programArgs '--nogui'
+            // TCK ephemeral port (sub-21 Stage E): the scenario runner passes
+            // -Pvine.tck.port so a sweep never fights another dev server for 25565.
+            // Absent property => the vanilla default, so a human's dev server is
+            // unchanged.
+            String tckPort = providers.gradleProperty('vine.tck.port').getOrNull()
+            if (tckPort != null) {
+                programArgs '--port', tckPort
+            }
         }
         // The TCK's GameTest path (sub-21 Stage B): the loader's own test lifecycle
         // around the same in-process scenarios the /vine_test tck_run command runs.
