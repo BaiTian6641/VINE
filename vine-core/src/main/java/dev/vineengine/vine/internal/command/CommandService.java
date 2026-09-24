@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import dev.vineengine.vine.command.CommandDescriptor;
+import dev.vineengine.vine.command.VineCommandExecutor;
 import dev.vineengine.vine.command.VineCommands;
 import dev.vineengine.vine.registry.VineId;
 
@@ -35,6 +36,9 @@ public final class CommandService implements VineCommands {
     private static final System.Logger LOG = System.getLogger(CommandBridge.LOG_NAME);
 
     private final Map<VineId, CommandDescriptor> descriptors = new LinkedHashMap<>();
+    private final Map<VineId, VineCommandExecutor> executors = new LinkedHashMap<>();
+    /** JSON-shipped descriptors: reloadable, registration order, replaces on re-apply. */
+    private final Map<VineId, CommandDescriptor> jsonDescriptors = new LinkedHashMap<>();
     private boolean frozen;
     private List<CommandDescriptor> resolved;
 
@@ -63,6 +67,41 @@ public final class CommandService implements VineCommands {
         frozen = true;
     }
 
+    @Override
+    public synchronized void registerExecutor(VineId executorId, VineCommandExecutor executor) {
+        Objects.requireNonNull(executorId, "executorId");
+        Objects.requireNonNull(executor, "executor");
+        if (frozen) {
+            throw new IllegalStateException("command executor registration closed (REGISTRIES_FROZEN): " + executorId);
+        }
+        if (executors.putIfAbsent(executorId, executor) != null) {
+            throw new IllegalStateException("duplicate command executor id '" + executorId + "'");
+        }
+    }
+
+    /** The named executor, or {@code null} — the lookup the JSON codec resolves references with. */
+    public synchronized VineCommandExecutor executor(VineId executorId) {
+        return executors.get(executorId);
+    }
+
+    @Override
+    public synchronized void applyJson(List<CommandDescriptor> descriptors) {
+        Objects.requireNonNull(descriptors, "descriptors");
+        Map<VineId, CommandDescriptor> incoming = new LinkedHashMap<>();
+        Set<VineId> seenIds = new HashSet<>();
+        for (CommandDescriptor descriptor : descriptors) {
+            if (!seenIds.add(descriptor.id())) {
+                throw new IllegalArgumentException("duplicate JSON command descriptor id '" + descriptor.id() + "'");
+            }
+            CommandCompiler.validate(descriptor);
+            incoming.put(descriptor.id(), descriptor);
+        }
+        jsonDescriptors.clear();
+        jsonDescriptors.putAll(incoming);
+        resolved = null; // the JSON layer changes the merged tree
+        LOG.log(System.Logger.Level.INFO, "[VINE] command json layer: " + jsonDescriptors.size() + " descriptor(s)");
+    }
+
     /**
      * The conflict-resolved descriptor set for one native dispatcher build.
      * Re-invoked per build (drivers re-attach on every dispatcher construction);
@@ -73,7 +112,12 @@ public final class CommandService implements VineCommands {
         if (resolved == null) {
             Map<String, CommandDescriptor> byRootLiteral = new LinkedHashMap<>();
             Map<String, VineId> claimerOfRoot = new HashMap<>();
-            for (CommandDescriptor descriptor : descriptors.values()) {
+            // Java registrations first (static, authoritative on a clash), then
+            // the JSON layer — a JSON descriptor that clashes merges or reports
+            // like any other consumer.
+            java.util.List<CommandDescriptor> all = new ArrayList<>(descriptors.values());
+            all.addAll(jsonDescriptors.values());
+            for (CommandDescriptor descriptor : all) {
                 String root = descriptor.root().name();
                 CommandDescriptor first = byRootLiteral.get(root);
                 if (first == null) {

@@ -50,6 +50,8 @@ public final class VineTestmod implements VineInitializer {
         dev.vineengine.vine.testmod.net.SyncChunkExemplar.register();
         dev.vineengine.vine.testmod.net.HandshakeExemplar.register();
         EchoCommand.register();      // command exemplar (sub-06, M0): /vine_test echo + tck_echo (TCK drive child)
+        dev.vineengine.vine.testmod.command.CommandJsonExemplar.register();  // JSON command exemplar
+                                     //   (sub-06 Stage B): executors for data/vine_test/vine/commands/quest.json
         dev.vineengine.vine.testmod.command.CommandTreeExemplar.register();  // command-tree exemplar
                                      //   (sub-06 Stage B): mirrors/enum/requires/suggests + merge & conflict cases
         VoxelExemplar.register();    // voxel-data exemplar (sub-03 Stage C): vine_test:voxel, 1 portable + 1 native field

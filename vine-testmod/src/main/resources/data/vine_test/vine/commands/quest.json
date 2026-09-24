@@ -1,0 +1,28 @@
+{
+  "id": "vine_test:quest_json",
+  "root": "vinequest",
+  "permission": 2,
+  "then": [
+    {
+      "literal": "start",
+      "executor": "vine_test:json_start",
+      "then": [
+        {
+          "argument": "mode",
+          "type": "enum:MODE",
+          "values": ["HUNT", "EXPEDITION"],
+          "suggests": ["HUNT", "EXPEDITION"],
+          "executor": "vine_test:json_mode"
+        }
+      ]
+    },
+    {
+      "literal": "status",
+      "executor": "vine_test:json_status"
+    },
+    {
+      "literal": "vt",
+      "redirect": "vine_test"
+    }
+  ]
+}

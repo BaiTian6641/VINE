@@ -38,6 +38,7 @@ import dev.vineengine.vine.internal.data.SchemaRegistry;
 import dev.vineengine.vine.internal.data.VoxelBlobCodec;
 import dev.vineengine.vine.internal.data.VoxelStorageBinding;
 import dev.vineengine.vine.internal.registry.IdMapStore;
+import dev.vineengine.vine.internal.command.CommandJsonLoader;
 import dev.vineengine.vine.internal.registry.StructuralJsonLoader;
 import dev.vineengine.vine.internal.net.VineNetImpl;
 import dev.vineengine.vine.internal.registry.DescriptorStore;
@@ -83,6 +84,11 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
     private final DescriptorStore registries = new DescriptorStore();
     private final VineNetImpl net = new VineNetImpl(bus);
     private final CommandService commands = new CommandService();
+
+    /** The command service (package seam for the JSON command load in {@code ConsumerInitializers}). */
+    CommandService commandsService() {
+        return commands;
+    }
 
     private final SchemaRegistry schemas = new SchemaRegistry();
     private final CapabilityStore capabilities = new CapabilityStore();

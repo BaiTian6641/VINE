@@ -34,6 +34,27 @@ public final class ConsumerInitializers {
             LOADED.add(initializer);
             initializer.init();
         }
+        // JSON command descriptors (sub-06 Stage B) load here, not at the
+        // registry freeze: consumers have registered their named executors by
+        // now, and the first native command-dispatcher build happens during
+        // server construction — before REGISTRIES_FROZEN — so a later load would
+        // miss the only attach pass until /reload.
+        dev.vineengine.vine.internal.command.CommandJsonLoader.Result commands =
+            dev.vineengine.vine.internal.command.CommandJsonLoader.load(commandsOf(), loader(), codeSources());
+        if (commands.descriptors() > 0) {
+            System.getLogger("boot").log(System.Logger.Level.INFO,
+                "[VINE] command json: " + commands.descriptors() + " descriptor(s) loaded");
+        }
+    }
+
+    private static dev.vineengine.vine.internal.command.CommandService commandsOf() {
+        Object engine = dev.vineengine.vine.internal.EngineAccess.get();
+        return ((dev.vineengine.vine.internal.core.VineEngineImpl) engine).commandsService();
+    }
+
+    private static ClassLoader loader() {
+        ClassLoader context = Thread.currentThread().getContextClassLoader();
+        return context != null ? context : ConsumerInitializers.class.getClassLoader();
     }
 
     /**

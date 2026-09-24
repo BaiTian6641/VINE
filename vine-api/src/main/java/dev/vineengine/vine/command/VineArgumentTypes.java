@@ -40,6 +40,16 @@ public final class VineArgumentTypes {
      * (case-insensitive), so consumers get a typed value and suggest nothing by
      * default (mirror-enums are self-suggesting on every cell).
      */
+    /**
+     * The data-driven spelling of {@link #enumeration(Class)} (sub-06 Stage B):
+     * constants come from the descriptor file, and the parsed value is the
+     * chosen constant's name (no consumer class is reachable from data).
+     * Internal to the JSON descriptor path — consumers use the typed form.
+     */
+    public static ArgumentTypeRef<String> jsonEnumeration(String name, java.util.List<String> values) {
+        return new ArgumentTypeRef<>("enum:" + name, String.class, values);
+    }
+
     public static <E extends Enum<E>> ArgumentTypeRef<E> enumeration(Class<E> type) {
         java.util.List<String> values = java.util.Arrays.stream(type.getEnumConstants())
             .map(Enum::name)

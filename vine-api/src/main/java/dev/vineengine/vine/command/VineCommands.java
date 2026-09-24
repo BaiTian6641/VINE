@@ -42,4 +42,26 @@ public interface VineCommands {
      *         or registration has closed ({@code REGISTRIES_FROZEN} entered)
      */
     void register(CommandDescriptor descriptor);
+
+    /**
+     * Registers behavior under a stable id so descriptors can reference it —
+     * the seam JSON-shipped commands use, since a JSON node cannot carry a
+     * lambda (sub-06 Stage B). A Java descriptor may reference an executor too,
+     * which keeps command structure fully data-driven.
+     *
+     * @throws IllegalStateException if the id is taken, or registration has
+     *         closed ({@code REGISTRIES_FROZEN} entered)
+     */
+    void registerExecutor(dev.vineengine.vine.registry.VineId executorId, VineCommandExecutor executor);
+
+    /**
+     * Applies the JSON descriptor layer (sub-06 Stage B): replaces the previously
+     * applied set, recomputes the merged snapshot, and is deliberately NOT gated
+     * by {@code REGISTRIES_FROZEN} — this layer is what {@code /reload} re-runs
+     * (Stage E), while Java registrations stay static.
+     *
+     * @throws IllegalArgumentException if any descriptor fails compilation; the
+     *         engine keeps the previous layer when one descriptor is rejected
+     */
+    void applyJson(java.util.List<CommandDescriptor> descriptors);
 }

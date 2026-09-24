@@ -23,6 +23,10 @@
     { "type": "RunCommand", "command": "vine_test tree gated" },
     { "type": "RunCommand", "command": "vine_test tree open" },
     { "type": "RunCommand", "command": "vine_test second" },
+    { "type": "RunCommand", "command": "vinequest start" },
+    { "type": "RunCommand", "command": "vinequest start hunt" },
+    { "type": "RunCommand", "command": "vinequest status" },
+    { "type": "RunCommand", "command": "vinequest vt echo jsonaliased" },
     { "type": "RunCommand", "command": "vt echo aliased" },
     { "type": "RunCommand", "command": "vt tree int 7" },
     { "type": "AssertTrace", "trace": "command", "expect": [
@@ -37,7 +41,15 @@
       "tree greedy=two words here",
       "suggest: ON,OFF",
       "tree open ok",
-      "second ok",
+      "second ok"
+    ]},
+    { "type": "AssertTrace", "trace": "command", "expect": [
+      "quest json: started",
+      "quest json: mode=HUNT",
+      "quest json: status ok",
+      "echo: jsonaliased"
+    ]},
+    { "type": "AssertTrace", "trace": "command", "expect": [
       "echo: aliased",
       "tree int=7"
     ]}
