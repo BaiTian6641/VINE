@@ -130,6 +130,11 @@ final class ChannelRegistry {
         return byWireId.get(wireId);
     }
 
+    /** The channel registered under {@code id}, or {@code null} (unknown ids are ignored). */
+    synchronized ChannelImpl channel(VineId id) {
+        return channels.get(id);
+    }
+
     /** Wire identity for a message on {@code channel} — the id syncs and chunk frames address. */
     synchronized VineId wireIdOf(ChannelImpl channel, VineId messageId) {
         return wireId(channel.spec().id(), messageId);

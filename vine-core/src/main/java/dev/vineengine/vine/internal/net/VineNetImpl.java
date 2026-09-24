@@ -2,6 +2,8 @@ package dev.vineengine.vine.internal.net;
 
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.Executor;
 
 import dev.vineengine.vine.VinePlayer;
@@ -190,6 +192,85 @@ public final class VineNetImpl implements VineNet {
         }
     }
 
+    // ------------------------------------------------------------------
+    // Handshake (sub-05 Stage C)
+    // ------------------------------------------------------------------
+
+    private static final ChannelSpec HANDSHAKE_SPEC =
+        new ChannelSpec(VineId.of("vine", "handshake"), 1, VersionPolicy.REQUIRE_MATCH);
+
+    /** One connection's negotiated state: refused, or ready with per-channel disables. */
+    private static final class ConnectionState {
+
+        final Set<VineId> disabled = java.util.concurrent.ConcurrentHashMap.newKeySet();
+        volatile boolean refused;
+        volatile String reason = "";
+    }
+
+    private final Map<UUID, ConnectionState> connections = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private ConnectionState stateOf(VinePlayer player) {
+        return connections.computeIfAbsent(player.uniqueId(), id -> new ConnectionState());
+    }
+
+    @Override
+    public void onHandshake(VinePlayer player, Map<VineId, Integer> advertised) {
+        ConnectionState state = stateOf(player);
+        int known = 0;
+        // Unknown ids are ignored, not errors: a peer advertising channels this
+        // side never registered (a foreign or older client) is the vanilla-join
+        // case, and it must stay a clean no-op.
+        for (Map.Entry<VineId, Integer> entry : advertised.entrySet()) {
+            ChannelImpl channel = registry.channel(entry.getKey());
+            if (channel == null) {
+                continue;
+            }
+            known++;
+            ChannelSpec spec = channel.spec();
+            if (entry.getValue() == spec.protocol()) {
+                continue;
+            }
+            switch (spec.policy()) {
+                case REQUIRE_MATCH -> {
+                    state.refused = true;
+                    state.reason = "channel " + spec.id() + " requires protocol " + spec.protocol()
+                        + ", peer offered " + entry.getValue();
+                    LOG.log(System.Logger.Level.WARNING,
+                        "[VINE] handshake: refusing " + player.name() + " — " + state.reason);
+                }
+                case OPTIONAL -> {
+                    state.disabled.add(spec.id());
+                    LOG.log(System.Logger.Level.WARNING, "[VINE] handshake: channel " + spec.id()
+                        + " disabled for " + player.name() + " (peer protocol " + entry.getValue()
+                        + ", server " + spec.protocol() + ")");
+                }
+                case SERVER_AUTHORITATIVE -> LOG.log(System.Logger.Level.INFO,
+                    "[VINE] handshake: channel " + spec.id() + " keeps the server protocol "
+                        + spec.protocol() + " for " + player.name());
+            }
+        }
+        if (state.refused) {
+            connections.put(player.uniqueId(), state);
+            return;
+        }
+        // Acknowledge with the server's view so a real client can gate its own sends.
+        LOG.log(System.Logger.Level.INFO, "[VINE] handshake: " + player.name() + " ready ("
+            + (known - state.disabled.size()) + " channel(s) negotiated, "
+            + state.disabled.size() + " disabled)");
+    }
+
+    /** Whether VINE may send to {@code player} at all (vanilla-join peers stay ready). */
+    boolean connectionRefused(VinePlayer player) {
+        ConnectionState state = connections.get(player.uniqueId());
+        return state != null && state.refused;
+    }
+
+    /** Whether {@code channel} is disabled for {@code player} by negotiation. */
+    boolean channelDisabled(VinePlayer player, VineId channelId) {
+        ConnectionState state = connections.get(player.uniqueId());
+        return state != null && state.disabled.contains(channelId);
+    }
+
     @Override
     public void onPlayerJoin(VinePlayer player) {
         NetDriver bound = transport;
@@ -222,6 +303,7 @@ public final class VineNetImpl implements VineNet {
     public void onPlayerLeave(VinePlayer player) {
         String prefix = player.uniqueId() + " ";
         reassemblies.keySet().removeIf(key -> key.startsWith(prefix));
+        connections.remove(player.uniqueId());
     }
 
     @Override

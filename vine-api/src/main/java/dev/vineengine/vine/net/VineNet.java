@@ -3,6 +3,7 @@ package dev.vineengine.vine.net;
 import dev.vineengine.vine.VinePlayer;
 import dev.vineengine.vine.internal.EngineAccess;
 import dev.vineengine.vine.internal.NetBackend;
+import dev.vineengine.vine.registry.VineId;
 
 /**
  * The engine networking facade (sub-05 §2): channel registration, readiness
@@ -28,6 +29,18 @@ public interface VineNet {
      * on the loopback transport.
      */
     void onPlayerJoin(dev.vineengine.vine.VinePlayer player);
+
+    /**
+     * Reports a peer's handshake (sub-05 Stage C): the transport calls this when
+     * a client's {@code vine:handshake/hello} arrives — or a test harness
+     * simulates it. The engine negotiates every advertised channel against its
+     * {@link ChannelSpec#policy()}: a {@code REQUIRE_MATCH} mismatch refuses the
+     * connection with a reason, an {@code OPTIONAL} mismatch disables just that
+     * channel, and {@code SERVER_AUTHORITATIVE} adopts the server's version.
+     *
+     * @param advertised protocol version per channel id, as the peer reported it
+     */
+    void onHandshake(VinePlayer player, java.util.Map<VineId, Integer> advertised);
 
     /** Reports a player leave: drops that player's partial reassembly state. */
     void onPlayerLeave(dev.vineengine.vine.VinePlayer player);

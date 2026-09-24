@@ -1,0 +1,30 @@
+{
+  "id": "vine_test:handshake",
+  "tags": ["SMOKE"],
+  "steps": [
+    { "type": "RunCommand", "command": "vine_test tck_handshake_match" },
+    { "type": "AssertTrace", "trace": "handshake", "expect": [
+      "handshake: [tck-match] ready (2 channel(s) negotiated, 0 disabled)",
+      "handshake req delivered seq=1",
+      "handshake opt delivered seq=2",
+      "handshake match done=true"
+    ] },
+    { "type": "RunCommand", "command": "vine_test tck_handshake_optional" },
+    { "type": "AssertTrace", "trace": "handshake", "expect": [
+      "handshake: channel vine_test:opt disabled for [tck-optional] (peer protocol 1, server 2)",
+      "handshake req delivered seq=3",
+      "handshake optional done=true"
+    ] },
+    { "type": "RunCommand", "command": "vine_test tck_handshake_require" },
+    { "type": "AssertTrace", "trace": "handshake", "expect": [
+      "handshake: refusing [tck-require] — channel vine_test:req requires protocol 2, peer offered 1",
+      "handshake require done=true"
+    ] },
+    { "type": "RunCommand", "command": "vine_test tck_handshake_vanilla" },
+    { "type": "AssertTrace", "trace": "handshake", "expect": [
+      "handshake: [tck-vanilla] ready (0 channel(s) negotiated, 0 disabled)",
+      "handshake req delivered seq=6",
+      "handshake vanilla done=true"
+    ] }
+  ]
+}

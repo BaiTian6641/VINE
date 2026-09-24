@@ -85,6 +85,26 @@ public final class EchoCommand {
                     dev.vineengine.vine.testmod.design.DesignProbeExemplar.report();
                     return 1;
                 }))
+            .then(VineCommand.literal("tck_handshake_match")
+                .executes(ctx -> {
+                    dev.vineengine.vine.testmod.net.HandshakeExemplar.match();
+                    return 1;
+                }))
+            .then(VineCommand.literal("tck_handshake_optional")
+                .executes(ctx -> {
+                    dev.vineengine.vine.testmod.net.HandshakeExemplar.optionalMismatch();
+                    return 1;
+                }))
+            .then(VineCommand.literal("tck_handshake_require")
+                .executes(ctx -> {
+                    dev.vineengine.vine.testmod.net.HandshakeExemplar.requireMismatch();
+                    return 1;
+                }))
+            .then(VineCommand.literal("tck_handshake_vanilla")
+                .executes(ctx -> {
+                    dev.vineengine.vine.testmod.net.HandshakeExemplar.vanillaJoin();
+                    return 1;
+                }))
             .then(VineCommand.literal("tck_join")
                 .executes(ctx -> {
                     dev.vineengine.vine.testmod.net.SyncChunkExemplar.join();

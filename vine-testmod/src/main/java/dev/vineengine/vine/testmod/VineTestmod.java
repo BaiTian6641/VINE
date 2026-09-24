@@ -48,6 +48,7 @@ public final class VineTestmod implements VineInitializer {
         EchoPacket.register();       // packet echo exemplar (sub-05 Stage A): vinetest:echo C2S→S2C
         dev.vineengine.vine.testmod.net.ValidationExemplar.register();
         dev.vineengine.vine.testmod.net.SyncChunkExemplar.register();
+        dev.vineengine.vine.testmod.net.HandshakeExemplar.register();
         EchoCommand.register();      // command exemplar (sub-06, M0): /vine_test echo + tck_echo (TCK drive child)
         VoxelExemplar.register();    // voxel-data exemplar (sub-03 Stage C): vine_test:voxel, 1 portable + 1 native field
         CapabilityExemplar.register();  // capability exemplar (sub-04): vine_test:mana stateful type + ITEM-scope provider

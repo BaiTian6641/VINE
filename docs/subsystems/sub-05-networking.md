@@ -86,7 +86,28 @@ public enum Endpoint { SERVER, CLIENT }          // handler side
 
 ### Stage C — handshake & payload versioning
 
-- [ ] **Do:** `vine:handshake` control channel; `VersionPolicy` negotiation; `isReady` gating; vanilla-client join to a VINE server unaffected.
+- [x] **Do:** `vine:handshake` control channel; `VersionPolicy` negotiation; `isReady` gating; vanilla-client join to a VINE server unaffected.
+  - **Landed 2026-09-24:** `VineNet.onHandshake(player, advertisedVersions)` — the
+    seam a transport calls when a peer's hello arrives (and the test harness can
+    drive directly). Negotiation is per channel against its `ChannelSpec`:
+    `REQUIRE_MATCH` mismatch refuses the connection with a precise reason line
+    and every later send to that peer becomes a no-op; `OPTIONAL` mismatch
+    disables **only that channel** for that connection; `SERVER_AUTHORITATIVE`
+    keeps the server's protocol; ids this side never registered are ignored, so a
+    foreign or vanilla peer stays a clean no-op. State is per player, and
+    `onPlayerLeave` drops it with the reassembly state.
+  - **Evidence:** `vine_test:handshake` TCK scenario, one synthetic player per
+    case — matching versions negotiate 2 channels and both carry traffic; an
+    OPTIONAL mismatch logs `channel vine_test:opt disabled … (peer protocol 1,
+    server 2)` while the other channel still delivers; a REQUIRE_MATCH mismatch
+    logs `refusing [tck-require] — channel vine_test:req requires protocol 2,
+    peer offered 1` and sends nothing; a foreign channel advertisement logs
+    `ready (0 channel(s) negotiated, 0 disabled)`. **19/19 scenarios PASS on both
+    1.21.1 cells.**
+  - **Seam (documented):** the drivers' configuration-phase wiring (NF registrar
+    tasks / Fabric configuration networking) and the client-side hello sender
+    land with sub-21's client runner; the engine-side negotiation, gate and
+    reasons are what this suite proves.
 - **Acceptance:** TCK handshake scenario — `REQUIRE_MATCH` mismatch disconnects with engine reason; `OPTIONAL` disables only that channel; vanilla-client join is a clean no-op.
 - **Touches:** vine-core handshake state machine, driver configuration-phase bindings (NF registrar tasks / Fabric configuration networking), TCK.
 - **Bootstrap prompt:**

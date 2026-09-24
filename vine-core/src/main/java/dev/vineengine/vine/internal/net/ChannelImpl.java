@@ -88,6 +88,15 @@ final class ChannelImpl implements Channel {
             logNotReady();
             return;
         }
+        if (net.connectionRefused(to)) {
+            // Handshake refused this peer (sub-05 Stage C): nothing is sent, and
+            // the refusal was already logged with its reason.
+            return;
+        }
+        if (net.channelDisabled(to, spec.id())) {
+            logNotReady();
+            return;
+        }
         net.sendPayload(transport, to, entry.wireId, encode(entry, payload));
     }
 
