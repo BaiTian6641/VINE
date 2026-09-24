@@ -58,6 +58,19 @@ tasks.named('runServer') {
 
 
 // ---------------------------------------------------------------------------
+// sub-18 Stage E — the stage's headless GameTest boot path. Loom derives run
+// task names from the run-config key ('gametest' -> runGametest), and the key
+// keeps that name because sub-21's docs reference runGametest; this alias is the
+// boot path under the name the Stage E acceptance invokes, and it drives the
+// same run configuration (same args, same run/gametest dir).
+// ---------------------------------------------------------------------------
+tasks.register('runGameTestServer') {
+    group = 'vine'
+    description = 'Alias of runGametest (headless GameTest boot, sub-18 Stage E).'
+    dependsOn 'runGametest'
+}
+
+// ---------------------------------------------------------------------------
 // sub-02 Stage E — driver-owned content cooking: consumer source assets ->
 // per-cell derived resources (blockstates, models, sounds.json). Deterministic;
 // the TCK's verifyDatagen task byte-compares the result against golden fixtures.

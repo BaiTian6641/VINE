@@ -146,22 +146,100 @@ Each bootstrap assumes the agent has read this file, plan §5.8–§5.10, and
 - **Acceptance:** **M0 pass — identical testmod source (one block, one item,
   one engine event, one packet, one command) compiles and runs on both
   loaders** (§10); CI green both cells, JDK 21.
-  - **Mixin status (verified):** the 1.21.1 wave ships **zero Mixins** — no
-    `*.mixins.json` in any driver's resources, and no mixin plugin on either
-    build. Everything the wave needs rides documented loader APIs (Fabric API
-    attachments/lifecycle hooks, NeoForge events, attachments, deferred
-    registries), which is the strongest possible form of the quarantine rule. The
-    one remaining Mixin candidate is Fabric's missing *entity place* / *level
-    save* hook (`HookSlots`: NF observes both natively; Fabric has no callback),
-    listed here rather than papered over — its coarse seams (`SERVER_STOPPING`
-    world-store flush) already work today.
+  - **Mixin status (2026-09-25):** the wave ships **one** Mixin config, in the
+    Fabric driver — `vine-1211-fabric.mixins.json`, registered through
+    `fabric.mod.json`'s `mixins` array — holding exactly the two slots Fabric
+    has no callback for (`blockPlace`, `worldSave`; NeoForge observes both
+    natively via `BlockEvent.EntityPlaceEvent` / `LevelEvent.Save`). Every other
+    hook still rides documented loader APIs, and the NeoForge driver still ships
+    **zero** Mixins; the quarantine rule is now "Mixin only where the loader has
+    no native hook", not "no Mixins".
+  - **No refmap — supersedes the §2 table row:** Loom 1.17.21 remaps a Mixin's
+    annotation strings in place (`useLegacyMixinAp` default), so the built jar
+    carries the config plus both Mixin classes and **no** `*refmap.json`; the
+    remapped classes hold intermediary targets (`method_7712(class_1750)`,
+    `method_7708(class_1750,class_2680)`, `method_14176(class_3536,ZZ)V`). §2's
+    "one config + refmap (Yarn→intermediary: mandatory)" row is therefore wrong
+    for this cell — verified against the artifact, not assumed.
+  - **What the Mixins are:** `fabric/mixin/BlockItemPlaceMixin` wraps the call
+    to the protected `BlockItem#place(ItemPlacementContext, BlockState)` inside
+    the public `BlockItem#place(ItemPlacementContext)`;
+    `fabric/mixin/ServerWorldSaveMixin` injects at `RETURN` of
+    `ServerWorld#save(ProgressListener, boolean, boolean)` behind the same
+    `!skipSave` guard the NeoForge site sits in. Both post through
+    `events/MixinHookTap` (two volatile sinks, `null` while nothing
+    subscribes), which `FabricHookInstallers` binds on first subscription and
+    clears on last close — the engine's `installHook` contract is untouched and
+    the Mixin stays invisible to it.
+  - **Why minimal, and the rejected alternatives:** the public `place` is the
+    seam because every item-driven placement funnels through it exactly once —
+    `ItemStack#useOnBlock`, `BlockPlacementDispenserBehavior`, and the
+    `BedItem`/`TallBlockItem` overrides of the protected one (beds do not call
+    `super`, tall blocks do, so a Mixin on that override would either miss beds
+    or report twice). Rejected: `World#setBlockState` — the global block write
+    would patch every vanilla and modded write (Minimal Footprint §5.1, "no
+    global vanilla behavior change"); and NeoForge's post-write rollback —
+    Fabric's seam has no block-snapshot capture, and gating the application
+    gives the same observable outcome (veto ⇒ no block, no item consumed,
+    `FAIL`) without a second world write. For save, rejected: `saveLevel()`
+    (level data only, so a skipped data write and the world-store flush that
+    rides this hook would go unobserved) and the `SERVER_STOPPING`-only flush
+    seam (not a save observation — it stays the coarse fallback if this Mixin is
+    ever withdrawn).
+  - **Ordering difference recorded:** NeoForge reports `EntityPlaceEvent` after
+    the vanilla write and reverts on cancel, while this cell gates the write
+    itself; the save hook, by contrast, sits at the same point of the
+    `!skipSave` branch as NeoForge's. Normalized payload and veto outcome are
+    identical on both cells, the intra-`place` position is not — the TCK asserts
+    payload equality, not that position.
+  - **Deviation recorded:** install/uninstall cannot switch a Mixin off (it is
+    applied at class load), so Minimal Footprint's "zero consumers ⇒ zero native
+    listeners" degenerates to "zero consumers ⇒ one null check, no event object,
+    vanilla untouched".
+  - **Evidence (2026-09-25):**
+    `./gradlew :drivers:driver-1.21.1-fabric:runGameTestServer` (this stage's
+    headless GameTest boot — Loom names run tasks from the run-config key, so
+    the driver build registers `runGameTestServer` as a documented alias of
+    `runGametest`) prints
+    `[05:32:22] [Server thread/INFO] (Minecraft) [STDOUT]: vine-driver-mixin: hooked slots installed=2`,
+    `… blockPlace world=minecraft:overworld block=minecraft:stone
+    pos=4862464,-58,-10346946 player=ba943433-…`,
+    `… block=minecraft:oak_door …` (a two-high block reports once),
+    `… blockPlace vetoed block=minecraft:dirt`,
+    `… worldSave world=minecraft:overworld`,
+    `… mixin hooks ok places=2 vetoes=1 saves=1`, then
+    `All 2 required tests passed :)`.
+    `unzip -l build/libs/vine-driver-1.21.1-fabric-0.1.0-SNAPSHOT.jar` lists
+    `vine-1211-fabric.mixins.json` and
+    `fabric/mixin/{BlockItemPlaceMixin,ServerWorldSaveMixin}.class` and no
+    `*refmap.json`. `./gradlew :vine-tck:runScenarios1211Fabric` reports
+    **29/33**, with `hooks`, `harness_probe/duality/truncation`,
+    `block_place_break`, `save_reload` and every session/voxeldata scenario
+    green. Of the four failures, `state_roundtrip` and
+    `determinism_tick_barrier` are the not-yet-written Fabric state half, while
+    `command_tree` and `id_map_policy` are stale needles that the concurrent
+    `vine_test:stateblock` content broke (the id map dump shows
+    `vine_test:stateblock=4`, shifting the pinned `optional=4` to 5; the
+    suggestion line now reads
+    `suggestid: vine_test:stateblock,vine_test:testblock,vine_test:testitem`).
+    Neither is this stage's doing: with the Mixins unregistered and only those
+    two scenarios drilled, both fail with the same messages.
+  - **Trigger path (driver-owned):** the testmod's hook path cannot reach these
+    two slots (it posts synthetic command events and subscribes to loader-API
+    slots only), so the driver owns the trigger — `tck.MixinHooksGameTest`,
+    listed in `fabric.mod.json`'s `fabric-gametest` entrypoint, drives vanilla's
+    own `ItemStack#useOnBlock` (`TestContext#useStackOnBlock` with a mock
+    player) and `ServerWorld#save`, and asserts payload, position, UUID, the
+    veto (no block, no item consumed) and the `skipSave` guard.
   - **M0-pass clause green 2026-09-24:** the same testmod source (block, item,
     registry marker, engine packet via the loopback, engine commands, hook
     events) runs on both 1.21.1 loaders — 10/10 TCK scenarios on each cell plus
-    boot smoke. Remaining Stage E items: Mixin configs/refmaps against the
-    remapped Fabric jar and per-loader GameTest smoke; the CI workflow rides
-    sub-00's pending CI stage.
-- **Touches:** Mixin configs, `vine-tck` cell wiring.
+    boot smoke. Remaining Stage E items: per-loader GameTest smoke (Fabric path
+    above; NeoForge path pending) and the CI workflow, which rides sub-00's
+    pending CI stage.
+- **Touches:** Mixin configs (`drivers/driver-1.21.1-fabric/src/main/resources/
+  vine-1211-fabric.mixins.json` + its `fabric/mixin` package), `vine-tck` cell
+  wiring.
 - **Bootstrap prompt:**
   > Execute Stage E of `docs/subsystems/sub-18-driver-1211.md`: finalize Mixin
   > configs + refmaps (NF Mojmap runtime; Fabric Yarn→intermediary), GameTest

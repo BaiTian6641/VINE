@@ -17,9 +17,13 @@
             "dev.vineengine.vine.internal.driver1211.fabric.VineFabricClient"
         ],
         "fabric-gametest": [
-            "dev.vineengine.vine.internal.driver1211.fabric.tck.VineGameTest"
+            "dev.vineengine.vine.internal.driver1211.fabric.tck.VineGameTest",
+            "dev.vineengine.vine.internal.driver1211.fabric.tck.MixinHooksGameTest"
         ]
     },
+    "mixins": [
+        "vine-1211-fabric.mixins.json"
+    ],
     "depends": {
         "fabricloader": ">=0.19.5",
         "minecraft": "~1.21.1",

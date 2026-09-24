@@ -20,9 +20,14 @@ import dev.vineengine.vine.internal.spi.VineDriver;
  * Binding a slot means: first subscription installs the loader listener, which
  * posts the normalized event to the engine bus; last close uninstalls.
  *
- * <p>Seams (never bound on this loader): {@code blockPlace} and {@code worldSave}
- * have no Fabric callback — they wait on the quarantined per-driver Mixin config,
- * so a subscription to them fails loudly instead of sitting silently inert.
+ * <p>Seams (Mixin-backed, sub-18 Stage E §5.9): {@code blockPlace} and
+ * {@code worldSave} have no Fabric callback. The wave's single per-driver Mixin
+ * config ({@code vine-1211-fabric.mixins.json}) injects into vanilla's own
+ * {@code BlockItem#place} and {@code ServerWorld#save} and posts through
+ * {@link MixinHookTap}, so install binds that tap's sink and uninstall clears
+ * it. The injection site itself cannot be switched off (it is applied at class
+ * load), so laziness lives in the tap: with zero consumers the injected body is
+ * one null check, no event is allocated and vanilla is untouched.
  * Loader difference absorbed: Fabric API events have no {@code unregister}, so
  * uninstall flips the listener into a permanent no-op; zero consumers still mean
  * zero behavior change (one empty callback dispatch remains).
@@ -69,6 +74,16 @@ public final class FabricHookInstallers {
             PlayerBlockBreakEvents.AFTER.register(listener);
             // Fabric has no unregister: dormancy is the gate.
             return () -> live.set(false);
+        });
+
+        bind(ctx, HookSlots.BLOCK_PLACE, () -> {
+            MixinHookTap.blockPlace(bus::post);
+            return () -> MixinHookTap.blockPlace(null);
+        });
+
+        bind(ctx, HookSlots.WORLD_SAVE, () -> {
+            MixinHookTap.worldSave(bus::post);
+            return () -> MixinHookTap.worldSave(null);
         });
 
         bind(ctx, HookSlots.WORLD_LOAD, () -> {
