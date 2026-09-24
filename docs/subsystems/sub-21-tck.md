@@ -111,10 +111,14 @@ public enum TckTag { SMOKE, PERSISTENCE, NETWORK, BRAIN, ANIMATION, PERF, QUARAN
   config were reverted rather than shipped failing; the scenario coverage is
   unaffected (both cells run the full suite through the external runner and the
   in-process path).
-  **Remaining:** the per-cell feedback tee (wrap the console source so command
-  feedback reaches the in-process sink) and NeoForge's GameTest structure
-  provisioning — both are *additional* harness reach over the same DSL, not gaps
-  in the DSL itself.
+  **Remaining (reach, not semantics):** command feedback and engine log lines are
+  not capturable from inside the same process in these loader versions — a teeing
+  command source (`withOutput`, and NeoForge's `CommandSourceStack` constructor
+  with a teeing `CommandSource`) and a JUL handler on the engine's loggers both
+  failed to divert output that the external runner reads without trouble, so
+  scenarios needing it report `SKIP` in-process and pass externally. Determinism
+  helpers (fixed-seed worlds, tick-locked `AdvanceTicks`) are likewise still open;
+  the goldens and cross-cell round trip they would protect are already green.
 - **Landed (partial):** the scenario runner executes the documented step
   set (commands, traces, block placement, data probes, packets, save/reload,
   file writes) on both cells with a cross-cell matrix + quarantine policy from

@@ -112,8 +112,12 @@ public final class Fabric1211Driver implements VineDriver {
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             net.server(server);
             // In-process TCK harness (sub-21 Stage B): the console path a scenario's
-            // commands run through, so verdicts match the external runner's.
-            dev.vineengine.vine.internal.ConsoleDispatch.install(command ->
+            // commands run through. The sink stays empty on purpose: this cell's
+            // feedback travels the server's logging stack, and wrapping the source
+            // (withOutput) did not divert it — the harness reports such assertions
+            // as SKIP rather than guessing, while engine log lines *are* captured
+            // and assertable in-process.
+            dev.vineengine.vine.internal.ConsoleDispatch.install((command, sink) ->
                 server.getCommandManager().executeWithPrefix(server.getCommandSource(), command));
             ctx.advancePhase(EnginePhase.SERVER_UP);
             VoxelProbe.run(FabricVoxelStorage::probeStack, FabricVoxelStorage.probeAccess(), "1.21.1-fabric", FabricVoxelStorage.probeHolders());

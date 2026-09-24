@@ -18,9 +18,14 @@ public final class ConsoleDispatch {
     private ConsoleDispatch() {
     }
 
-    /** What a cell installs: dispatch one command line on the server thread. */
+    /**
+     * What a cell installs: run one command line on the server thread, feeding the
+     * command's own output (feedback, errors, the command echo's text) into
+     * {@code sink}. The sink is how a harness observes what a command said without
+     * living inside the cell's logging stack.
+     */
     public interface Installer {
-        void dispatch(String command);
+        void dispatch(String command, java.util.function.Consumer<String> sink);
     }
 
     /** Installs the cell's dispatcher ({@code null} clears it — cell teardown, tests). */
@@ -29,11 +34,11 @@ public final class ConsoleDispatch {
     }
 
     /** Dispatches {@code command} as the console, or throws when no cell bound one. */
-    public static void dispatch(String command) {
+    public static void dispatch(String command, java.util.function.Consumer<String> sink) {
         Installer current = installer;
         if (current == null) {
             throw new IllegalStateException("no console dispatch installed (driver did not bind one)");
         }
-        current.dispatch(command);
+        current.dispatch(command, sink);
     }
 }

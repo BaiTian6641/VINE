@@ -8,7 +8,7 @@
     ] },
     { "type": "RunCommand", "command": "vine_test tck_run harness_truncation" },
     { "type": "AssertTrace", "trace": "command", "expect": [
-      "SKIP (trace not captured in-process: cell feedback tee pending)"
+      "SKIP (no output captured in-process for this step)"
     ] }
   ]
 }

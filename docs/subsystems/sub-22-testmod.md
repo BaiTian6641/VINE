@@ -115,6 +115,10 @@ vine-testmod/
   **Remaining:** golden-fixture dumping of these exemplars (the cross-cell task
   covers VoxelData/registry payloads today; wiring the placed-block and
   capability payloads into it is the follow-up).
+  **Stage B status:** landed for the M1 scope — block-entity round trip,
+  durability-as-data, capability scopes, session basics all proven by scenarios
+  on both cells. Stages C–F (entity/animation, breadth recipes, client exemplar,
+  26.x wiring) are M2+ and stay open with their own acceptance.
 - **Acceptance:** round-trip scenarios green on both 1.21.1 cells; fixture
   dumps land in SUB-21's store and diff clean across loaders.
 - **Touches:** `vine-testmod` content + scenarios.

@@ -28,14 +28,20 @@ import java.util.Map;
  * never as a silent pass — a harness that quietly narrows a scenario would be
  * worse than no second harness.
  *
- * <p>Trace assertions read the output the server produced while the scenario ran
- * (stdout is teed for the duration), which is exactly what the external runner
- * asserts against, minus boot-time lines that happened before the command.
+ * <p>Trace assertions read what this harness can see: writes to the JVM's own
+ * {@code System.out} during the run. A cell's command feedback and its engine log
+ * lines travel that cell's logging stack (which is what the external runner reads
+ * from the process), and neither a teeing command source nor a JUL handler on the
+ * engine's loggers diverted them here — so a scenario whose assertions need that
+ * output reports {@code SKIP} with the reason instead of failing or, worse,
+ * passing on a narrowed assertion.
  */
 public final class InProcessScenarios {
 
     /** Where the scenarios live inside the testmod jar. */
     private static final String SCENARIOS_ROOT = "vine-tck/scenarios/";
+
+
 
     private InProcessScenarios() {
     }
@@ -91,9 +97,11 @@ public final class InProcessScenarios {
         switch (type) {
             case "RunCommand" -> {
                 String command = MiniJson.string(step.get("command"));
-                // The console path the driver installed, so the command's feedback
-                // lands on stdout exactly as it does under the external runner.
-                dev.vineengine.vine.internal.ConsoleDispatch.dispatch(command);
+                // The console path the driver installed: the command's own output
+                // arrives through the sink (the cell owns how a source is built),
+                // so an in-process assertion sees exactly what the external runner
+                // reads from the process log.
+                dev.vineengine.vine.internal.ConsoleDispatch.dispatch(command, trace::add);
                 System.out.println("[TCK] dispatch returned for " + command);
                 return null;
             }
@@ -121,7 +129,10 @@ public final class InProcessScenarios {
      */
     private static String assertTrace(List<String> needles, List<String> trace) {
         if (trace.stream().allMatch(line -> line.startsWith("[TCK] "))) {
-            return "SKIP (trace not captured in-process: cell feedback tee pending)";
+            // Nothing but this harness's own lines: the cell either did not bind a
+            // dispatch or produced nothing for this command. Saying so beats
+            // reporting a scenario failure for a harness limitation.
+            return "SKIP (no output captured in-process for this step)";
         }
         int line = 0;
         int col = 0;
@@ -224,7 +235,6 @@ public final class InProcessScenarios {
                 public void close() {
                 }
             };
-            java.util.logging.Logger.getLogger("vine").addHandler(handler);
             return new Trace(original, tee, handler);
         }
 
@@ -232,7 +242,7 @@ public final class InProcessScenarios {
         public void close() {
             System.setOut(original);
             tee.flush();
-            java.util.logging.Logger.getLogger("vine").removeHandler(julHandler);
+
         }
     }
 

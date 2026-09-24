@@ -25,7 +25,7 @@ public final class VineGameTest implements FabricGameTest {
 
     /** Console dispatch for the in-process interpreter — this cell owns the source. */
     private static void bindConsole(TestContext context) {
-        ConsoleDispatch.install(command -> context.getWorld().getServer().getCommandManager()
+        ConsoleDispatch.install((command, sink) -> context.getWorld().getServer().getCommandManager()
             .executeWithPrefix(context.getWorld().getServer().getCommandSource(), command));
     }
 

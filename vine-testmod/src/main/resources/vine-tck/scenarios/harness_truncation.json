@@ -2,7 +2,7 @@
   "id": "vine_test:harness_truncation",
   "tags": ["SMOKE"],
   "steps": [
-    { "type": "RunCommand", "command": "vine_test tck_sessions" },
-    { "type": "AssertTrace", "trace": "command", "expect": ["[VINE] session created"] }
+    { "type": "RunCommand", "command": "vine_test echo inprocess" },
+    { "type": "AssertTrace", "trace": "command", "expect": ["echo: inprocess"] }
   ]
 }

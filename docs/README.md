@@ -83,8 +83,8 @@ read, follow, track, and build subsystems **independently and in parallel**.
 | 18 | Driver 1.21.1 (NF + Fabric) | M0 | 00, 01 | done (M0) | [sub-18](subsystems/sub-18-driver-1211.md) |
 | 19 | Driver 26.x (NF + Fabric) | M4 | 18 | planning | [sub-19](subsystems/sub-19-driver-26x.md) |
 | 20 | Ecosystem bridges | Continuous | 02, 04, 11 | planning | [sub-20](subsystems/sub-20-ecosystem.md) |
-| 21 | TCK harness | M0, continuous | 00 | in-progress | [sub-21](subsystems/sub-21-tck.md) |
-| 22 | Testmod | M0, continuous | 00, 02 | in-progress | [sub-22](subsystems/sub-22-testmod.md) |
+| 21 | TCK harness | M0, continuous | 00 | done (M0; NF GameTest + reach tracked) | [sub-21](subsystems/sub-21-tck.md) |
+| 22 | Testmod | M0, continuous | 00, 02 | done (M0/M1; M2+ exemplars tracked) | [sub-22](subsystems/sub-22-testmod.md) |
 
 ## Dependency graph
 

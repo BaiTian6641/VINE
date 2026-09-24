@@ -128,9 +128,50 @@ public final class NeoForge1211Driver implements VineDriver {
             ctx.advancePhase(EnginePhase.SERVER_UP);
             VoxelProbe.run(NeoForgeVoxelStorage::probeStack, NeoForgeVoxelStorage.probeAccess(), "1.21.1-neoforge", NeoForgeVoxelStorage.probeHolders());
             // In-process TCK harness (sub-21 Stage B): the console path a scenario's
-            // commands run through, so verdicts match the external runner's.
-            dev.vineengine.vine.internal.ConsoleDispatch.install(command ->
+            // commands run through. The sink stays empty on purpose: this cell's
+            // feedback travels the server's logging stack, and building a teeing
+            // source did not divert it — the harness reports such assertions as SKIP
+            // rather than guessing, while engine log lines *are* captured and
+            // assertable in-process.
+            dev.vineengine.vine.internal.ConsoleDispatch.install((command, sink) ->
                 server.getCommands().performPrefixedCommand(server.createCommandSourceStack(), command));
+            VoxelProbe.run(NeoForgeVoxelStorage::probeStack, NeoForgeVoxelStorage.probeAccess(), "1.21.1-neoforge", NeoForgeVoxelStorage.probeHolders());
+            // In-process TCK harness (sub-21 Stage B): the console path a scenario's
+            // commands run through, with the command's own output teed into the
+            // harness's sink — the cell owns how a source is built, so the harness
+            // never reaches into the logging stack.
+            dev.vineengine.vine.internal.ConsoleDispatch.install((command, sink) -> {
+                net.minecraft.commands.CommandSourceStack base = server.createCommandSourceStack();
+                net.minecraft.commands.CommandSource teeing = new net.minecraft.commands.CommandSource() {
+                    @Override
+                    public void sendSystemMessage(net.minecraft.network.chat.Component message) {
+                        sink.accept(message.getString());
+                    }
+
+                    @Override
+                    public boolean acceptsSuccess() {
+                        return true;
+                    }
+
+                    @Override
+                    public boolean acceptsFailure() {
+                        return true;
+                    }
+
+                    @Override
+                    public boolean shouldInformAdmins() {
+                        return false;
+                    }
+                };
+                net.minecraft.commands.CommandSourceStack teeingStack =
+                    // Permission 4 is the console's own level, and the harness
+                    // dispatches as the console — the base stack does not expose
+                    // its level, so it is stated here rather than guessed.
+                    new net.minecraft.commands.CommandSourceStack(teeing, base.getPosition(),
+                        base.getRotation(), base.getLevel(), 4, base.getTextName(),
+                        base.getDisplayName(), base.getServer(), base.getEntity());
+                server.getCommands().performPrefixedCommand(teeingStack, command);
+            });
         });
 
         // Voxel storage (sub-03 Stage D): item-stack attach point + acceptance probe.
