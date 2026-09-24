@@ -146,6 +146,15 @@ Each bootstrap assumes the agent has read this file, plan §5.8–§5.10, and
 - **Acceptance:** **M0 pass — identical testmod source (one block, one item,
   one engine event, one packet, one command) compiles and runs on both
   loaders** (§10); CI green both cells, JDK 21.
+  - **Mixin status (verified):** the 1.21.1 wave ships **zero Mixins** — no
+    `*.mixins.json` in any driver's resources, and no mixin plugin on either
+    build. Everything the wave needs rides documented loader APIs (Fabric API
+    attachments/lifecycle hooks, NeoForge events, attachments, deferred
+    registries), which is the strongest possible form of the quarantine rule. The
+    one remaining Mixin candidate is Fabric's missing *entity place* / *level
+    save* hook (`HookSlots`: NF observes both natively; Fabric has no callback),
+    listed here rather than papered over — its coarse seams (`SERVER_STOPPING`
+    world-store flush) already work today.
   - **M0-pass clause green 2026-09-24:** the same testmod source (block, item,
     registry marker, engine packet via the loopback, engine commands, hook
     events) runs on both 1.21.1 loaders — 10/10 TCK scenarios on each cell plus

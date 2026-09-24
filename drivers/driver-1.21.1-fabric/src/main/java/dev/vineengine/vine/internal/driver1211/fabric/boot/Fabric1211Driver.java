@@ -70,11 +70,19 @@ public final class Fabric1211Driver implements VineDriver {
         return new CellInfo(dataVersion, LoaderFamily.FABRIC, CellProbes.supportedFeatures());
     }
 
+    private static volatile net.minecraft.server.MinecraftServer currentServer;
+
+    /** The running server, or {@code null} before start / after stop (probe plumbing). */
+    public static net.minecraft.server.MinecraftServer currentServer() {
+        return currentServer;
+    }
+
     @Override
     public void bootstrap(DriverContext ctx) {
         ctx.advancePhase(EnginePhase.REGISTRIES_OPEN);
         driverContext = ctx;
         ServerLifecycleEvents.SERVER_STARTING.register(server -> {
+            currentServer = server;
             // Player-name lookup (sub-06 Stage C): the engine knows session
             // participants by UUID; naming them for suggestions is a cell concern.
             dev.vineengine.vine.internal.PlayerNames.install(uuid -> {
@@ -98,9 +106,10 @@ public final class Fabric1211Driver implements VineDriver {
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             net.server(server);
             ctx.advancePhase(EnginePhase.SERVER_UP);
-            VoxelProbe.run(FabricVoxelStorage::probeStack, FabricVoxelStorage.probeAccess(), "1.21.1-fabric");
+            VoxelProbe.run(FabricVoxelStorage::probeStack, FabricVoxelStorage.probeAccess(), "1.21.1-fabric", FabricVoxelStorage.probeHolders());
         });
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
+            currentServer = null;
             net.server(null);
             dev.vineengine.vine.internal.PlayerNames.install(null);
         });

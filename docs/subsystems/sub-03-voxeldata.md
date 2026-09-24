@@ -192,9 +192,27 @@ public interface VoxelStorageDriver {
   Proven live: a 34-field tree, one field changed — delta 52B of 467B whole,
   `applied=1`, the peer's untouched fields intact, and the listener's recorded
   set is exactly `[stats.mana, stats]` (path + ancestor).
-  **Remaining:** BE/entity/player attach points (their save/load survival is the
-  `voxeldata.attach_all` half) and the sub-05 transport wiring for delta sends;
-  client-visible path filtering rides the schema field-flag work.
+- **Landed (attach wave):** block entities, entities and players attach through
+  each cell's own data-attachment mechanism under the engine key
+  `vine:voxel_data` — Fabric `AttachmentRegistry.createPersistent` (its API is
+  mixed into exactly those three holder kinds by the library that owns it, so the
+  engine ships **no Mixin** for attach) and NeoForge `AttachmentType` with an
+  `IAttachmentSerializer` (NeoForge patches the same holders with
+  `IAttachmentHolder`). Both mechanisms persist into the holder's own save data,
+  which is the property that makes a tree survive a save/reload; neither declares
+  sync yet, because only client-visible paths should cross to clients and no path
+  carries that flag. `AbstractItemStackVoxelStorage` became `AbstractVoxelStorage`,
+  dispatching over all four reachable target kinds; native-field interop stays an
+  item-stack mapping (a holder without a component view reports "unknown
+  component" instead of guessing). Flush calls now carry the tree's own dirty set
+  rather than a wildcard.
+  Proven live on both cells by the boot probe: a vanilla block entity and a
+  vanilla entity created for the probe (never placed in the world) round-trip
+  `mana=77` / `mana=88` through attach, flush and re-open, and their save data
+  carries the engine payload (`persisted=true`).
+  **Remaining:** player attach shares the entity code path (no headless player
+  exists to probe it), world attach rides sub-13, and client-visible path
+  filtering + the sub-05 delta transport stay open.
 - **Acceptance:** TCK `voxeldata.attach_all` + `voxeldata.sync_delta` green on
   both 1.21.1 cells; measured delta payload < whole-tree payload.
 - **Touches:** vine-core (sync), both 1.21.1 drivers, vine-tck.

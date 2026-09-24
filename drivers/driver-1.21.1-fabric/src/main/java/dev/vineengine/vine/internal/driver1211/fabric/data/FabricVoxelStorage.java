@@ -12,19 +12,25 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import dev.vineengine.vine.internal.data.VoxelStorageBinding.EngineVoxels;
-import dev.vineengine.vine.internal.driver1211.common.data.AbstractItemStackVoxelStorage;
+import dev.vineengine.vine.internal.driver1211.common.data.AbstractVoxelStorage;
 import dev.vineengine.vine.internal.driver1211.common.data.VoxelProbe;
 
 /**
- * Fabric 1.21.1 item-stack attach (sub-03 Stage D): the engine's
- * {@code vine:voxel_data} data component carries the tree's opaque blob, and the
- * native mapping resolves {@code minecraft:damage} to the vanilla DAMAGE
- * component.
+ * Fabric 1.21.1 attach points (sub-03 Stages D + E): the engine's
+ * {@code vine:voxel_data} data component carries an item stack's blob, and the
+ * same payload rides {@code vine:voxel_data} **data attachments** for block
+ * entities, entities and players — Fabric's attachment API is mixed into all
+ * three holder kinds by the mod whose semantics the engine borrows, so no engine
+ * Mixin is needed for attach (sub-18's quarantine stays empty here).
  *
- * <p>The component type is registered in mod init (this cell's registration
- * moment, {@code Registry.register} through {@code FabricRegistryBuilder}).
+ * <p>Attachments are persistent but not synced in this stage: only
+ * client-visible paths are supposed to cross to clients, and no path carries that
+ * flag yet — registering a sync handler now would ship the whole tree.
+ *
+ * <p>The component type and the attachment type are registered in mod init (this
+ * cell's registration moment, {@code Registry.register}).
  */
-public final class FabricVoxelStorage extends AbstractItemStackVoxelStorage {
+public final class FabricVoxelStorage extends AbstractVoxelStorage {
 
     private static final Logger LOG = LoggerFactory.getLogger(FabricVoxelStorage.class);
 
@@ -35,6 +41,11 @@ public final class FabricVoxelStorage extends AbstractItemStackVoxelStorage {
     public static final ComponentType<String> VOXEL_DATA = ComponentType.<String>builder()
         .codec(Codec.STRING)
         .build();
+
+    /** The engine's portable payload attachment for block entities, entities and players. */
+    public static final net.fabricmc.fabric.api.attachment.v1.AttachmentType<String> VOXEL_ATTACHMENT =
+        net.fabricmc.fabric.api.attachment.v1.AttachmentRegistry
+            .createPersistent(Identifier.of("vine", "voxel_data"), Codec.STRING);
 
     private static byte[] decode(String payload) {
         return payload == null ? null : java.util.Base64.getDecoder().decode(payload);
@@ -82,37 +93,115 @@ public final class FabricVoxelStorage extends AbstractItemStackVoxelStorage {
         };
     }
 
-    /** Registers the component type; call during mod init, before any item is built. */
+    /**
+     * The Stage-E attach legs: a vanilla block entity and a vanilla entity
+     * created for the probe and never placed in the world, so a probe can never
+     * disturb a save. The testmod's own block entity arrives with sub-22 Stage B;
+     * attach is exercised here on holders that exist in every cell.
+     */
+    public static VoxelProbe.AttachmentHolders probeHolders() {
+        return new VoxelProbe.AttachmentHolders() {
+            @Override
+            public Object blockEntity() {
+                return new net.minecraft.block.entity.ChestBlockEntity(
+                    net.minecraft.util.math.BlockPos.ORIGIN,
+                    net.minecraft.block.Blocks.CHEST.getDefaultState());
+            }
+
+            @Override
+            public Object entity() {
+                net.minecraft.server.MinecraftServer server =
+                    dev.vineengine.vine.internal.driver1211.fabric.boot.Fabric1211Driver.currentServer();
+                if (server == null) {
+                    throw new IllegalStateException("probe entity requested before the server was available");
+                }
+                return net.minecraft.entity.EntityType.PIG.create(server.getOverworld());
+            }
+
+            @Override
+            public boolean persisted(Object holder) {
+                // The attachment rides the holder's own save data under the API's
+                // reserved key: presence there is what survives a save/reload —
+                // checking the live attachment map would only prove memory.
+                net.minecraft.server.MinecraftServer server =
+                    dev.vineengine.vine.internal.driver1211.fabric.boot.Fabric1211Driver.currentServer();
+                if (server == null) {
+                    return false;
+                }
+                net.minecraft.nbt.NbtCompound tag = new net.minecraft.nbt.NbtCompound();
+                try {
+                    if (holder instanceof net.minecraft.block.entity.BlockEntity blockEntity) {
+                        // createNbt is the public save view (writeNbt is protected).
+                        tag = blockEntity.createNbt(server.getRegistryManager());
+                    } else if (holder instanceof net.minecraft.entity.Entity entity) {
+                        entity.writeNbt(tag);
+                    } else {
+                        return false;
+                    }
+                } catch (RuntimeException writeFailure) {
+                    return false;
+                }
+                return tag.contains(net.fabricmc.fabric.api.attachment.v1.AttachmentTarget.NBT_ATTACHMENT_KEY);
+            }
+
+            @Override
+            public String describe() {
+                return "vanilla chest be + pig entity (fabric attachments)";
+            }
+        };
+    }
+
+    /** Registers the component + attachment types; call during mod init. */
     public static void registerComponent() {
         net.minecraft.registry.Registry.register(
             Registries.DATA_COMPONENT_TYPE, Identifier.of("vine", "voxel_data"), VOXEL_DATA);
         LOG.info("[VINE] voxeldata: component vine:voxel_data registered (Fabric)");
+        LOG.info("[VINE] voxeldata: attachment vine:voxel_data registered for block entities, entities"
+            + " and players (Fabric)");
+    }
+
+    /** The attachment holder behind a block entity / entity / player object. */
+    private static net.fabricmc.fabric.api.attachment.v1.AttachmentTarget attachmentOf(Object holder) {
+        if (holder instanceof net.fabricmc.fabric.api.attachment.v1.AttachmentTarget target) {
+            return target;
+        }
+        throw new UnsupportedOperationException(
+            "this cell cannot attach voxel data to " + holder.getClass().getName());
     }
 
     @Override
-    protected byte[] storedBlob(Object stack) {
-        return decode(((ItemStack) stack).get(VOXEL_DATA));
+    protected byte[] storedBlob(Object holder) {
+        if (holder instanceof ItemStack stack) {
+            return decode(stack.get(VOXEL_DATA));
+        }
+        return decode(attachmentOf(holder).getAttached(VOXEL_ATTACHMENT));
     }
 
     @Override
-    protected void storeBlob(Object stack, byte[] blob) {
-        ((ItemStack) stack).set(VOXEL_DATA, encode(blob));
+    protected void storeBlob(Object holder, byte[] blob) {
+        if (holder instanceof ItemStack stack) {
+            stack.set(VOXEL_DATA, encode(blob));
+            return;
+        }
+        attachmentOf(holder).setAttached(VOXEL_ATTACHMENT, encode(blob));
     }
 
     @Override
-    protected int readNativeInt(Object stack, String componentId) {
-        if (!VoxelProbe.NATIVE_DAMAGE.equals(componentId)) {
+    protected int readNativeInt(Object holder, String componentId) {
+        if (!(holder instanceof ItemStack stack) || !VoxelProbe.NATIVE_DAMAGE.equals(componentId)) {
+            // Native interop is an item-stack mapping in this stage; other holder
+            // kinds have no component view to read.
             return Integer.MIN_VALUE;
         }
-        return ((ItemStack) stack).getOrDefault(DataComponentTypes.DAMAGE, 0);
+        return stack.getOrDefault(DataComponentTypes.DAMAGE, 0);
     }
 
     @Override
-    protected boolean writeNativeInt(Object stack, String componentId, int value) {
-        if (!VoxelProbe.NATIVE_DAMAGE.equals(componentId)) {
+    protected boolean writeNativeInt(Object holder, String componentId, int value) {
+        if (!(holder instanceof ItemStack stack) || !VoxelProbe.NATIVE_DAMAGE.equals(componentId)) {
             return false;
         }
-        ((ItemStack) stack).set(DataComponentTypes.DAMAGE, value);
+        stack.set(DataComponentTypes.DAMAGE, value);
         return true;
     }
 }

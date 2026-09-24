@@ -29,6 +29,25 @@ public final class VoxelProbe {
     public static final VineId CAP_SCHEMA = VineId.of("vine", "probe_cap_state");
     public static final String NATIVE_DAMAGE = "minecraft:damage";
 
+    /**
+     * Per-cell factory for the block-entity and entity attach legs (sub-03 Stage
+     * E). Holders are real game objects created for the probe — never placed in
+     * the world, so the probe cannot disturb a save — and {@code persisted}
+     * reports whether the holder's own save data carries the engine payload,
+     * which is the property that makes a tree survive a save/reload.
+     */
+    public interface AttachmentHolders {
+
+        Object blockEntity();
+
+        Object entity();
+
+        boolean persisted(Object holder);
+
+        /** Cell label fragment for the log line (e.g. "NeoForge"). */
+        String describe();
+    }
+
     /** The probe's consumer-visible capability interface (sub-04 Stage C/D leg). */
     public interface ProbeCap {
         int value();
@@ -83,6 +102,11 @@ public final class VoxelProbe {
 
     /** Runs both legs; {@code stackFactory} creates a probe stack on the calling cell. */
     public static void run(java.util.function.Supplier<Object> stackFactory, ComponentAccess access, String cell) {
+        run(stackFactory, access, cell, null);
+    }
+
+    public static void run(java.util.function.Supplier<Object> stackFactory, ComponentAccess access, String cell,
+                           AttachmentHolders holders) {
         // Leg 1 — portable round-trip through the engine's public attach path.
         Object stack = stackFactory.get();
         VoxelData tree = VineData.of(new ItemStackTarget(stack), ROUNDTRIP_SCHEMA);
@@ -125,15 +149,60 @@ public final class VoxelProbe {
         System.out.println("[VINE] caps driver interop cell=" + cell);
         System.out.println("[VINE] caps driver interop value="
             + foreign.map(carrier -> carrier.getInt("value")).orElse(-1));
+
+        // Leg 4 — block-entity and entity attach (Stage E): the same engine API,
+        // the same blob, a different holder kind per cell's attachment mechanism.
+        if (holders == null) {
+            return;
+        }
+        Object blockEntity = holders.blockEntity();
+        var beTarget = new dev.vineengine.vine.data.BlockEntityTarget(blockEntity);
+        VoxelData beTree = VineData.of(beTarget, ROUNDTRIP_SCHEMA);
+        beTree.put("mana", 77);
+        flushTree(ROUNDTRIP_SCHEMA, beTarget, beTree);
+        int beReadBack = VineData.of(new dev.vineengine.vine.data.BlockEntityTarget(blockEntity),
+            ROUNDTRIP_SCHEMA).getInt("mana");
+        boolean bePersisted = holders.persisted(blockEntity);
+
+        Object entity = holders.entity();
+        var entityTarget = new dev.vineengine.vine.data.EntityTarget(entity);
+        VoxelData entityTree = VineData.of(entityTarget, ROUNDTRIP_SCHEMA);
+        entityTree.put("mana", 88);
+        flushTree(ROUNDTRIP_SCHEMA, entityTarget, entityTree);
+        int entityReadBack = VineData.of(new dev.vineengine.vine.data.EntityTarget(entity),
+            ROUNDTRIP_SCHEMA).getInt("mana");
+        boolean entityPersisted = holders.persisted(entity);
+
+        System.out.println("[VINE] voxeldata attach cell=" + cell + " holders=" + holders.describe());
+        System.out.println("[VINE] voxeldata attach blockentity mana=" + beReadBack
+            + " persisted=" + bePersisted + " entity mana=" + entityReadBack
+            + " persisted=" + entityPersisted);
     }
 
-    private static void flush(VineId schemaId, Object stack) {
+    private static void flush(VineId schemaId, Object holder) {
         var driver = VoxelStorageBinding.bound();
         if (driver == null) {
             throw new IllegalStateException("voxeldata probe ran before a VoxelStorageDriver was bound");
         }
-        // Whole-tree flush: M1 has no path-granular dirty tracking yet (sub-03 Stage E).
-        driver.flushDirty(new ItemStackTarget(stack), schemaId, Set.of("*"));
+        flush(schemaId, new ItemStackTarget(holder), null, driver);
+    }
+
+    /** Flushes one tree through its target using the tree's own dirty record. */
+    private static void flushTree(VineId schemaId, dev.vineengine.vine.data.VoxelTarget target, VoxelData tree) {
+        var driver = VoxelStorageBinding.bound();
+        if (driver == null) {
+            throw new IllegalStateException("voxeldata probe ran before a VoxelStorageDriver was bound");
+        }
+        driver.flushDirty(target, schemaId, VoxelStorageBinding.engine().drainDirty(tree));
+    }
+
+    private static void flush(VineId schemaId, dev.vineengine.vine.data.VoxelTarget target,
+                              VoxelData tree, dev.vineengine.vine.internal.spi.VoxelStorageDriver driver) {
+        // Stage E: the flush carries the dirty set the tree recorded, not a
+        // wildcard — the same record a sync pass would transmit.
+        Set<String> dirty = tree == null ? Set.of("*")
+            : VoxelStorageBinding.engine().drainDirty(tree);
+        driver.flushDirty(target, schemaId, dirty);
     }
 
     /** Raw component access — the probe's own plumbing on a cell. */

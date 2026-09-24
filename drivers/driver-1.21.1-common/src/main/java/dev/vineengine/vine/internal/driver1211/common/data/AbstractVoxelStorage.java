@@ -7,7 +7,10 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import dev.vineengine.vine.data.BlockEntityTarget;
+import dev.vineengine.vine.data.EntityTarget;
 import dev.vineengine.vine.data.ItemStackTarget;
+import dev.vineengine.vine.data.PlayerTarget;
 import dev.vineengine.vine.data.VoxelData;
 import dev.vineengine.vine.data.VoxelTarget;
 import dev.vineengine.vine.internal.data.VoxelStorageBinding.EngineVoxels;
@@ -15,24 +18,32 @@ import dev.vineengine.vine.internal.spi.VoxelStorageDriver;
 import dev.vineengine.vine.registry.VineId;
 
 /**
- * Item-stack attach point for both 1.21.1 cells (sub-03 Stage D): the tree's
- * blob lives in the engine's {@code vine:voxel_data} data component, so vanilla
- * save/load and item sync carry it unchanged. Blobs are opaque — every read goes
- * through the engine's load handle (fix-on-load, read-only guard) and every write
- * through its save handle.
+ * The storage driver shared by both 1.21.1 cells (sub-03 Stages D + E): it maps
+ * every reachable {@link VoxelTarget} to the cell's native holder and keeps the
+ * blob opaque — every read goes through the engine's load handle (fix-on-load,
+ * read-only guard) and every write through its save handle.
+ *
+ * <p>Holder shapes per cell (sub-03 §2): item stacks = the engine's
+ * {@code vine:voxel_data} data component (portable, carried by vanilla sync);
+ * block entities, entities and players = the cell's data-attachment API under
+ * the same engine key (NeoForge {@code AttachmentType}, Fabric
+ * {@code AttachmentRegistry}) — both loaders persist attachments in the holder's
+ * own save data, which is what makes a tree survive a save/reload.
+ * {@code WorldTarget} stays with sub-13's world surface.
  *
  * <p>Native-mapped fields ({@code FieldStrategy.Native}) are copied at the edges:
  * the native component's value is read into the tree on {@link #open} and written
  * back on {@link #flushDirty}, so vanilla systems and engine code agree without
  * either side reading the other's payload.
  *
- * <p>Block-entity, entity and player attach points (BE save-tag sub-compound, NF
- * data attachments / Fabric custom data) need loader hooks and land with the
- * Mixin wave (sub-18 Stage E) — the SPI shape does not change when they do.
+ * <p>Native-mapped fields are an item-stack concept in this stage
+ * ({@code FieldStrategy.Native} mirrors vanilla components such as
+ * {@code minecraft:damage}); a holder kind that has no component view reports
+ * "unknown component" and the mapping is skipped with a warning, never guessed.
  */
-public abstract class AbstractItemStackVoxelStorage implements VoxelStorageDriver {
+public abstract class AbstractVoxelStorage implements VoxelStorageDriver {
 
-    private static final Logger LOG = LoggerFactory.getLogger(AbstractItemStackVoxelStorage.class);
+    private static final Logger LOG = LoggerFactory.getLogger(AbstractVoxelStorage.class);
 
     private volatile EngineVoxels voxels;
     private final Map<Object, VoxelData> openTrees = new IdentityHashMap<>();
@@ -55,7 +66,7 @@ public abstract class AbstractItemStackVoxelStorage implements VoxelStorageDrive
 
     @Override
     public VoxelData open(VoxelTarget target, VineId schemaId) {
-        Object stack = stackOf(target);
+        Object stack = holderOf(target);
         byte[] blob = storedBlob(stack);
         VoxelData tree = blob == null ? voxels().create(schemaId) : voxels().load(blob);
         voxels().nativeFields(schemaId).forEach((path, componentId) -> {
@@ -75,7 +86,7 @@ public abstract class AbstractItemStackVoxelStorage implements VoxelStorageDrive
 
     @Override
     public void flushDirty(VoxelTarget target, VineId schemaId, Set<String> dirtyPaths) {
-        Object stack = stackOf(target);
+        Object stack = holderOf(target);
         VoxelData tree;
         synchronized (openTrees) {
             tree = openTrees.get(stack);
@@ -93,13 +104,26 @@ public abstract class AbstractItemStackVoxelStorage implements VoxelStorageDrive
         storeBlob(stack, voxels().save(tree));
     }
 
-    private static Object stackOf(VoxelTarget target) {
+    /**
+     * The native holder a target names. Every holder kind the current wave
+     * supports maps here; anything else fails loudly instead of silently
+     * attaching nowhere.
+     */
+    private static Object holderOf(VoxelTarget target) {
         if (target instanceof ItemStackTarget itemStack) {
             return itemStack.stack();
         }
+        if (target instanceof BlockEntityTarget blockEntity) {
+            return blockEntity.blockEntity();
+        }
+        if (target instanceof EntityTarget entity) {
+            return entity.entity();
+        }
+        if (target instanceof PlayerTarget player) {
+            return player.player();
+        }
         throw new UnsupportedOperationException(
-            "this cell's voxel storage currently attaches item stacks only; " + target.getClass().getSimpleName()
-                + " arrives with the Mixin wave (sub-18 Stage E)");
+            "world attach (" + target.getClass().getSimpleName() + ") lands with sub-13's world surface");
     }
 
     /** The blob currently stored on {@code stack}, or null. */

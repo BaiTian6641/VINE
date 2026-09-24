@@ -23,6 +23,7 @@ public final class VoxelStorageBinding {
 
     private static volatile VoxelStorageDriver driver;
     private static volatile SchemaRegistry engineRegistry;
+    private static volatile EngineVoxels handle;
 
     private VoxelStorageBinding() {
     }
@@ -57,7 +58,16 @@ public final class VoxelStorageBinding {
                 "driver bound a VoxelStorageDriver before the engine installed its schema registry");
         }
         driver = candidate;
-        return new EngineVoxels(registry);
+        handle = new EngineVoxels(registry);
+        return handle;
+    }
+
+    /**
+     * The engine's blob handle once a driver bound one ({@code null} before
+     * that) — the probe's access to dirty-path drains without re-binding.
+     */
+    public static EngineVoxels engine() {
+        return handle;
     }
 
     /** The bound driver, or {@code null} when headless / pre-Stage-D — callers fail explicitly. */

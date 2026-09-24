@@ -15,24 +15,33 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import dev.vineengine.vine.internal.data.VoxelStorageBinding.EngineVoxels;
-import dev.vineengine.vine.internal.driver1211.common.data.AbstractItemStackVoxelStorage;
+import dev.vineengine.vine.internal.driver1211.common.data.AbstractVoxelStorage;
 import dev.vineengine.vine.internal.driver1211.common.data.VoxelProbe;
 
 /**
- * NeoForge 1.21.1 item-stack attach (sub-03 Stage D): the engine's
- * {@code vine:voxel_data} data component carries the tree's opaque blob, and the
- * native mapping resolves {@code minecraft:damage} to the vanilla DAMAGE
- * component.
+ * NeoForge 1.21.1 attach points (sub-03 Stages D + E): the engine's
+ * {@code vine:voxel_data} data component carries an item stack's blob, and the
+ * same payload rides a {@code vine:voxel_data} **attachment** on block entities,
+ * entities and players — NeoForge patches those holders with
+ * {@code IAttachmentHolder}, so attach needs no engine Mixin here either.
  *
- * <p>The component type is declared through a {@code DeferredRegister} created in
+ * <p>Attachments are serialized into the holder's own save data (the vanilla
+ * contract for {@code IAttachmentSerializer}), which is what makes a tree survive
+ * a save/reload. Sync is deliberately not declared yet: only client-visible paths
+ * should cross to clients, and no path carries that flag.
+ *
+ * <p>Both registrations are declared through {@code DeferredRegister}s created in
  * the mod constructor (this cell's {@code REGISTRIES_OPEN} moment).
  */
-public final class NeoForgeVoxelStorage extends AbstractItemStackVoxelStorage {
+public final class NeoForgeVoxelStorage extends AbstractVoxelStorage {
 
     private static final Logger LOG = LoggerFactory.getLogger(NeoForgeVoxelStorage.class);
 
     private static DeferredRegister<DataComponentType<?>> components;
     private static DeferredHolder<DataComponentType<?>, DataComponentType<String>> voxelData;
+    private static DeferredRegister<net.neoforged.neoforge.attachment.AttachmentType<?>> attachments;
+    private static DeferredHolder<net.neoforged.neoforge.attachment.AttachmentType<?>,
+        net.neoforged.neoforge.attachment.AttachmentType<String>> voxelAttachment;
 
     /** A fresh stack of the testmod's item — the probe's attach target. */
     public static Object probeStack() {
@@ -71,6 +80,64 @@ public final class NeoForgeVoxelStorage extends AbstractItemStackVoxelStorage {
         };
     }
 
+    /**
+     * The Stage-E attach legs: a vanilla block entity and a vanilla entity
+     * created for the probe and never placed in the world, so a probe can never
+     * disturb a save. The testmod's own block entity arrives with sub-22 Stage B.
+     */
+    public static VoxelProbe.AttachmentHolders probeHolders() {
+        return new VoxelProbe.AttachmentHolders() {
+            @Override
+            public Object blockEntity() {
+                var type = net.minecraft.world.level.block.entity.BlockEntityType.CHEST;
+                return type.create(net.minecraft.core.BlockPos.ZERO,
+                    net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
+            }
+
+            @Override
+            public Object entity() {
+                net.minecraft.server.MinecraftServer server =
+                    dev.vineengine.vine.internal.driver1211.neoforge.boot.NeoForge1211Driver.currentServer();
+                if (server == null) {
+                    throw new IllegalStateException("probe entity requested before the server was available");
+                }
+                return net.minecraft.world.entity.EntityType.PIG.create(server.overworld());
+            }
+
+            @Override
+            public boolean persisted(Object holder) {
+                // The attachment rides the holder's own save data (the vanilla
+                // contract for IAttachmentSerializer) — checking the live map
+                // would only prove memory.
+                net.minecraft.server.MinecraftServer server =
+                    dev.vineengine.vine.internal.driver1211.neoforge.boot.NeoForge1211Driver.currentServer();
+                if (server == null) {
+                    return false;
+                }
+                try {
+                    net.minecraft.nbt.CompoundTag tag;
+                    if (holder instanceof net.minecraft.world.level.block.entity.BlockEntity blockEntity) {
+                        tag = blockEntity.saveWithoutMetadata(server.registryAccess());
+                    } else if (holder instanceof net.minecraft.world.entity.Entity entity) {
+                        tag = new net.minecraft.nbt.CompoundTag();
+                        entity.saveWithoutId(tag);
+                    } else {
+                        return false;
+                    }
+                    net.minecraft.nbt.Tag attachments = tag.get("neoforge:attachments");
+                    return attachments != null && attachments.toString().contains("vine:voxel_data");
+                } catch (RuntimeException saveFailure) {
+                    return false;
+                }
+            }
+
+            @Override
+            public String describe() {
+                return "vanilla chest be + pig entity (neoforge attachments)";
+            }
+        };
+    }
+
     /** Declares the component type on the mod bus; call during mod construction. */
     public static void registerComponent(IEventBus modBus) {
         components = DeferredRegister.create(Registries.DATA_COMPONENT_TYPE, "vine");
@@ -81,34 +148,73 @@ public final class NeoForgeVoxelStorage extends AbstractItemStackVoxelStorage {
             .networkSynchronized(net.minecraft.network.codec.ByteBufCodecs.STRING_UTF8)
             .build());
         components.register(modBus);
-        LOG.info("[VINE] voxeldata: component vine:voxel_data declared (NeoForge)");
+
+        attachments = DeferredRegister.create(
+            net.neoforged.neoforge.registries.NeoForgeRegistries.ATTACHMENT_TYPES, "vine");
+        voxelAttachment = attachments.register("voxel_data", () -> net.neoforged.neoforge.attachment
+            .AttachmentType.<String>builder(() -> "")
+            .serialize(new net.neoforged.neoforge.attachment.IAttachmentSerializer<net.minecraft.nbt.StringTag, String>() {
+                @Override
+                public net.minecraft.nbt.StringTag write(String value,
+                        net.minecraft.core.HolderLookup.Provider registries) {
+                    return net.minecraft.nbt.StringTag.valueOf(value);
+                }
+
+                @Override
+                public String read(net.neoforged.neoforge.attachment.IAttachmentHolder holder,
+                        net.minecraft.nbt.StringTag tag, net.minecraft.core.HolderLookup.Provider registries) {
+                    return tag.getAsString();
+                }
+            })
+            .build());
+        attachments.register(modBus);
+        LOG.info("[VINE] voxeldata: component and attachment vine:voxel_data declared (NeoForge)");
+    }
+
+    /** The attachment holder behind a block entity / entity / player object. */
+    private static net.neoforged.neoforge.attachment.IAttachmentHolder attachmentOf(Object holder) {
+        if (holder instanceof net.neoforged.neoforge.attachment.IAttachmentHolder target) {
+            return target;
+        }
+        throw new UnsupportedOperationException(
+            "this cell cannot attach voxel data to " + holder.getClass().getName());
     }
 
     @Override
-    protected byte[] storedBlob(Object stack) {
-        String payload = ((ItemStack) stack).get(voxelData.get());
+    protected byte[] storedBlob(Object holder) {
+        if (holder instanceof ItemStack stack) {
+            String payload = stack.get(voxelData.get());
+            return payload == null ? null : java.util.Base64.getDecoder().decode(payload);
+        }
+        String payload = attachmentOf(holder).getExistingDataOrNull(voxelAttachment.get());
         return payload == null ? null : java.util.Base64.getDecoder().decode(payload);
     }
 
     @Override
-    protected void storeBlob(Object stack, byte[] blob) {
-        ((ItemStack) stack).set(voxelData.get(), java.util.Base64.getEncoder().encodeToString(blob));
+    protected void storeBlob(Object holder, byte[] blob) {
+        String payload = java.util.Base64.getEncoder().encodeToString(blob);
+        if (holder instanceof ItemStack stack) {
+            stack.set(voxelData.get(), payload);
+            return;
+        }
+        attachmentOf(holder).setData(voxelAttachment.get(), payload);
     }
 
     @Override
-    protected int readNativeInt(Object stack, String componentId) {
-        if (!VoxelProbe.NATIVE_DAMAGE.equals(componentId)) {
+    protected int readNativeInt(Object holder, String componentId) {
+        if (!(holder instanceof ItemStack stack) || !VoxelProbe.NATIVE_DAMAGE.equals(componentId)) {
+            // Native interop is an item-stack mapping in this stage.
             return Integer.MIN_VALUE;
         }
-        return ((ItemStack) stack).getOrDefault(DataComponents.DAMAGE, 0);
+        return stack.getOrDefault(DataComponents.DAMAGE, 0);
     }
 
     @Override
-    protected boolean writeNativeInt(Object stack, String componentId, int value) {
-        if (!VoxelProbe.NATIVE_DAMAGE.equals(componentId)) {
+    protected boolean writeNativeInt(Object holder, String componentId, int value) {
+        if (!(holder instanceof ItemStack stack) || !VoxelProbe.NATIVE_DAMAGE.equals(componentId)) {
             return false;
         }
-        ((ItemStack) stack).set(DataComponents.DAMAGE, value);
+        stack.set(DataComponents.DAMAGE, value);
         return true;
     }
 }
