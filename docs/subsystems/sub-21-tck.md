@@ -93,9 +93,28 @@ public enum TckTag { SMOKE, PERSISTENCE, NETWORK, BRAIN, ANIMATION, PERF, QUARAN
   `harness_duality` runs a scenario in-process (verdict `PASS`), then runs one
   whose assertion needs the external path and sees the `SKIP` reason on both
   1.21.1 cells.
+- **Landed (GameTest path, Fabric):** the cell declares a
+  `fabric-gametest` entrypoint (`VineGameTest`) whose batch runs the *same*
+  scenario files through the *same* engine-side interpreter the
+  `/vine_test tck_run` command uses — `runGametest` reports "Running test batch
+  'vine_tck:0' (1 tests) … All 1 required tests passed". That is the third
+  harness path, and it exists because the interpreter was moved into
+  `vine-api`'s internal package: the testmod compiles against `vine-api` alone
+  and a driver cannot depend on a consumer, so the one shared implementation had
+  to sit where both can reach it.
+  **Blocked (GameTest path, NeoForge):** `@GameTest` resolves a structure template
+  through the server's datapack, and NeoForge's dev run ships none — Fabric's API
+  works around this by bundling its own `empty.snbt` and injecting a structure, so
+  the same file placed in the mod's data folder is *not* found (`Missing test
+  structure: vine:vinegametest.empty`, tried as `structure/`, `structures/`,
+  dotted and slashed names, and in the correct 1.21 NBT shape). The class and run
+  config were reverted rather than shipped failing; the scenario coverage is
+  unaffected (both cells run the full suite through the external runner and the
+  in-process path).
   **Remaining:** the per-cell feedback tee (wrap the console source so command
-  feedback reaches the in-process sink) and the GameTest batch path — both are
-  *additional* harnesses over the same DSL, not gaps in the DSL itself.
+  feedback reaches the in-process sink) and NeoForge's GameTest structure
+  provisioning — both are *additional* harness reach over the same DSL, not gaps
+  in the DSL itself.
 - **Landed (partial):** the scenario runner executes the documented step
   set (commands, traces, block placement, data probes, packets, save/reload,
   file writes) on both cells with a cross-cell matrix + quarantine policy from

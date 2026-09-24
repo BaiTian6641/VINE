@@ -32,6 +32,15 @@ loom {
             server()
             programArgs '--nogui'
         }
+        // The TCK's GameTest path (sub-21 Stage B): the loader's own test lifecycle
+        // around the same in-process scenarios the /vine_test tck_run command runs.
+        gametest {
+            server()
+            name = 'Gametest'
+            vmArg '-Dfabric-api.gametest'
+            vmArg "-Dfabric-api.gametest.report-file=${project.layout.buildDirectory.file('gametest.xml').get().asFile}"
+            runDir 'run/gametest'
+        }
     }
 }
 

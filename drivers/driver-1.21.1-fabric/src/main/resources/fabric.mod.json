@@ -15,6 +15,9 @@
         ],
         "client": [
             "dev.vineengine.vine.internal.driver1211.fabric.VineFabricClient"
+        ],
+        "fabric-gametest": [
+            "dev.vineengine.vine.internal.driver1211.fabric.tck.VineGameTest"
         ]
     },
     "depends": {

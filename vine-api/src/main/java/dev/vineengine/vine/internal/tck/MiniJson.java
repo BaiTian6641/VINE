@@ -1,4 +1,4 @@
-package dev.vineengine.vine.testmod.tck;
+package dev.vineengine.vine.internal.tck;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -8,8 +8,10 @@ import java.util.Map;
 /**
  * A minimal JSON reader for the in-process TCK harness (sub-21 Stage B): enough
  * of the format for scenario files (objects, arrays, strings, numbers, booleans),
- * with no dependency — the testmod compiles against {@code vine-api} alone, so it
- * cannot borrow the engine's or the external runner's parser.
+ * with no dependency — the engine's own Gson usage is for content descriptors, and
+ * the harness deliberately shares nothing with the external runner's parser so a
+ * disagreement about a scenario file surfaces as a parse failure instead of
+ * diverging silently.
  *
  * <p>Deliberately strict: a scenario file the external runner would reject must
  * not silently parse here, or the two harness paths could disagree about what a
