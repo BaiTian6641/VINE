@@ -164,6 +164,10 @@ public final class Fabric1211Driver implements VineDriver {
         // the world-view seam it resolves its dimensions through, and before any
         // world can load — the engine never sees an unbound entity seam.
         EntityBinding.bind(new FabricEntityDriver());
+        // Actor lifecycle (sub-08 Stage C): removal detaches from inside the
+        // entity; chunk unload has no overridable hook, so this cell's one entity
+        // listener covers it before any world can load.
+        FabricEntityDriver.installUnloadDetach();
         // Capability interop (sub-04 Stage C/D): native queries answer from the
         // same item payload the storage driver writes.
         dev.vineengine.vine.internal.capability.CapabilityDriverBinding.bind(

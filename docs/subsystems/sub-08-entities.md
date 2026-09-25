@@ -190,6 +190,36 @@ multipart fixture.
 - **Acceptance:** Stage-B brain drives a live wyvern to a target across
   obstacles on both cells.
 - **Touches:** `internal.entity.spi`, both 1.21.1 drivers.
+- **Landed (engine half, 2026-09-26):** the loop is engine-owned and the cell only
+  drives it. Per-instance identity is the engine's (`VineEntityRef(entityId,
+  instanceUuid)`; the SPI's `spawn` takes the engine-chosen id so a cell never
+  invents one and two entities of one descriptor are two actors), the actor table is
+  `EntityRuntime` (`attach`/`detach`/`tickActor`, the last returning the brain's
+  status or empty when nothing is attached), and attachment is a consumer act —
+  `VineEntities.attach(ref, brain)` — not a descriptor field, so a plain entity
+  behaves exactly as in Stage A. `Primitives` gained `position()`: a behaviour has to
+  know where it is, and taking it from the cell each tick keeps the answer live
+  instead of remembered. The cell implements `Primitives` per actor over its own
+  navigation, raycasts and entity queries, and calls back into the engine once per
+  tick; a cell that has nothing attached does nothing, which is what keeps the
+  per-tick path free for ordinary entities.
+  **Evidence (2026-09-26, Fabric; NeoForge in flight):** `entity_brain_walk` green on
+  1.21.1-fabric (38/38 on that cell) — the beast spawns with an engine-assigned ref,
+  the cell's own navigation walks it around the wall in the scenario, and it arrives
+  between tick 43 and tick 85 depending on leftover blocks from earlier scenarios,
+  inside the 200-tick budget; the exemplar prints progress, so a failure is readable
+  rather than just red.
+  Three findings worth keeping: (1) **vanilla's path node offset is a trap for wide
+  mobs** — `Path#getNodePosition` drives the body centre to
+  `node + (int)(width + 1) * 0.5`, which is 1.5 blocks for the 2.4-wide testbeast, so
+  a target handed straight to the navigation leaves the actor short and then
+  permanently `UNREACHABLE` at the platform edge; the cell now names the node as
+  `floor(target - nodeOffset())`, generic in the actor's width rather than a
+  scenario-specific nudge. (2) The beast's **first brain tick reports `UNREACHABLE`**
+  because the freshly spawned body is not yet flagged `onGround`: an honest native
+  refusal, and the walk simply starts on the next tick. (3) Vanilla logs
+  `No data fixer registered for vine_test:testbeast` at boot for engine entity types
+  — benign, and recorded here so nobody "fixes" it by touching engine content.
 - **Bootstrap prompt:**
   > Implement SUB-08 Stage C per the file. Map each SPI primitive to native
   > navigation/sensing in both 1.21.1 drivers; comment each absorbed

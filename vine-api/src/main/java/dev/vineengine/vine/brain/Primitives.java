@@ -23,6 +23,13 @@ import dev.vineengine.vine.world.Vec3;
 public interface Primitives {
 
     /**
+     * Where the actor is right now. A behaviour needs its own position to reason about
+     * distance and arrival, and taking it from the world each tick keeps the answer
+     * truthfully live rather than a value the behaviour remembers and drifts with.
+     */
+    Vec3 position();
+
+    /**
      * Requests a path to {@code target} and reports this tick's outcome. A cell may
      * answer {@link PathOutcome#PENDING} while it computes asynchronously; the caller
      * is expected to ask again next tick.

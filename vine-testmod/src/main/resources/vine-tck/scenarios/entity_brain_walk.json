@@ -1,0 +1,45 @@
+{
+  "id": "vine_test:entity_brain_walk",
+  "tags": [
+    "ENTITY",
+    "BRAIN"
+  ],
+  "steps": [
+    {
+      "type": "RunCommand",
+      "command": "fill 1 299 -1 9 299 5 minecraft:stone"
+    },
+    {
+      "type": "RunCommand",
+      "command": "fill 5 300 -1 5 301 3 minecraft:stone"
+    },
+    {
+      "type": "RunCommand",
+      "command": "forceload add 0 0 16 16"
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_beast_walk 2 300 0 8 300 0"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "command",
+      "expect": [
+        "tck: beast spawned ref=vine_test:testbeast#",
+        "tck: beast walk started=true"
+      ]
+    },
+    {
+      "type": "AdvanceTicks",
+      "ticks": 200
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "log",
+      "expect": [
+        "tck: beast arrived at=",
+        "ticks="
+      ]
+    }
+  ]
+}

@@ -48,6 +48,27 @@ public final class EchoCommand {
                             ctx.feedback("tck: sent echo number=" + number + " text=" + text);
                             return 1;
                         }))))
+            .then(VineCommand.literal("tck_beast_walk")
+                .then(VineCommand.argument("x", VineArgumentTypes.INT)
+                    .then(VineCommand.argument("y", VineArgumentTypes.INT)
+                        .then(VineCommand.argument("z", VineArgumentTypes.INT)
+                            .then(VineCommand.argument("tx", VineArgumentTypes.INT)
+                                .then(VineCommand.argument("ty", VineArgumentTypes.INT)
+                                    .then(VineCommand.argument("tz", VineArgumentTypes.INT)
+                                        .executes(ctx -> {
+                                            boolean spawned = dev.vineengine.vine.testmod.brain.EntityBrainExemplar
+                                                .spawnAndWalk(
+                                                    dev.vineengine.vine.world.Vec3.of(
+                                                        ctx.argument("x", Integer.class) + 0.5D,
+                                                        ctx.argument("y", Integer.class),
+                                                        ctx.argument("z", Integer.class) + 0.5D),
+                                                    dev.vineengine.vine.world.Vec3.of(
+                                                        ctx.argument("tx", Integer.class) + 0.5D,
+                                                        ctx.argument("ty", Integer.class),
+                                                        ctx.argument("tz", Integer.class) + 0.5D));
+                                            ctx.feedback("tck: beast walk started=" + spawned);
+                                            return 1;
+                                        }))))))))
             .then(VineCommand.literal("tck_brain_trace")
                 .then(VineCommand.argument("ticks", VineArgumentTypes.INT)
                     .executes(ctx -> {
@@ -65,11 +86,12 @@ public final class EchoCommand {
                                     int x = ctx.argument("x", Integer.class);
                                     int y = ctx.argument("y", Integer.class);
                                     int z = ctx.argument("z", Integer.class);
-                                    boolean spawned = dev.vineengine.vine.entity.VineEntities.spawn(id,
+                                    var spawned = dev.vineengine.vine.entity.VineEntities.spawn(id,
                                         dev.vineengine.vine.world.VineWorlds.overworld(),
                                         dev.vineengine.vine.world.Vec3.of(x + 0.5D, y, z + 0.5D));
                                     ctx.feedback("tck: entity spawn id=" + id + " at=" + x + "," + y + "," + z
-                                        + " ok=" + spawned);
+                                        + " ok=" + spawned.isPresent() + " ref="
+                                        + spawned.map(Object::toString).orElse("none"));
                                     return 1;
                                 }))))))
 

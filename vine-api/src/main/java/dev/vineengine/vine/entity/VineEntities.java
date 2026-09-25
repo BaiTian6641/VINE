@@ -1,5 +1,9 @@
 package dev.vineengine.vine.entity;
 
+import java.util.Objects;
+import java.util.Optional;
+
+import dev.vineengine.vine.brain.VineBrain;
 import dev.vineengine.vine.internal.EngineAccess;
 import dev.vineengine.vine.internal.EntityBackend;
 import dev.vineengine.vine.registry.VineId;
@@ -25,15 +29,31 @@ public final class VineEntities {
     /**
      * Spawns one entity of {@code entityId} at {@code position} in {@code world}.
      *
-     * @return {@code true} when the entity exists there afterwards; {@code false}
-     *         when the cell refused (dimension not loaded, position outside the
-     *         world)
+     * @return the new instance's engine identity, or empty when the cell refused
+     *         (dimension not loaded, position outside the world)
      * @throws IllegalArgumentException if no entity descriptor is registered under
      *         {@code entityId} — spawning unregistered content is a caller bug
      * @throws IllegalStateException if the running cell cannot spawn entities
      */
-    public static boolean spawn(VineId entityId, VineWorld world, Vec3 position) {
+    public static Optional<VineEntityRef> spawn(VineId entityId, VineWorld world, Vec3 position) {
         return backend().spawn(entityId, world, position);
+    }
+
+    /**
+     * Attaches {@code brain} to the instance {@code ref} names (sub-08 Stage C). The
+     * cell's per-tick actor callback then ticks it; nothing ticks on its own.
+     *
+     * @throws IllegalArgumentException if no live instance carries {@code ref}
+     * @throws IllegalStateException if that instance already has a brain attached
+     */
+    public static void attach(VineEntityRef ref, VineBrain brain) {
+        Objects.requireNonNull(ref, "ref");
+        backend().attach(ref, Objects.requireNonNull(brain, "brain"));
+    }
+
+    /** Drops whatever is attached to {@code ref}; idempotent, so an entity removal may call it blindly. */
+    public static void detach(VineEntityRef ref) {
+        backend().detach(ref);
     }
 
     private static EntityBackend backend() {

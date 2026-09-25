@@ -27,11 +27,16 @@ import dev.vineengine.vine.world.Vec3;
 public interface EntityDriver {
 
     /**
-     * Spawns one {@code entityId} at {@code position} in {@code dimensionId}.
+     * Spawns one {@code entityId} at {@code position} in {@code dimensionId}, tagged
+     * with {@code instance} — the engine's per-instance identity (sub-08 Stage C).
+     *
+     * <p>The cell stores the instance id on the entity it creates and hands it back
+     * when it drives the engine's actor tick, so the engine can key a brain by actor
+     * without the cell inventing identities of its own.
      *
      * @return {@code true} when a fresh entity of that descriptor exists at that
      *         position afterwards; {@code false} when the cell refused (dimension
      *         not loaded, position outside the world, descriptor not materialized)
      */
-    boolean spawn(VineId entityId, VineId dimensionId, Vec3 position);
+    boolean spawn(VineId entityId, VineId dimensionId, Vec3 position, java.util.UUID instance);
 }

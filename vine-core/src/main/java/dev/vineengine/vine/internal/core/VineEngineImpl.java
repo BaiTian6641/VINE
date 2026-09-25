@@ -250,7 +250,8 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
     }
 
     @Override
-    public boolean spawn(VineId entityId, VineWorld world, Vec3 position) {
+    public java.util.Optional<dev.vineengine.vine.entity.VineEntityRef> spawn(VineId entityId, VineWorld world,
+            Vec3 position) {
         // The engine validates identity before the cell is asked: a cell must never
         // have to answer for content the engine does not know, and "unregistered id"
         // is a caller bug rather than a world condition.
@@ -259,7 +260,22 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
             throw new IllegalArgumentException("no entity descriptor is registered under " + entityId
                 + " — spawning unregistered content is a caller bug");
         }
-        return EntityBinding.bound().spawn(entityId, world.id(), position);
+        // The engine chooses the instance id (sub-08 Stage C): identity must not depend
+        // on a cell's own numbering, and two entities of one descriptor are two actors.
+        java.util.UUID instance = java.util.UUID.randomUUID();
+        return EntityBinding.bound().spawn(entityId, world.id(), position, instance)
+            ? java.util.Optional.of(new dev.vineengine.vine.entity.VineEntityRef(entityId, instance))
+            : java.util.Optional.empty();
+    }
+
+    @Override
+    public void attach(dev.vineengine.vine.entity.VineEntityRef ref, VineBrain brain) {
+        dev.vineengine.vine.internal.entity.EntityRuntime.attach(ref, brain);
+    }
+
+    @Override
+    public void detach(dev.vineengine.vine.entity.VineEntityRef ref) {
+        dev.vineengine.vine.internal.entity.EntityRuntime.detach(ref);
     }
 
     @Override

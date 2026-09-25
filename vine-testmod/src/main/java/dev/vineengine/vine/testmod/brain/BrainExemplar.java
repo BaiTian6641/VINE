@@ -162,6 +162,14 @@ public final class BrainExemplar {
             private int visionCalls;
 
             @Override
+            public Vec3 position() {
+                // The scripted world does not move: this exemplar's behaviour walks a path
+                // without reading its own coordinates, so a constant answers honestly and
+                // keeps the recording a pure function of the call sequence.
+                return PATROL;
+            }
+
+            @Override
             public PathOutcome requestPath(Vec3 target) {
                 // Every request is satisfied in this world; what changes over time is what
                 // the actor can see, not whether it can walk there.

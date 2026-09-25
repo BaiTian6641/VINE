@@ -7,6 +7,8 @@ import net.minecraft.entity.attribute.EntityAttributeInstance;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.server.world.ServerWorld;
 
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,6 +40,26 @@ public final class FabricEntityDriver implements EntityDriver {
     private static final Logger LOG = LoggerFactory.getLogger(FabricEntityDriver.class);
 
     /**
+     * Installs this cell's unload-side actor detach (sub-08 Stage C). Vanilla routes
+     * a chunk unload straight through the final {@code Entity#setRemoved}, which
+     * cannot be overridden, but Fabric's {@code ENTITY_UNLOAD} fires from the same
+     * entity-handler {@code stopTracking} that removal and unload both pass through.
+     * Detaching there keeps the engine's actor table free of bodies the world no
+     * longer holds — one listener and no Mixin, Minimal Footprint.
+     *
+     * <p>Removal through {@code Entity#remove} is already handled by
+     * {@link VineEntity#remove}; calling {@code vineDetach()} twice is harmless
+     * because the engine's detach is idempotent.
+     */
+    public static void installUnloadDetach() {
+        ServerEntityEvents.ENTITY_UNLOAD.register((entity, world) -> {
+            if (entity instanceof VineEntity vine) {
+                vine.vineDetach();
+            }
+        });
+    }
+
+    /**
      * Creates one entity of {@code entityId}'s native type in {@code dimensionId}'s
      * live world at {@code position}.
      *
@@ -46,7 +68,7 @@ public final class FabricEntityDriver implements EntityDriver {
      * answer is then the world's own state, re-read by id.
      */
     @Override
-    public boolean spawn(VineId entityId, VineId dimensionId, Vec3 position) {
+    public boolean spawn(VineId entityId, VineId dimensionId, Vec3 position, java.util.UUID instance) {
         ServerWorld world = FabricWorldView.nativeWorld(dimensionId);
         if (world == null) {
             // No server yet, an id this cell's dimension registry does not know, or a
@@ -61,9 +83,12 @@ public final class FabricEntityDriver implements EntityDriver {
             return false;
         }
         Entity created = type.create(world);
+        // The engine owns per-instance identity (sub-08 Stage C): the cell only carries
+        // it, so a brain can be keyed by actor rather than by descriptor.
         if (!(created instanceof VineEntity entity)) {
             return false;
         }
+        entity.vineInstance(instance);
         entity.refreshPositionAndAngles(position.x(), position.y(), position.z(), 0.0F, 0.0F);
         if (!world.spawnEntity(entity) || world.getEntityById(entity.getId()) != entity) {
             // The add was refused (unloaded chunk, duplicate identity, a world that

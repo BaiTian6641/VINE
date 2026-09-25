@@ -88,6 +88,13 @@ public final class TapePrimitives implements Primitives {
     }
 
     @Override
+    public Vec3 position() {
+        String result = serve("position", "", () -> delegate.position().asString());
+        String[] parts = result.split(",");
+        return Vec3.of(Double.parseDouble(parts[0]), Double.parseDouble(parts[1]), Double.parseDouble(parts[2]));
+    }
+
+    @Override
     public PathOutcome requestPath(Vec3 target) {
         String argument = target.asString();
         return PathOutcome.valueOf(serve("requestPath", argument, () -> delegate.requestPath(target).name()));
