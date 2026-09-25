@@ -141,6 +141,17 @@ outside drivers.
 
 ## 4. Problems & blockers
 
+- **GeckoLib cannot supply server-side bone positions (verified 2026-09-26,
+  GeckoLib 5 wiki):** bone world positions are exposed through the render pass
+  (`RenderPassInfo`) and animation controllers are invoked per render frame, so
+  neither is usable as an authoritative hitbox source on a dedicated server. This
+  is *why* the headless evaluator exists rather than being a nicety: per-bone
+  hitboxes (sub-08 Stage D), attack windows and sweep shapes (sub-10 Stage C) all
+  consume it. **It is therefore the critical path for the RPG/Monster-Hunter
+  target** — nothing downstream of it can be bone-accurate until it lands, and the
+  server-tick time base (never render frames or client animation time) is the
+  contract that keeps it authoritative.
+
 - **Evaluator fidelity vs client interpolation** — decided: canonical
   evaluation at 20 TPS tick boundaries is the single source of truth; client
   interpolation is cosmetic and never read back into gameplay. Golden

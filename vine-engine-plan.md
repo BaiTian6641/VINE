@@ -433,6 +433,22 @@ Same move as `VoxelData`: own the semantics, host on the native game. Mapping
 VINE behavior to native AI would leak version semantics (goal selectors vs.
 Brain hybrids) — forbidden by the Prime Invariant.
 
+- **Part hosting (verified 2026-09-26)**: NeoForge ships a real primitive —
+  `net.neoforged.neoforge.entity.PartEntity`, with vanilla `EnderDragonPart`
+  patched to extend it — while Fabric has **no** equivalent, so the Fabric cell
+  hosts the vanilla multi-entity mechanism manually (sub-08 Stage D's documented
+  asymmetry). No third-party library is required on either cell, and the NF-only
+  datapack libraries in this space (e.g. CustomHitboxLib) would break Fabric
+  parity.
+- **Part *positions* are the hard half, and they are engine-side**: GeckoLib's bone
+  world positions are a render-pass facility (`RenderPassInfo`) and its animation
+  controllers run per render frame, so neither can be the server's collision
+  source (verified 2026-09-26 against the GeckoLib 5 wiki). A server-authoritative
+  part host must therefore have its own pose evaluator over the same Blockbench
+  asset — which is exactly §5.14's engine evaluator — with server ticks as the time
+  base, swept colliders between the previous and current locator, and a per-attack
+  already-hit set. Until that evaluator lands, parts can only be driven by declared
+  geometry or a pose tape, which is a staging device, not the design.
 - **`VineBrain`**: an engine-owned behavior runtime (state machine / behavior
   tree hybrid) ticked by the engine. Identical semantics on every cell;
   determinism is TCK-tested via golden tick-traces.
@@ -492,6 +508,28 @@ designing a competing format is needless weight.
   entity/item.
 - **I-frames and hitstop are engine-owned and server-authoritative**; the
   client presents them (flash, shake, freeze-frames) via the client surface.
+- **Combat-partner ownership (locked 2026-09-26)**: every item that deals melee
+  damage declares an *owner* as data — `VINE` (engine pipeline: sweep, cooldown,
+  windows, animation timing from §5.14) or a named partner (`BETTER_COMBAT`).
+  VINE-owned items get no partner data and the engine's rules; partner-owned items
+  get **no** engine sweep/cooldown and the partner's own data file, cooked by the
+  content pipeline from the same descriptor (Better Combat reads
+  `data/<ns>/weapon_attributes/<item>.json` presets and exposes
+  `net.bettercombat.api`, and its own documentation warns that implementing your
+  own range/cooldown/dual-wield/input/animation on the same item *semantically
+  conflicts* with it — verified 2026-09-26 against its 1.21.1 README). The engine
+  then consumes only the *result*, which is what routes a partner-driven hit
+  through part resolution (§5.13) without either system double-handling it.
+  Ownership is the whole bridge: two pipelines that both claim an item cannot be
+  merged, only assigned.
+- **Partner matrix for combat (verified 2026-09-26)**: Better Combat ships on
+  **both** 1.21.1 loaders (and is alive on 26.2, `net.bettercombat.api`) so it is
+  the parity-safe partner; Epic Fight is **NeoForge-only** on 1.21.1
+  (`yesman.epicfight.api`, datapack
+  `data/<ns>/capabilities/weapons/<item>.json`, registry-based
+  `WeaponCapability.Builder`) and its own docs call the public API still
+  stabilizing — an optional NF-only partner behind the same probe, never the
+  parity path. Both are soft partners: absence degrades to VINE-owned rules.
 
 ### 5.16 Recipes & crafting
 

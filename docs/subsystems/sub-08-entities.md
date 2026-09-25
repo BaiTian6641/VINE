@@ -50,11 +50,26 @@ referenced only), damage pipeline ordering (sub-10 — consumes this part data).
   deferred registers + attribute-creation event; Fabric via its default-
   attribute registry; 26.x per then-current lifecycle — absorbed in drivers.
   Multipart hosting: NeoForge formalizes `PartEntity`; Fabric hosts the
-  vanilla mechanism manually.
+  vanilla mechanism manually. **Verified 2026-09-26:** the NeoForge primitive is
+  real (`net.neoforged.neoforge.entity.PartEntity`, with vanilla
+  `EnderDragonPart` patched to extend it) and Fabric has no equivalent, so this
+  asymmetry is the loader's, not a gap in the plan. Third-party datapack solutions
+  in this space (e.g. CustomHitboxLib, 1.20.1 Forge / 1.21.1 NeoForge) are
+  NF-only and would break Fabric parity.
 - **Data flow / sync:** part positions are server-authoritative, computed by
   the sub-09 evaluator; published fixed-point-quantized, delta-compressed over
   sub-05 (deadband 0.02 blocks). Rider input: client→server over sub-05,
   validated server-side.
+  **Why the evaluator and nothing else (verified 2026-09-26):** GeckoLib cannot be
+  the server's collision source — its bone world positions live in a render-pass
+  facility (`RenderPassInfo`) and its animation controllers are called per render
+  frame, so a server-tick hitbox cannot be read out of them. The plan's own
+  evaluator (§5.14, sub-09) is the design the ecosystem independently recommends:
+  server-tick time base, pose evaluated from the Blockbench asset, swept collider
+  between previous and current locator, and a per-attack already-hit set.
+  **Decision (locked 2026-09-26): Stage D lands *after* the sub-09 evaluator**, so
+  parts are bone-accurate from their first boot; declared geometry and the scripted
+  pose tape remain staging devices for the interface, never the shipped source.
 
 ### Worked example — multipart hitbox (first-class)
 
@@ -119,7 +134,13 @@ multipart fixture.
   `PartEntity` hosting per cell, position consumer interface toward sub-09,
   quantized delta sync.
 - **Acceptance:** wyvern TCK: per-part multipliers resolve, tail breaks at
-  threshold, positions sync within 1 tick on both 1.21.1 cells.
+  threshold, positions sync within 1 tick on both 1.21.1 cells — with the positions
+  coming from the sub-09 evaluator, not from a tape.
+- **Fixture (locked 2026-09-26):** the wyvern lives in the testmod
+  (`head/neck/body/tail/wing_l/wing_r`, per-part multipliers, flinch, tail break,
+  sever) and the acceptance fight is driven by a testmod weapon whose combat owner
+  is Better Combat — proving the engine's part routing and the partner bridge in
+  one scenario. This wyvern is the regression fixture for sub-09 and sub-10.
 - **Touches:** `vine-core` part runtime, drivers, sub-05 channels.
 - **Bootstrap prompt:**
   > Implement SUB-08 Stage D per the file. Until sub-09 lands, drive positions

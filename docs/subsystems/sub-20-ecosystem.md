@@ -78,10 +78,20 @@ bridge), never breaks a consumer.
 | Partner | 1.21.1-NF | 1.21.1-Fabric | 26.x-NF | 26.x-Fabric |
 |---|---|---|---|---|
 | GeckoLib | GL4, hard | GL4, hard | GL5, hard | GL5, hard |
+| Combat | Better Combat (probe-only, soft) | Better Combat (probe-only, soft) | Better Combat (soft) | Better Combat (soft) |
+| Combat (NF-only) | Epic Fight (soft) | — | Epic Fight (soft, if it ships) | — |
 | Recipe viewer | JEI | REI | JEI or EMI | EMI (+ its JEI-compat) |
 | Accessory slots | Curios | Trinkets | Accessories | Accessories |
 | Energy/fluid | FE/RF caps | Fabric transfer API | FE/RF caps | Fabric transfer API |
 | Shader/render stack | Sodium+Iris (probe-only) | Sodium+Iris (probe-only) | Sodium+Iris (probe-only) | Sodium+Iris (probe-only) |
+
+Combat partners are **ownership-based**, not merged (verified 2026-09-26):
+Better Combat ships on both 1.21.1 loaders and is alive on 26.2, so it is the
+parity-safe partner; Epic Fight is NeoForge-only on 1.21.1 with a self-described
+stabilizing API, so no Fabric cell may depend on it. For a partner-owned weapon the
+engine installs no sweep and no cooldown and cooks the partner's own preset
+(`data/<ns>/weapon_attributes/<item>.json` for Better Combat) — sub-10 §2 owns the
+rule, this file owns the probe.
 
 GL5's generation boundary is also a *namespace* boundary: GeckoLib 5 moved
 from `software.bernie.geckolib` to `com.geckolib` (verified 2026-09-25,
