@@ -1,0 +1,76 @@
+{
+  "variants": {
+    "lit=true,level=0,mode=IDLE": {
+      "model": "vine_test:block/stateblock"
+    },
+    "lit=true,level=0,mode=WAITING": {
+      "model": "vine_test:block/stateblock"
+    },
+    "lit=true,level=0,mode=CHARGED": {
+      "model": "vine_test:block/stateblock"
+    },
+    "lit=true,level=1,mode=IDLE": {
+      "model": "vine_test:block/stateblock"
+    },
+    "lit=true,level=1,mode=WAITING": {
+      "model": "vine_test:block/stateblock"
+    },
+    "lit=true,level=1,mode=CHARGED": {
+      "model": "vine_test:block/stateblock"
+    },
+    "lit=true,level=2,mode=IDLE": {
+      "model": "vine_test:block/stateblock"
+    },
+    "lit=true,level=2,mode=WAITING": {
+      "model": "vine_test:block/stateblock"
+    },
+    "lit=true,level=2,mode=CHARGED": {
+      "model": "vine_test:block/stateblock"
+    },
+    "lit=true,level=3,mode=IDLE": {
+      "model": "vine_test:block/stateblock"
+    },
+    "lit=true,level=3,mode=WAITING": {
+      "model": "vine_test:block/stateblock"
+    },
+    "lit=true,level=3,mode=CHARGED": {
+      "model": "vine_test:block/stateblock"
+    },
+    "lit=false,level=0,mode=IDLE": {
+      "model": "vine_test:block/stateblock"
+    },
+    "lit=false,level=0,mode=WAITING": {
+      "model": "vine_test:block/stateblock"
+    },
+    "lit=false,level=0,mode=CHARGED": {
+      "model": "vine_test:block/stateblock"
+    },
+    "lit=false,level=1,mode=IDLE": {
+      "model": "vine_test:block/stateblock"
+    },
+    "lit=false,level=1,mode=WAITING": {
+      "model": "vine_test:block/stateblock"
+    },
+    "lit=false,level=1,mode=CHARGED": {
+      "model": "vine_test:block/stateblock"
+    },
+    "lit=false,level=2,mode=IDLE": {
+      "model": "vine_test:block/stateblock"
+    },
+    "lit=false,level=2,mode=WAITING": {
+      "model": "vine_test:block/stateblock"
+    },
+    "lit=false,level=2,mode=CHARGED": {
+      "model": "vine_test:block/stateblock"
+    },
+    "lit=false,level=3,mode=IDLE": {
+      "model": "vine_test:block/stateblock"
+    },
+    "lit=false,level=3,mode=WAITING": {
+      "model": "vine_test:block/stateblock"
+    },
+    "lit=false,level=3,mode=CHARGED": {
+      "model": "vine_test:block/stateblock"
+    }
+  }
+}

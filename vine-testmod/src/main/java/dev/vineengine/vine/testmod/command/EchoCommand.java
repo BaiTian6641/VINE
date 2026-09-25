@@ -48,6 +48,17 @@ public final class EchoCommand {
                             ctx.feedback("tck: sent echo number=" + number + " text=" + text);
                             return 1;
                         }))))
+            .then(VineCommand.literal("tck_counter_get")
+                .then(VineCommand.argument("x", VineArgumentTypes.INT)
+                    .then(VineCommand.argument("y", VineArgumentTypes.INT)
+                        .then(VineCommand.argument("z", VineArgumentTypes.INT)
+                            .executes(ctx -> {
+                                dev.vineengine.vine.testmod.content.CounterExemplar.read(
+                                    ctx.argument("x", Integer.class),
+                                    ctx.argument("y", Integer.class),
+                                    ctx.argument("z", Integer.class));
+                                return 1;
+                            })))))
             .then(VineCommand.literal("tck_state_get")
                 .then(VineCommand.argument("x", VineArgumentTypes.INT)
                     .then(VineCommand.argument("y", VineArgumentTypes.INT)

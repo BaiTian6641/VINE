@@ -31,6 +31,7 @@ import dev.vineengine.vine.internal.driver1211.common.command.EngineCommands;
 import dev.vineengine.vine.internal.driver1211.neoforge.command.NeoForgeCommandFactory;
 import dev.vineengine.vine.internal.driver1211.neoforge.events.NeoForgeHookInstallers;
 import dev.vineengine.vine.internal.driver1211.neoforge.net.NeoForgeNetDriver;
+import dev.vineengine.vine.internal.driver1211.neoforge.registry.NeoForgeBehaviorWiring;
 import dev.vineengine.vine.internal.driver1211.neoforge.registry.NeoForgeDesignMaterializer;
 import dev.vineengine.vine.internal.driver1211.neoforge.registry.NeoForgeStructuralMaterializer;
 import dev.vineengine.vine.internal.spi.VineDriver;
@@ -100,6 +101,13 @@ public final class NeoForge1211Driver implements VineDriver {
             // Schemas land after engine boot and before the store freezes.
             VoxelProbe.registerSchemas();
             ctx.advancePhase(EnginePhase.REGISTRIES_FROZEN);
+            // Sub-07 Stage C: the cell-side half of the stage's Minimal Footprint
+            // assertion — what this cell actually wired, printed right after the
+            // engine's own "[VINE] behaviors: ticking block entities=N" line (the
+            // engine prints it inside the advancePhase above), so the two counts are
+            // read together. Content materialization has already run: NeoForge fires
+            // every RegisterEvent before common setup.
+            LOG.info(NeoForgeBehaviorWiring.installReport());
         });
         // Structural descriptor materialization (sub-02 Stage B): wires itself to
         // NewRegistryEvent/RegisterEvent on the same mod bus.
@@ -142,43 +150,6 @@ public final class NeoForge1211Driver implements VineDriver {
             // assertable in-process.
             dev.vineengine.vine.internal.ConsoleDispatch.install((command, sink) ->
                 server.getCommands().performPrefixedCommand(server.createCommandSourceStack(), command));
-            VoxelProbe.run(NeoForgeVoxelStorage::probeStack, NeoForgeVoxelStorage.probeAccess(), "1.21.1-neoforge", NeoForgeVoxelStorage.probeHolders());
-            // In-process TCK harness (sub-21 Stage B): the console path a scenario's
-            // commands run through, with the command's own output teed into the
-            // harness's sink — the cell owns how a source is built, so the harness
-            // never reaches into the logging stack.
-            dev.vineengine.vine.internal.ConsoleDispatch.install((command, sink) -> {
-                net.minecraft.commands.CommandSourceStack base = server.createCommandSourceStack();
-                net.minecraft.commands.CommandSource teeing = new net.minecraft.commands.CommandSource() {
-                    @Override
-                    public void sendSystemMessage(net.minecraft.network.chat.Component message) {
-                        sink.accept(message.getString());
-                    }
-
-                    @Override
-                    public boolean acceptsSuccess() {
-                        return true;
-                    }
-
-                    @Override
-                    public boolean acceptsFailure() {
-                        return true;
-                    }
-
-                    @Override
-                    public boolean shouldInformAdmins() {
-                        return false;
-                    }
-                };
-                net.minecraft.commands.CommandSourceStack teeingStack =
-                    // Permission 4 is the console's own level, and the harness
-                    // dispatches as the console — the base stack does not expose
-                    // its level, so it is stated here rather than guessed.
-                    new net.minecraft.commands.CommandSourceStack(teeing, base.getPosition(),
-                        base.getRotation(), base.getLevel(), 4, base.getTextName(),
-                        base.getDisplayName(), base.getServer(), base.getEntity());
-                server.getCommands().performPrefixedCommand(teeingStack, command);
-            });
         });
 
         // Voxel storage (sub-03 Stage D): item-stack attach point + acceptance probe.

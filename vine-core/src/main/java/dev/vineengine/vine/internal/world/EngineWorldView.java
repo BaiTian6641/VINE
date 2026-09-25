@@ -5,6 +5,8 @@ import java.util.Optional;
 
 import dev.vineengine.vine.content.BlockDescriptor;
 import dev.vineengine.vine.content.Property;
+import dev.vineengine.vine.data.VineData;
+import dev.vineengine.vine.data.VoxelData;
 import dev.vineengine.vine.content.VineContent;
 import dev.vineengine.vine.internal.spi.WorldViewDriver;
 import dev.vineengine.vine.registry.VineId;
@@ -82,6 +84,27 @@ public final class EngineWorldView implements VineWorld {
                 + names(descriptor.properties()));
         }
         return driver.setState(dimensionId, pos, state);
+    }
+
+    @Override
+    public Optional<VoxelData> dataAt(BlockPos pos) {
+        Objects.requireNonNull(pos, "pos");
+        Optional<BlockState> state = stateAt(pos);
+        if (state.isEmpty()) {
+            return Optional.empty();
+        }
+        BlockDescriptor descriptor = descriptorOf(state.get().blockId()).orElseThrow();
+        var blockEntity = descriptor.blockEntity();
+        if (blockEntity.isEmpty()) {
+            // A block without a block-entity declaration has no holder: "no data"
+            // is the honest answer, not an empty tree that would imply one exists.
+            return Optional.empty();
+        }
+        // The driver supplies the attach point, the engine opens the tree through the
+        // same storage path every other holder uses, so this returns the live tree
+        // rather than a copy of it.
+        return driver.holderTarget(dimensionId, pos)
+            .map(target -> VineData.of(target, blockEntity.get().schemaId()));
     }
 
     private static Optional<BlockDescriptor> descriptorOf(VineId blockId) {

@@ -24,6 +24,7 @@ import dev.vineengine.vine.internal.driver1211.fabric.data.FabricVoxelStorage;
 import dev.vineengine.vine.internal.driver1211.fabric.data.FabricWorldView;
 import dev.vineengine.vine.internal.driver1211.fabric.events.FabricHookInstallers;
 import dev.vineengine.vine.internal.driver1211.fabric.net.FabricNetDriver;
+import dev.vineengine.vine.internal.driver1211.fabric.registry.FabricBehaviorWiring;
 import dev.vineengine.vine.internal.driver1211.fabric.registry.FabricDesignMaterializer;
 import dev.vineengine.vine.internal.driver1211.fabric.registry.FabricStructuralMaterializer;
 import dev.vineengine.vine.internal.spi.VineDriver;
@@ -102,6 +103,11 @@ public final class Fabric1211Driver implements VineDriver {
             // and before the store freezes — this anchor is exactly that window.
             VoxelProbe.registerSchemas();
             ctx.advancePhase(EnginePhase.REGISTRIES_FROZEN);
+            // Sub-07 Stage C: the cell-side half of the stage's Minimal Footprint
+            // assertion — what this cell actually wired, printed next to the engine's
+            // own "[VINE] behaviors: ticking block entities=N" line so the two counts
+            // are read together.
+            LOG.info(FabricBehaviorWiring.installReport());
             ctx.advancePhase(EnginePhase.WORLD_LOAD);
         });
 

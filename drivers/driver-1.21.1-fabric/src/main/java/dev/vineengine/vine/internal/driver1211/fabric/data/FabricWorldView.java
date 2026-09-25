@@ -18,6 +18,8 @@ import dev.vineengine.vine.internal.driver1211.fabric.registry.FabricBlockStates
 import dev.vineengine.vine.internal.driver1211.fabric.registry.FabricContentMaterializer;
 import dev.vineengine.vine.internal.spi.WorldViewDriver;
 import dev.vineengine.vine.registry.Holder;
+import dev.vineengine.vine.data.BlockEntityTarget;
+import dev.vineengine.vine.data.VoxelTarget;
 import dev.vineengine.vine.registry.VineId;
 import dev.vineengine.vine.registry.VineRegistries;
 import dev.vineengine.vine.world.BlockPos;
@@ -87,6 +89,22 @@ public final class FabricWorldView implements WorldViewDriver {
             world.setBlockState(nativePos, requested, Block.NOTIFY_ALL);
         }
         return world.getBlockState(nativePos).equals(requested);
+    }
+
+    @Override
+    public Optional<VoxelTarget> holderTarget(VineId dimensionId, BlockPos pos) {
+        ServerWorld level = world(dimensionId);
+        if (level == null) {
+            return Optional.empty();
+        }
+        // Only this cell's own carrier qualifies: another mod's block entity at the
+        // same position is not an engine holder, and answering with its target would
+        // attach engine data to somebody else's save tag.
+        net.minecraft.block.entity.BlockEntity holder = level.getBlockEntity(nativePos(pos));
+        if (!(holder instanceof FabricContentMaterializer.EngineBlockEntity)) {
+            return Optional.empty();
+        }
+        return Optional.of(new BlockEntityTarget(holder));
     }
 
     @Override

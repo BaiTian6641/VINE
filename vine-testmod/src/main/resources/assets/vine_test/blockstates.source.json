@@ -1,0 +1,22 @@
+{
+  "stateblock": {
+    "properties": {
+      "lit": [
+        "true",
+        "false"
+      ],
+      "level": [
+        "0",
+        "1",
+        "2",
+        "3"
+      ],
+      "mode": [
+        "IDLE",
+        "WAITING",
+        "CHARGED"
+      ]
+    },
+    "model": "vine_test:block/stateblock"
+  }
+}

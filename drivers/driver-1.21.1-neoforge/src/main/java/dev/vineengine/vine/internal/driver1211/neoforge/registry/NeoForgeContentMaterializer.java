@@ -1,12 +1,22 @@
 package dev.vineengine.vine.internal.driver1211.neoforge.registry;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.ItemInteractionResult;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntityTicker;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
+import net.minecraft.world.phys.BlockHitResult;
 import net.neoforged.neoforge.registries.RegisterEvent;
 
 import org.slf4j.Logger;
@@ -14,6 +24,8 @@ import org.slf4j.LoggerFactory;
 
 import dev.vineengine.vine.content.BlockDescriptor;
 import dev.vineengine.vine.content.ItemDescriptor;
+import dev.vineengine.vine.data.BlockEntityTarget;
+import dev.vineengine.vine.internal.content.BehaviorDispatch;
 import dev.vineengine.vine.internal.driver1211.common.registry.RegistryHookTap;
 import dev.vineengine.vine.internal.spi.StructuralRegistryView;
 import dev.vineengine.vine.registry.Holder;
@@ -36,9 +48,12 @@ import dev.vineengine.vine.registry.VineId;
  * <p>Shape: one block per BlockDescriptor (tuning mapped 1:1 onto
  * {@code BlockBehaviour.Properties}) whose state definition is the descriptor's
  * flattened state model (sub-07 Stage B, {@link NeoForgeBlockStates}), one item
- * per ItemDescriptor. Behaviors do not exist yet — none are installed (Minimal
- * Footprint); a flagged descriptor's block materializes with a block-entity type
- * carrying the engine storage (sub-07 Stage C).
+ * per ItemDescriptor. Behavior composition (sub-07 Stage C) is wired from the
+ * block's own plan: each descriptor asks {@code BehaviorDispatch.plan} once here,
+ * the answer rides the native block, and {@link NeoForgeBehaviorWiring} is what
+ * that answer arms — a block that declares no behavior gets no ticker, no
+ * interaction hook and no drop path (Minimal Footprint). A flagged descriptor's
+ * block materializes with a block-entity type carrying the engine storage.
  */
 public final class NeoForgeContentMaterializer {
 
@@ -53,10 +68,23 @@ public final class NeoForgeContentMaterializer {
             for (Holder<?> holder : type.entries()) {
                 BlockDescriptor descriptor = (BlockDescriptor) holder.value();
                 requireMatchingIds(holder, descriptor.id());
+                // The engine's plan is what this cell wires for the block (sub-07
+                // Stage C): read once, at materialization, so the native hooks answer
+                // from the same decision the boot line counts.
+                BehaviorDispatch.Plan plan = BehaviorDispatch.plan(descriptor.id());
+                if (plan.ticking()) {
+                    NeoForgeBehaviorWiring.installedTicker();
+                }
+                if (plan.use()) {
+                    NeoForgeBehaviorWiring.installedUseHook();
+                }
+                if (plan.loot()) {
+                    NeoForgeBehaviorWiring.installedLootPath();
+                }
                 BlockBehaviour.Properties properties = BlockBehaviour.Properties.of()
                     .strength(descriptor.tuning().hardness(), descriptor.tuning().resistance());
                 Block block;
-                if (descriptor.blockEntity()) {
+                if (descriptor.blockEntity().isPresent()) {
                     // A flagged block gets a block-entity type whose instances are
                     // the engine carrier (sub-07 Stage C, minimal): the payload rides
                     // NeoForge's attachment, so persistence applies with no behavior
@@ -64,11 +92,11 @@ public final class NeoForgeContentMaterializer {
                     // pass ({@link #registerBlockEntities}) — NeoForge forbids
                     // nesting one registry's registration inside another's, and the
                     // block must exist first anyway.
-                    EngineBlockEntityBlock engineBlock = EngineBlockEntityBlock.materialize(descriptor, properties);
+                    EngineBlockEntityBlock engineBlock = EngineBlockEntityBlock.materialize(descriptor, properties, plan);
                     block = engineBlock;
                     PENDING_BLOCK_ENTITIES.put(descriptor.id(), engineBlock);
                 } else {
-                    block = EngineBlock.materialize(descriptor, properties);
+                    block = EngineBlock.materialize(descriptor, properties, plan);
                 }
                 // The native default state must be the engine's default state
                 // (sub-07 Stage B): checked before the block reaches the registry,
@@ -89,20 +117,27 @@ public final class NeoForgeContentMaterializer {
      * {@link NeoForgeBlockStates#withStateModel} because the state definition is
      * built inside the {@code Block} constructor — before this class's fields can
      * hold the descriptor's properties.
+     *
+     * <p>Sub-07 Stage C: the block also carries the engine's behavior plan, which is
+     * the one decision its native hooks answer from, and it is where a declared use
+     * behavior runs.
      */
     public static class EngineBlock extends Block {
 
         private final VineId id;
+        private final BehaviorDispatch.Plan vinePlan;
 
-        EngineBlock(BlockBehaviour.Properties properties, VineId id) {
+        EngineBlock(BlockBehaviour.Properties properties, VineId id, BehaviorDispatch.Plan plan) {
             super(properties);
             this.id = id;
+            this.vinePlan = plan;
         }
 
         /** Constructs the block for {@code descriptor}, its state model installed. */
-        static EngineBlock materialize(BlockDescriptor descriptor, BlockBehaviour.Properties properties) {
+        static EngineBlock materialize(BlockDescriptor descriptor, BlockBehaviour.Properties properties,
+                BehaviorDispatch.Plan plan) {
             return NeoForgeBlockStates.withStateModel(descriptor.properties(),
-                () -> new EngineBlock(properties, descriptor.id()));
+                () -> new EngineBlock(properties, descriptor.id(), plan));
         }
 
         @Override
@@ -110,9 +145,34 @@ public final class NeoForgeContentMaterializer {
             NeoForgeBlockStates.installStateModel(builder);
         }
 
+        /**
+         * The native block-interaction hook (sub-07 Stage C): the one vanilla layer a
+         * real player's right-click ({@code ServerPlayerGameMode#useItemOn} →
+         * {@code BlockState#useItemOn}) and NF's own interaction helper
+         * ({@code GameTestHelper#useBlock}) both reach, carrying the hand, the face and
+         * the hit point the engine's context promises.
+         *
+         * <p>Only a block whose plan declares a use behavior leaves vanilla's own
+         * answer: a block that declares none returns {@code super}, i.e. the stage's
+         * Minimal Footprint rule, untouched interaction included.
+         */
+        @Override
+        protected ItemInteractionResult useItemOn(ItemStack stack, BlockState nativeState, Level level, BlockPos pos,
+                Player player, InteractionHand hand, BlockHitResult hit) {
+            if (!vinePlan.use()) {
+                return super.useItemOn(stack, nativeState, level, pos, player, hand, hit);
+            }
+            return NeoForgeBehaviorWiring.useBlock(this, nativeState, level, pos, player, hand, hit);
+        }
+
         /** The engine block descriptor this native block was materialized for. */
         public VineId vineId() {
             return id;
+        }
+
+        /** The behavior plan this block was materialized with — what its native hooks are armed for. */
+        BehaviorDispatch.Plan vinePlan() {
+            return vinePlan;
         }
     }
 
@@ -126,14 +186,15 @@ public final class NeoForgeContentMaterializer {
 
         volatile net.minecraft.world.level.block.entity.BlockEntityType<EngineBlockEntity> vineType;
 
-        EngineBlockEntityBlock(BlockBehaviour.Properties properties, VineId id) {
-            super(properties, id);
+        EngineBlockEntityBlock(BlockBehaviour.Properties properties, VineId id, BehaviorDispatch.Plan plan) {
+            super(properties, id, plan);
         }
 
         /** Constructs the block for a flagged {@code descriptor}, its state model installed. */
-        static EngineBlockEntityBlock materialize(BlockDescriptor descriptor, BlockBehaviour.Properties properties) {
+        static EngineBlockEntityBlock materialize(BlockDescriptor descriptor, BlockBehaviour.Properties properties,
+                BehaviorDispatch.Plan plan) {
             return NeoForgeBlockStates.withStateModel(descriptor.properties(),
-                () -> new EngineBlockEntityBlock(properties, descriptor.id()));
+                () -> new EngineBlockEntityBlock(properties, descriptor.id(), plan));
         }
 
         @Override
@@ -142,14 +203,55 @@ public final class NeoForgeContentMaterializer {
             net.minecraft.world.level.block.entity.BlockEntityType<EngineBlockEntity> type = vineType;
             return type == null ? null : new EngineBlockEntity(type, pos, state);
         }
+
+        /**
+         * The ticker vanilla installs when this holder enters the ticking set (sub-07
+         * Stage C): present exactly when the plan ticks, so a holder whose descriptor
+         * declares no ticking gets no ticker at all — the stage's boot assertion, made
+         * native.
+         *
+         * <p>The client is not wired: holder payloads do not sync yet (sub-03 Stage E
+         * lists that as remaining), so a client-side tick would run behaviors against a
+         * tree the client never received.
+         */
+        @SuppressWarnings("unchecked")
+        @Override
+        public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state,
+                BlockEntityType<T> type) {
+            if (level.isClientSide() || !vinePlan().ticking() || type != vineType) {
+                return null;
+            }
+            // The comparison above proves T is this block's own holder type, which is
+            // what vanilla asks with (the block entity's own type).
+            return (BlockEntityTicker<T>) (BlockEntityTicker<EngineBlockEntity>) NeoForgeBehaviorWiring::tickBlockEntity;
+        }
     }
 
-    /** The engine's block entity: no behavior, just the attachment-carried payload. */
+    /**
+     * The engine's block entity: the attachment-carried payload plus the little state a
+     * ticker needs (sub-07 Stage C) — the per-holder interval counter, and the holder's
+     * own attach point, built once so a tick allocates neither.
+     */
     public static final class EngineBlockEntity extends net.minecraft.world.level.block.entity.BlockEntity {
+
+        /** Ticks since this holder's last dispatch — the interval is per holder, not per world clock. */
+        int vineTicks;
+
+        private BlockEntityTarget vineTarget;
 
         public EngineBlockEntity(net.minecraft.world.level.block.entity.BlockEntityType<?> type,
                 net.minecraft.core.BlockPos pos, net.minecraft.world.level.block.state.BlockState state) {
             super(type, pos, state);
+        }
+
+        /** This holder's engine attach point, built on first use and reused for its lifetime. */
+        BlockEntityTarget vineTarget() {
+            BlockEntityTarget current = vineTarget;
+            if (current == null) {
+                current = new BlockEntityTarget(this);
+                vineTarget = current;
+            }
+            return current;
         }
     }
 
@@ -174,7 +276,7 @@ public final class NeoForgeContentMaterializer {
         event.register(Registries.BLOCK_ENTITY_TYPE, helper -> {
             for (Holder<?> holder : type.entries()) {
                 BlockDescriptor descriptor = (BlockDescriptor) holder.value();
-                if (!descriptor.blockEntity()) {
+                if (descriptor.blockEntity().isEmpty()) {
                     continue;
                 }
                 EngineBlockEntityBlock block = PENDING_BLOCK_ENTITIES.get(descriptor.id());

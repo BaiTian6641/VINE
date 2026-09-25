@@ -69,7 +69,7 @@ read, follow, track, and build subsystems **independently and in parallel**.
 | 04 | Capabilities | M1 | 02, 03 | in-progress — A–D landed, E open | `:vine-tck:runScenarios1211{Fabric,Neoforge}` | [sub-04](subsystems/sub-04-capabilities.md) |
 | 05 | Networking | M0→M1 | 01, 02, 03 | done | `:vine-tck:runScenarios1211{Fabric,Neoforge}` | [sub-05](subsystems/sub-05-networking.md) |
 | 06 | Commands | M0 minimal→M1 full | 01, 02, 03 | in-progress — A–D landed, E open | `:vine-tck:runScenarios1211{Fabric,Neoforge}` | [sub-06](subsystems/sub-06-commands.md) |
-| 07 | Blocks & items | M0 minimal→M3 full | 02, 03 | in-progress — A and B landed, C–E open | `:vine-tck:runScenarios1211{Fabric,Neoforge}`; `:vine-tck:verifyDatagen` | [sub-07](subsystems/sub-07-blocks-items.md) |
+| 07 | Blocks & items | M0 minimal→M3 full | 02, 03 | in-progress — A–C landed (C except BE-to-client sync), D–E open | `:vine-tck:runScenarios1211{Fabric,Neoforge}`; `:vine-tck:verifyDatagen` | [sub-07](subsystems/sub-07-blocks-items.md) |
 | 08 | Entities & VineBrain | M2 | 02, 03, 05 | planning — no stage landed | — | [sub-08](subsystems/sub-08-entities.md) |
 | 09 | Animation runtime | M2 data → M5 render | 08 | planning — no stage landed | — | [sub-09](subsystems/sub-09-animation.md) |
 | 10 | Combat & input | M2 | 05, 08, 09 | planning — no stage landed | — | [sub-10](subsystems/sub-10-combat-input.md) |

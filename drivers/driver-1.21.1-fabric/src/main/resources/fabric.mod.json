@@ -18,7 +18,8 @@
         ],
         "fabric-gametest": [
             "dev.vineengine.vine.internal.driver1211.fabric.tck.VineGameTest",
-            "dev.vineengine.vine.internal.driver1211.fabric.tck.MixinHooksGameTest"
+            "dev.vineengine.vine.internal.driver1211.fabric.tck.MixinHooksGameTest",
+            "dev.vineengine.vine.internal.driver1211.fabric.tck.BehaviorUseGameTest"
         ]
     },
     "mixins": [

@@ -76,12 +76,14 @@ public final class TestContent {
         // block entity is the same attach point every other holder uses, so a
         // placed block persists a tree across save/reload.
         VineRegistries.register(VineContent.BLOCK_TYPE, TESTBLOCK_ID,
-            new BlockDescriptor(TESTBLOCK_ID, BlockTuning.STONE_LIKE, ModelHint.cubeAll(), true));
+            new BlockDescriptor(TESTBLOCK_ID, BlockTuning.STONE_LIKE, ModelHint.cubeAll(),
+                dev.vineengine.vine.content.BlockEntityDescriptor.storage(
+                    dev.vineengine.vine.testmod.data.VoxelExemplar.SCHEMA_ID)));
         VineRegistries.register(VineContent.ITEM_TYPE, TESTITEM_ID,
             new ItemDescriptor(TESTITEM_ID, new ItemTuning(64), ModelHint.generated()));
         VineRegistries.register(VineContent.BLOCK_TYPE, STATEBLOCK_ID,
             new BlockDescriptor(STATEBLOCK_ID, STATEBLOCK_PROPERTIES, BlockTuning.STONE_LIKE,
-                false, ModelHint.cubeAll()));
+                ModelHint.cubeAll()));
         attemptOverBudgetRegistration();
         engine.onPhase(EnginePhase.REGISTRIES_FROZEN, change -> {
             var block = VineRegistries.get(VineContent.BLOCK_TYPE, TESTBLOCK_ID)
@@ -110,7 +112,7 @@ public final class TestContent {
             Property.intRange("c", 0, 15));
         try {
             VineRegistries.register(VineContent.BLOCK_TYPE, OVERBUDGET_ID,
-                new BlockDescriptor(OVERBUDGET_ID, axes, BlockTuning.STONE_LIKE, false, ModelHint.cubeAll()));
+                new BlockDescriptor(OVERBUDGET_ID, axes, BlockTuning.STONE_LIKE, ModelHint.cubeAll()));
             System.out.println("vine-testmod: over-budget descriptor was ACCEPTED — budget is not enforced");
         } catch (IllegalArgumentException rejected) {
             System.out.println("vine-testmod: over-budget rejected: " + rejected.getMessage());

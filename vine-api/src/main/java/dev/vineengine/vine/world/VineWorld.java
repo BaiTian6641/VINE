@@ -2,6 +2,7 @@ package dev.vineengine.vine.world;
 
 import java.util.Optional;
 
+import dev.vineengine.vine.data.VoxelData;
 import dev.vineengine.vine.registry.VineId;
 
 /**
@@ -53,4 +54,16 @@ public interface VineWorld {
      *         not a runtime condition)
      */
     boolean setState(BlockPos pos, BlockState state);
+
+    /**
+     * The engine data tree of the block entity at {@code pos}, or empty when the
+     * position holds no holder (not an engine block, no block-entity declaration, or
+     * nothing loaded there).
+     *
+     * <p>The tree is opened through the engine's own storage path against the schema
+     * the block's descriptor declares, so it is the same object the block's behaviors
+     * see in their tick context and the same one the save path persists — reading it
+     * here is not a copy and not a second source of truth.
+     */
+    Optional<VoxelData> dataAt(BlockPos pos);
 }

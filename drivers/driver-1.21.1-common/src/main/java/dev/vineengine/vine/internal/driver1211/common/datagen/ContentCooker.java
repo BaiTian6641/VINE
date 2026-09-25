@@ -13,6 +13,7 @@ import java.util.stream.Stream;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
 /**
@@ -35,7 +36,13 @@ import com.google.gson.JsonParser;
  */
 public final class ContentCooker {
 
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final Gson GSON = new GsonBuilder()
+        .setPrettyPrinting()
+        // Blockstate variant keys are full of '='; Gson's HTML escaping would spell
+        // each one \u003d. Vanilla parses either form, but a cooked file a human
+        // reads should read like the state it names.
+        .disableHtmlEscaping()
+        .create();
 
     private ContentCooker() {
     }
@@ -71,6 +78,7 @@ public final class ContentCooker {
             }
             cookTextures(nsDir, namespace, out, "block", cooked);
             cookTextures(nsDir, namespace, out, "item", cooked);
+            cookBlockstates(nsDir, namespace, out, cooked);
             cookSounds(nsDir, namespace, out, cooked);
         }
         System.out.println("[datagen] " + cell + ": cooked " + cooked.size() + " file(s)");
@@ -109,6 +117,110 @@ public final class ContentCooker {
                 }
                 """.formatted(parent, textureKey, namespace, kind, name), cooked);
         }
+    }
+
+    /**
+     * Cooks blockstates for blocks whose state model is <em>flattened</em> (sub-07
+     * Stage B): a block with N declared properties has a state per combination of
+     * their values, and the client can only render such a block if its blockstate
+     * JSON names every combination.
+     *
+     * <p>The declaration lives in {@code assets/&lt;ns&gt;/blockstates.source.json} —
+     * source data, not derived data, because a texture's presence cannot say how
+     * many states a block has:
+     * <pre>
+     * {
+     *   "stateblock": {
+     *     "properties": { "lit": ["true", "false"], "level": ["0", "1", "2", "3"] },
+     *     "model": "vine_test:block/stateblock"
+     *   }
+     * }
+     * </pre>
+     * The enumeration is the cartesian product of the declared values in declared
+     * order, last property varying fastest — the same total order the engine's own
+     * state table uses, so the cooked file and the engine agree on what state zero
+     * is. A block named here overrides its texture-derived single-variant
+     * blockstate; a block with no entry keeps the placeholder shape.
+     */
+    private static void cookBlockstates(Path nsDir, String namespace, Path out, List<String> cooked) throws IOException {
+        Path source = nsDir.resolve("blockstates.source.json");
+        if (!Files.isRegularFile(source)) {
+            return;
+        }
+        JsonElement parsed;
+        try {
+            parsed = JsonParser.parseString(Files.readString(source, java.nio.charset.StandardCharsets.UTF_8));
+        } catch (RuntimeException e) {
+            throw new IOException("[datagen] " + source + " is not valid JSON: " + e.getMessage(), e);
+        }
+        if (!parsed.isJsonObject()) {
+            throw new IOException("[datagen] " + source + " must be a JSON object of block name -> declaration");
+        }
+        // Blocks are visited in sorted order (deterministic), but a block's
+        // properties keep the order the source declares them in: that order is the
+        // flattening order the engine's state table uses, so the first value of the
+        // first property is state zero on both sides.
+        for (String block : sorted(parsed.getAsJsonObject().keySet())) {
+            JsonObject declaration = parsed.getAsJsonObject().getAsJsonObject(block);
+            if (declaration == null || !declaration.has("properties") || !declaration.has("model")) {
+                throw new IOException("[datagen] " + source + ": '" + block
+                    + "' must declare both 'properties' and 'model'");
+            }
+            write(out, namespace + "/blockstates/" + block + ".json",
+                variants(namespace, block, declaration), cooked);
+        }
+    }
+
+    /** The blockstate document for one declared block: one variant per state, in declared order. */
+    private static String variants(String namespace, String block, JsonObject declaration) {
+        JsonObject properties = declaration.getAsJsonObject("properties");
+        String model = declaration.get("model").getAsString();
+        List<String> names = new ArrayList<>(properties.keySet());
+        List<List<String>> axes = new ArrayList<>(names.size());
+        for (String name : names) {
+            List<String> values = new ArrayList<>();
+            for (JsonElement value : properties.getAsJsonArray(name)) {
+                values.add(value.getAsString());
+            }
+            if (values.isEmpty()) {
+                throw new IllegalArgumentException("[datagen] " + namespace + "/" + block + ": property '" + name
+                    + "' declares no values (a property with no values has no state table)");
+            }
+            axes.add(values);
+        }
+        JsonObject variants = new JsonObject();
+        int total = 1;
+        for (List<String> axis : axes) {
+            total *= axis.size();
+        }
+        for (int index = 0; index < total; index++) {
+            // Row-major over the declared axes (first property most significant),
+            // which is the engine state table's own order: state zero is the first
+            // value of every property, on the client as well as in the engine.
+            int[] digits = new int[axes.size()];
+            int remainder = index;
+            for (int axis = axes.size() - 1; axis >= 0; axis--) {
+                digits[axis] = remainder % axes.get(axis).size();
+                remainder /= axes.get(axis).size();
+            }
+            List<String> parts = new ArrayList<>(axes.size());
+            for (int axis = 0; axis < axes.size(); axis++) {
+                parts.add(names.get(axis) + "=" + axes.get(axis).get(digits[axis]));
+            }
+            JsonObject variant = new JsonObject();
+            variant.addProperty("model", model);
+            variants.add(String.join(",", parts), variant);
+        }
+        com.google.gson.JsonObject root = new com.google.gson.JsonObject();
+        root.add("variants", variants);
+        return GSON.toJson(root) + System.lineSeparator();
+    }
+
+    /** Sorted copy of a key set — the deterministic visit order every cook uses. */
+    private static List<String> sorted(java.util.Set<String> keys) {
+        List<String> sorted = new ArrayList<>(keys);
+        java.util.Collections.sort(sorted);
+        return sorted;
     }
 
     private static void cookSounds(Path nsDir, String namespace, Path out, List<String> cooked) throws IOException {

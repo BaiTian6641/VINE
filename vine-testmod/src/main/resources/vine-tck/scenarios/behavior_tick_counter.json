@@ -1,0 +1,86 @@
+{
+  "id": "vine_test:behavior_tick_counter",
+  "tags": [
+    "SMOKE",
+    "BEHAVIOR"
+  ],
+  "steps": [
+    {
+      "type": "AssertTrace",
+      "trace": "log",
+      "expect": [
+        "[VINE] behaviors: ticking block entities=1",
+        "installed tickers=1"
+      ]
+    },
+    {
+      "type": "RunCommand",
+      "command": "tick freeze"
+    },
+    {
+      "type": "PlaceBlock",
+      "block": "vine_test:counterblock",
+      "pos": [
+        2,
+        300,
+        0
+      ]
+    },
+    {
+      "type": "AdvanceTicks",
+      "ticks": 40
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_counter_get 2 300 0"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "command",
+      "expect": [
+        "tck: counter @2,300,0 count=2"
+      ]
+    },
+    {
+      "type": "SaveReloadWorld"
+    },
+    {
+      "type": "RunCommand",
+      "command": "tick freeze"
+    },
+    {
+      "type": "RunCommand",
+      "command": "forceload add 2 300 0"
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_counter_get 2 300 0"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "command",
+      "expect": [
+        "tck: counter @2,300,0 count=2"
+      ]
+    },
+    {
+      "type": "AdvanceTicks",
+      "ticks": 20
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_counter_get 2 300 0"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "command",
+      "expect": [
+        "tck: counter @2,300,0 count=3"
+      ]
+    },
+    {
+      "type": "RunCommand",
+      "command": "tick unfreeze"
+    }
+  ]
+}

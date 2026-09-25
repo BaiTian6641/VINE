@@ -34,6 +34,7 @@ import dev.vineengine.vine.internal.VoxelBackend;
 import dev.vineengine.vine.internal.WorldBackend;
 import dev.vineengine.vine.internal.capability.CapabilityStore;
 import dev.vineengine.vine.internal.command.CommandService;
+import dev.vineengine.vine.internal.content.BehaviorDispatch;
 import dev.vineengine.vine.internal.content.BlockStateTable;
 import dev.vineengine.vine.internal.config.ConfigService;
 import dev.vineengine.vine.internal.data.NativeFields;
@@ -129,6 +130,11 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
                     + jsonResult.registered() + ", identical " + jsonResult.identicalTwins());
             }
             registries.freeze();
+            // Stage C's engine-side half of "a block with no ticking block entity
+            // installs no ticker": the number a cell's own installed-ticker count
+            // must equal, printed where boot logs carry it on every cell.
+            LOG.log(System.Logger.Level.INFO, "[VINE] behaviors: ticking block entities="
+                + BehaviorDispatch.tickingBlockCount());
             net.freezeAndSync();
             commands.freeze();
             // Store schemas must be registered before the schema registry freezes:
@@ -203,6 +209,7 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
         // terms — rather than at a cell's boot, where the author is not looking.
         if (data instanceof BlockDescriptor block) {
             BlockStateTable.validate(block);
+            BehaviorDispatch.noteRegistered(block);
         }
         return registries.register(type, id, data);
     }

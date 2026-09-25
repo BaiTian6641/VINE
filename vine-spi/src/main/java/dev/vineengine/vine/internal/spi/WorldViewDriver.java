@@ -2,6 +2,7 @@ package dev.vineengine.vine.internal.spi;
 
 import java.util.Optional;
 
+import dev.vineengine.vine.data.VoxelTarget;
 import dev.vineengine.vine.registry.VineId;
 import dev.vineengine.vine.world.BlockPos;
 import dev.vineengine.vine.world.BlockState;
@@ -47,4 +48,18 @@ public interface WorldViewDriver {
 
     /** Whether {@code dimensionId} is loaded by this cell right now. */
     boolean isLoaded(VineId dimensionId);
+
+    /**
+     * The engine data attach point of the block entity at {@code pos}, or empty when
+     * the position holds no holder (the block is not an engine block, it declares no
+     * block entity, or the chunk is not loaded).
+     *
+     * <p>The engine turns this into the holder's {@code VoxelData} tree (the same
+     * attach point storage, sync and save use), which is how a behavior's tick
+     * context gets its data and how a consumer reads a placed block's tree without
+     * ever naming a native type. Directions: a driver answers with the target its own
+     * storage path would use for that holder, and reports empty rather than throwing
+     * for every ordinary world condition.
+     */
+    Optional<VoxelTarget> holderTarget(VineId dimensionId, BlockPos pos);
 }

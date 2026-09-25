@@ -263,6 +263,33 @@ one item type, damage as data (§5.3/§5.4).
 - **Acceptance:** TCK: testmod ticking counter-BE persists its count across
   save/load on both loaders; `onUse` fires with correct context; BE-less
   blocks install zero tickers (boot assertion).
+- **Evidence (2026-09-25, both 1.21.1 cells):** `behavior_tick_counter` green on
+  both cells — 40 server ticks at the declared interval 20 produce exactly `count=2`
+  (per-holder interval arithmetic, driven through the `AdvanceTicks` barrier), the
+  count survives a `SaveReloadWorld` as `count=2`, and 20 further ticks reach
+  `count=3` — with the engine printing `[VINE] behaviors: ticking block entities=1`
+  and each cell printing its own `installed tickers=1` from the counts it actually
+  installed, so "a block with no ticking block entity installs no ticker" is a
+  compared pair of numbers rather than a claim. `behavior_loot_drops` green on both
+  cells: a `/setblock … destroy` removal (no player) reaches the loot behavior,
+  which prints the full context (`miner=none`, `added=vine_test:testitem`) and each
+  cell reports `loot applied=1`. `onUse` is proven per cell through the loader's own
+  GameTest helper driving a real interaction on a placed counter block, asserting
+  the engine's printed context (position, block, player, hand, face, hit) — Fabric
+  3/3 tests, NeoForge 2/2.
+- **Cell-seam notes (deliberate, not gaps):** Fabric hangs loot off the block's own
+  removal callback, so it fires on *every* removal; NeoForge uses `BlockDropsEvent`,
+  which fires where drops are actually resolved (`dropBlock=true`), so a removal
+  that drops nothing does not reach a loot behavior there — the no-breaker case is
+  covered on both. Global Loot Modifiers were considered on NeoForge and rejected
+  as the *less* close seam: they fire inside every loot roll in the game and are
+  enabled by datapack content rather than by a block's plan, while `BlockDropsEvent`
+  fires exactly where the engine's `LootContext` says it should with the drop list
+  in hand. For use, NeoForge hooks `Block#useItemOn` rather than
+  `PlayerInteractEvent.RightClickBlock`: the event is posted by exactly one vanilla
+  caller and never by the GameTest helper the acceptance drives, and installing both
+  layers would run a real player's behavior twice, since the event does not stop
+  vanilla's own `useItemOn` call from following it.
 - **Remaining (named, not implied):** block-entity **sync to clients** — the
   `Do` line's "BE sync via sub-05" — is not landed: the payload rides the storage
   path (persist/save/reload), and pushing it to clients needs the sub-03 client

@@ -1,0 +1,30 @@
+{
+  "id": "vine_test:behavior_loot_drops",
+  "tags": [
+    "SMOKE",
+    "BEHAVIOR"
+  ],
+  "steps": [
+    {
+      "type": "PlaceBlock",
+      "block": "vine_test:counterblock",
+      "pos": [
+        3,
+        300,
+        0
+      ]
+    },
+    {
+      "type": "RunCommand",
+      "command": "setblock 3 300 0 minecraft:air destroy"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "log",
+      "expect": [
+        "tck: loot pos=3,300,0 block=vine_test:counterblock state= miner=none added=vine_test:testitem",
+        "vine: behaviors loot applied=1"
+      ]
+    }
+  ]
+}

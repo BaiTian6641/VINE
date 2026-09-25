@@ -19,6 +19,8 @@ import dev.vineengine.vine.internal.driver1211.neoforge.registry.NeoForgeBlockSt
 import dev.vineengine.vine.internal.driver1211.neoforge.registry.NeoForgeContentMaterializer;
 import dev.vineengine.vine.internal.spi.WorldViewDriver;
 import dev.vineengine.vine.registry.Holder;
+import dev.vineengine.vine.data.BlockEntityTarget;
+import dev.vineengine.vine.data.VoxelTarget;
 import dev.vineengine.vine.registry.VineId;
 import dev.vineengine.vine.registry.VineRegistries;
 import dev.vineengine.vine.world.BlockPos;
@@ -88,6 +90,22 @@ public final class NeoForgeWorldView implements WorldViewDriver {
             level.setBlock(nativePos, requested, Block.UPDATE_ALL);
         }
         return level.getBlockState(nativePos).equals(requested);
+    }
+
+    @Override
+    public Optional<VoxelTarget> holderTarget(VineId dimensionId, BlockPos pos) {
+        ServerLevel level = level(dimensionId);
+        if (level == null) {
+            return Optional.empty();
+        }
+        // Only this cell's own carrier qualifies: another mod's block entity at the
+        // same position is not an engine holder, and answering with its target would
+        // attach engine data to somebody else's save tag.
+        net.minecraft.world.level.block.entity.BlockEntity holder = level.getBlockEntity(nativePos(pos));
+        if (!(holder instanceof NeoForgeContentMaterializer.EngineBlockEntity)) {
+            return Optional.empty();
+        }
+        return Optional.of(new BlockEntityTarget(holder));
     }
 
     @Override

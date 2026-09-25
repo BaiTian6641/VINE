@@ -285,10 +285,13 @@ public enum TckTag { SMOKE, PERSISTENCE, NETWORK, BRAIN, ANIMATION, PERF, QUARAN
   GameTest tasks do not take the sweep's lock). Worse, 25565 is a *shared*
   resource beyond this repo: a developer's or another project's dev server holding
   it broke a sweep through no fault of the code. The harness no longer competes
-  for it: `ScenarioRunner` probes a free ephemeral port per run and passes
-  `-Pvine.tck.port=<n>`, both 1.21.1 drivers honour that property on their
-  `runServer` config, and the runner drives the server over stdin so the port
-  never has to be reachable. The default remains 25565 when the property is
+  for it: `ScenarioRunner` passes `-Pvine.tck.port=0`, both 1.21.1 drivers honour
+  that property on their `runServer` config, and the runner drives the server over
+  stdin so the port never has to be reachable. Port 0 rather than a probed free
+  port is deliberate: the first version probed a port and closed the probe socket,
+  and on a busy machine the port was taken in the gap before the server bound it
+  (`FAILED TO BIND TO PORT`), which then failed every following boot of the run the
+  same way. Asking the OS to assign at bind time has no gap. The default remains 25565 when the property is
   absent (a human's `runServer` is unchanged). Keeping a sweep away from any other
   Gradle-driven run is still good manners — builds share more than a port (run
   dirs, jar outputs) — but it is no longer a correctness requirement. The
@@ -299,6 +302,17 @@ public enum TckTag { SMOKE, PERSISTENCE, NETWORK, BRAIN, ANIMATION, PERF, QUARAN
   commands need `server-port=0` written into their run directory first. That is
   dev-machine state, not repo state — CI has no competing server, and the
   property-based path covers every sweep.
+- **Perf gates are hard thresholds on a shared machine (observed 2026-09-25):**
+  `voxeldata_perf` gates mutation at `<= 1.0 µs/mutation` (min of 15 samples) and
+  reads at `<= 1 ms` per 10k aggregate. Under sustained load — a sibling sweep, a
+  fleet of Gradle daemons, an unrelated dev server, a compiler — the min-of-15
+  mitigation is not enough, and the scenario fails with the *measured* number in
+  its line (`mutate1k=1087.30us … withinBudget=false`). That is a measurement of
+  the machine, not of the engine, so the failure is a rerun signal: check the
+  printed numbers against the budget before treating it as a regression, and
+  measure on a quiet machine when the number matters. Two consecutive failures
+  quarantine the scenario by the ordinary policy, which is the intended outcome —
+  the budget is not to be loosened to make a loaded machine pass.
 - **Fixture size vs git:** saves are megabytes — store compressed
   (`.tar.zst`); git holds canonical dumps + one minimal save; full saves are
   CI artifacts. Repo-policy owner: SUB-00.
