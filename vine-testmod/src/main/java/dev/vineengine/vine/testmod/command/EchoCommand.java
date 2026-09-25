@@ -48,6 +48,31 @@ public final class EchoCommand {
                             ctx.feedback("tck: sent echo number=" + number + " text=" + text);
                             return 1;
                         }))))
+            .then(VineCommand.literal("tck_brain_trace")
+                .then(VineCommand.argument("ticks", VineArgumentTypes.INT)
+                    .executes(ctx -> {
+                        dev.vineengine.vine.testmod.brain.BrainExemplar.run(ctx.argument("ticks", Integer.class));
+                        return 1;
+                    })))
+
+            .then(VineCommand.literal("tck_entity_spawn")
+                .then(VineCommand.argument("id", VineArgumentTypes.VINE_ID)
+                    .then(VineCommand.argument("x", VineArgumentTypes.INT)
+                        .then(VineCommand.argument("y", VineArgumentTypes.INT)
+                            .then(VineCommand.argument("z", VineArgumentTypes.INT)
+                                .executes(ctx -> {
+                                    var id = ctx.argument("id", VineId.class);
+                                    int x = ctx.argument("x", Integer.class);
+                                    int y = ctx.argument("y", Integer.class);
+                                    int z = ctx.argument("z", Integer.class);
+                                    boolean spawned = dev.vineengine.vine.entity.VineEntities.spawn(id,
+                                        dev.vineengine.vine.world.VineWorlds.overworld(),
+                                        dev.vineengine.vine.world.Vec3.of(x + 0.5D, y, z + 0.5D));
+                                    ctx.feedback("tck: entity spawn id=" + id + " at=" + x + "," + y + "," + z
+                                        + " ok=" + spawned);
+                                    return 1;
+                                }))))))
+
             .then(VineCommand.literal("tck_counter_get")
                 .then(VineCommand.argument("x", VineArgumentTypes.INT)
                     .then(VineCommand.argument("y", VineArgumentTypes.INT)

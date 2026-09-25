@@ -1,15 +1,25 @@
 package dev.vineengine.vine.internal.driver1211.fabric.registry;
 
+import java.util.List;
+import java.util.function.ToDoubleFunction;
+
+import net.fabricmc.fabric.api.object.builder.v1.entity.FabricDefaultAttributeRegistry;
 import net.minecraft.block.AbstractBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.BlockEntityTicker;
 import net.minecraft.block.entity.BlockEntityType;
+import net.minecraft.entity.EntityType;
+import net.minecraft.entity.SpawnGroup;
+import net.minecraft.entity.attribute.DefaultAttributeContainer;
+import net.minecraft.entity.attribute.EntityAttribute;
+import net.minecraft.entity.mob.MobEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
+import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.state.StateManager;
 import net.minecraft.util.Hand;
 import net.minecraft.util.Identifier;
@@ -23,19 +33,23 @@ import org.slf4j.LoggerFactory;
 import dev.vineengine.vine.content.BlockDescriptor;
 import dev.vineengine.vine.content.ItemDescriptor;
 import dev.vineengine.vine.data.BlockEntityTarget;
+import dev.vineengine.vine.entity.AttributeSpec;
+import dev.vineengine.vine.entity.EntityDescriptor;
 import dev.vineengine.vine.internal.content.BehaviorDispatch;
 import dev.vineengine.vine.internal.driver1211.common.registry.RegistryHookTap;
+import dev.vineengine.vine.internal.driver1211.fabric.entity.VineEntity;
 import dev.vineengine.vine.internal.spi.StructuralRegistryView;
 import dev.vineengine.vine.registry.Holder;
 import dev.vineengine.vine.registry.VineId;
 
 /**
- * Native block/item materialization for the 1.21.1 Fabric cell (sub-07
- * Stage A): the sub-02 seam extension for content kinds. Unlike generic
- * structural types (which get a vine-created registry), {@code vine:block} and
- * {@code vine:item} entries land in the <em>vanilla</em> BLOCK and ITEM
- * registries — a placeable/breakable block and an inventory-real item only
- * exist as vanilla singletons.
+ * Native block/item/entity materialization for the 1.21.1 Fabric cell (sub-07
+ * Stage A; the entity kind is sub-08 Stage A): the sub-02 seam extension for
+ * content kinds. Unlike generic structural types (which get a vine-created
+ * registry), {@code vine:block}, {@code vine:item} and {@code vine:entity} entries
+ * land in the <em>vanilla</em> registries — a placeable/breakable block, an
+ * inventory-real item and a live entity only exist as vanilla singletons, so
+ * {@code Registries.BLOCK}/{@code ITEM}/{@code ENTITY_TYPE} are the authority.
  *
  * <p>Loader difference absorbed (vs. NeoForge's per-registry
  * {@code RegisterEvent} phasing): Fabric's registration moment is plain
@@ -50,6 +64,11 @@ import dev.vineengine.vine.registry.VineId;
  * rides the native block, and {@link FabricBehaviorWiring} is what that answer arms
  * — a block that declares no behavior gets no ticker, no interaction hook and no
  * loot path (Minimal Footprint).
+ *
+ * <p>Sub-08 Stage A adds the entity kind: one {@link VineEntity} type per
+ * EntityDescriptor, its dimensions and eye height from the descriptor, its
+ * attributes bound through {@link FabricDefaultAttributeRegistry} and its
+ * modifiers installed on each instance (see {@link #registerEntities}).
  */
 public final class FabricContentMaterializer {
 
@@ -298,6 +317,113 @@ public final class FabricContentMaterializer {
             RegistryHookTap.dispatch(type.type().registryId().toString(), descriptor.id().toString());
             LOG.info("vine: materialized item {} (model={})", descriptor.id(), descriptor.model().kind());
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Entities (sub-08 Stage A)
+    // ------------------------------------------------------------------
+
+    /** Materialized entity types by descriptor id — what the cell's {@code EntityDriver} resolves. */
+    private static final java.util.Map<VineId, EntityType<?>> ENTITY_TYPES =
+        new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** The native entity type materialized for {@code id}, or null when none was. */
+    public static EntityType<?> entityTypeFor(VineId id) {
+        return ENTITY_TYPES.get(id);
+    }
+
+    /**
+     * Registers every {@code vine:entity} entry into the vanilla entity-type
+     * registry (sub-08 Stage A), one {@link VineEntity} native kind per descriptor.
+     *
+     * <p><b>What the descriptor decides:</b> the type's dimensions and eye height
+     * come from {@code Dimensions} — the eye height is set explicitly, never left at
+     * this cell's {@code height * 0.85} default, because the engine's line of sight
+     * and part offsets were authored against the descriptor's number. The
+     * descriptor's attributes become the type's default container, each base clamped
+     * into its {@code [min, max]}, and the descriptor's modifiers are installed per
+     * instance by {@link VineEntity}.
+     *
+     * <p><b>Spawn group MISC:</b> the group gates this cell's natural spawn cycle
+     * (mob caps, biome spawn lists), and engine content is never part of that cycle —
+     * {@code MISC} is vanilla's group for the kinds that exist only because something
+     * created them.
+     *
+     * <p>Each attribute id resolves through the native attribute registry through
+     * {@link #attributeEntry}; an id the registry does not know fails the boot naming
+     * it rather than materializing an entity that silently lacks a stat. One line per
+     * entity is logged, because the boot trace and the acceptance scenario both read
+     * these base values back.
+     */
+    public static void registerEntities(StructuralRegistryView.StructuralType type) {
+        for (Holder<?> holder : type.entries()) {
+            EntityDescriptor descriptor = (EntityDescriptor) holder.value();
+            requireMatchingIds(holder, descriptor.id());
+            Identifier location = identifier(descriptor.id());
+            EntityType<VineEntity> entityType = EntityType.Builder
+                .<VineEntity>create((nativeType, nativeWorld) ->
+                    new VineEntity(nativeType, nativeWorld, descriptor.id(), descriptor), SpawnGroup.MISC)
+                .dimensions((float) descriptor.dimensions().width(), (float) descriptor.dimensions().height())
+                .eyeHeight((float) descriptor.dimensions().eyeHeight())
+                .build(location.toString());
+            Registry.register(Registries.ENTITY_TYPE, location, entityType);
+            FabricDefaultAttributeRegistry.register(entityType, defaultAttributes(descriptor));
+            ENTITY_TYPES.put(descriptor.id(), entityType);
+            RegistryHookTap.dispatch(type.type().registryId().toString(), descriptor.id().toString());
+            LOG.info("vine: materialized entity {} {}", descriptor.id(),
+                describeAttributes(descriptor.attributes(), AttributeSpec::base));
+        }
+    }
+
+    /**
+     * The default attribute container for {@code descriptor}: the mob's own vanilla
+     * default set as the floor, with every descriptor attribute overriding it.
+     *
+     * <p>The floor is deliberate: vanilla entity code reads attributes the descriptor
+     * does not name (follow range today), and a container missing them would fail
+     * inside a tick rather than at the descriptor author's keyboard. A descriptor
+     * value wins wherever the descriptor speaks.
+     */
+    private static DefaultAttributeContainer.Builder defaultAttributes(EntityDescriptor descriptor) {
+        DefaultAttributeContainer.Builder builder = MobEntity.createMobAttributes();
+        for (AttributeSpec spec : descriptor.attributes()) {
+            // AttributeSpec's own invariant is min <= base <= max, so this clamp is
+            // the descriptor contract made explicit, not a correction.
+            double base = Math.min(spec.max(), Math.max(spec.min(), spec.base()));
+            builder.add(attributeEntry(spec.attribute()), base);
+        }
+        return builder;
+    }
+
+    /**
+     * The native attribute an engine attribute id names, resolved through the native
+     * registry — the one authority on attribute identity (§5.13: the descriptor names
+     * the native id, the cell resolves it). An id the registry does not know fails
+     * the boot naming it, so a descriptor can never materialize an entity that
+     * silently lacks a stat.
+     */
+    public static RegistryEntry<EntityAttribute> attributeEntry(VineId attribute) {
+        return Registries.ATTRIBUTE.getEntry(identifier(attribute))
+            .orElseThrow(() -> new IllegalStateException("entity attribute " + attribute
+                + " does not exist in this cell's attribute registry — the descriptor names a native"
+                + " attribute this cell cannot bind"));
+    }
+
+    /**
+     * Renders {@code label=value} pairs for {@code specs} in declaration order — the
+     * one form both the materialization line (base values, {@link AttributeSpec#base})
+     * and the spawn line (live instance values) use. The label is the attribute id's
+     * final dot-segment, so {@code minecraft:generic.max_health} reads
+     * {@code max_health}: the name the acceptance needles use.
+     */
+    public static String describeAttributes(List<AttributeSpec> specs, ToDoubleFunction<AttributeSpec> value) {
+        java.util.List<String> parts = new java.util.ArrayList<>(specs.size());
+        for (AttributeSpec spec : specs) {
+            String path = spec.attribute().path();
+            int dot = path.lastIndexOf('.');
+            parts.add((dot < 0 ? path : path.substring(dot + 1)) + "=" + value.applyAsDouble(spec));
+        }
+        return String.join(" ", parts);
     }
 
     /** The holder key owns the entry; a disagreeing descriptor id is an author bug, never guessed. */

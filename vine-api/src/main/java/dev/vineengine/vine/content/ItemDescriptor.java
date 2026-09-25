@@ -26,7 +26,7 @@ public record ItemDescriptor(VineId id, ItemTuning tuning, ModelHint model) {
 
     /** Single source of truth for every representation of this data (sub-02 §2). */
     public static final Codec<ItemDescriptor> CODEC = RecordCodecBuilder.create(instance -> instance.group(
-        ContentCodecs.VINE_ID.fieldOf("id").forGetter(ItemDescriptor::id),
+        VineId.CODEC.fieldOf("id").forGetter(ItemDescriptor::id),
         ItemTuning.CODEC.fieldOf("tuning").forGetter(ItemDescriptor::tuning),
         ModelHint.CODEC.fieldOf("model").forGetter(ItemDescriptor::model)
     ).apply(instance, ItemDescriptor::new));

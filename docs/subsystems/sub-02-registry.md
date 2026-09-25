@@ -168,6 +168,18 @@ retained), `DROP`, `FAIL` (refuse load).
     every remaining structural entry in *key order*, so a world's numbering is
     stable across cells and runs (entries read before mount keep the ids those
     reads assigned, which the engine's own freeze-time reads fix deterministically).
+  - **Ordering note (2026-09-26, with sub-08 Stage A):** structural JSON now
+    completes *before* the first structural snapshot is taken
+    (`DescriptorStore.beforeStructuralSnapshot`), because a cell materializes what
+    the snapshot holds and Fabric's native registries freeze during mod init — a
+    JSON-authored descriptor that arrived at the engine's own freeze phase would be
+    materialized by nobody. The one observable consequence is *fresh-world*
+    numbering: the id map is now assigned with the JSON entries present from the
+    start (`vinetest:marker example` takes 0 and the block entries shift up by one),
+    where previously the JSON pass ran after the cell's materialization reads. Ids
+    stay deterministic per content set, a world that already has a map keeps its
+    numbering untouched, and the TCK fixture that pins the fresh numbering was
+    re-baselined with the change rather than the change being worked around.
   - **Evidence:** `build/sub02d` harness — 10 checks green (stable assignment,
     snapshot/restore, KEEP retains the slot, DROP releases it, FAIL refuses with
     an explicit message); new `vine_test:id_map_policy` TCK scenario drives

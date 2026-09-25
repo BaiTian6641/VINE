@@ -7,8 +7,8 @@ import dev.vineengine.vine.registry.DescriptorType;
 import dev.vineengine.vine.registry.VineId;
 
 /**
- * The engine-owned structural content kinds (sub-07 Stage A): {@code vine:block}
- * and {@code vine:item}. Consumers register {@link BlockDescriptor}s and
+ * The engine-owned structural content kinds: {@code vine:block} and
+ * {@code vine:item} (sub-07 Stage A), and {@code vine:entity} (sub-08 Stage A). Consumers register {@link BlockDescriptor}s and
  * {@link ItemDescriptor}s under these tokens via
  * {@code VineRegistries.register} during {@code VineInitializer.init()} —
  * the engine defines both types itself at boot, before any consumer or driver
@@ -32,6 +32,15 @@ public final class VineContent {
     /** The item kind: structural type {@code vine:item}. */
     public static final DescriptorType<ItemDescriptor> ITEM_TYPE =
         new StructuralType<>(VineId.of("vine", "item"), ItemDescriptor.CODEC);
+
+    /**
+     * The entity kind: structural type {@code vine:entity} (sub-08 Stage A). Entity
+     * types are structural by necessity, not by preference — a native entity kind
+     * cannot be redefined under a running world, so this path is static startup
+     * registration with a single JVM-session freeze like every other structural kind.
+     */
+    public static final DescriptorType<dev.vineengine.vine.entity.EntityDescriptor> ENTITY_TYPE =
+        new StructuralType<>(VineId.of("vine", "entity"), dev.vineengine.vine.entity.EntityDescriptor.CODEC);
 
     private VineContent() {
     }

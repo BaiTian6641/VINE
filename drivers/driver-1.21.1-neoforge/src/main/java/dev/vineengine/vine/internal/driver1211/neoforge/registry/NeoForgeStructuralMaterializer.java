@@ -8,6 +8,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.event.entity.EntityAttributeCreationEvent;
 import net.neoforged.neoforge.registries.NewRegistryEvent;
 import net.neoforged.neoforge.registries.RegisterEvent;
 import net.neoforged.neoforge.registries.RegistryBuilder;
@@ -39,7 +40,11 @@ import dev.vineengine.vine.registry.VineId;
  * <p>Sub-07 extension: the engine content kinds {@code vine:block} and
  * {@code vine:item} are routed away from the vine-created registries into the
  * <em>vanilla</em> BLOCK/ITEM registries via {@link NeoForgeContentMaterializer}
- * at those registries' own {@code RegisterEvent} firings.
+ * at those registries' own {@code RegisterEvent} firings. Sub-08 Stage A routes
+ * {@code vine:entity} the same way into the vanilla ENTITY_TYPE registry, and
+ * installs the types' attribute containers at
+ * {@link EntityAttributeCreationEvent} — the separate moment NeoForge reserves
+ * for them.
  */
 public final class NeoForgeStructuralMaterializer implements RegistryDriver {
 
@@ -48,6 +53,8 @@ public final class NeoForgeStructuralMaterializer implements RegistryDriver {
     private StructuralRegistryView.StructuralType blockType;
     /** Snapshot slice for {@code vine:item}, non-null iff entries exist (sub-07). */
     private StructuralRegistryView.StructuralType itemType;
+    /** Snapshot slice for {@code vine:entity}, non-null iff entries exist (sub-08 Stage A). */
+    private StructuralRegistryView.StructuralType entityType;
     /** Types whose vanilla registry was created but whose RegisterEvent has not fired yet. */
     private final Map<ResourceLocation, StructuralRegistryView.StructuralType> pending = new LinkedHashMap<>();
     /** The in-flight NewRegistryEvent, set by the mod-bus listener around {@link #materializeStructural}. */
@@ -69,6 +76,13 @@ public final class NeoForgeStructuralMaterializer implements RegistryDriver {
             }
         });
         modBus.addListener(RegisterEvent.class, this::onRegister);
+        // Entity attribute containers (sub-08 Stage A): NeoForge fires this after
+        // every RegisterEvent firing and before common setup, and it is the only
+        // moment a type's default attribute container may be installed
+        // (EntityAttributeCreationEvent.put). The containers themselves were built
+        // at the ENTITY_TYPE firing, where the descriptors were in hand.
+        modBus.addListener(EntityAttributeCreationEvent.class,
+            NeoForgeContentMaterializer::registerEntityAttributes);
     }
 
 
@@ -92,6 +106,13 @@ public final class NeoForgeStructuralMaterializer implements RegistryDriver {
                 itemType = type;
                 continue;
             }
+            if (type.type() == VineContent.ENTITY_TYPE) {
+                // Same reasoning as blocks/items: a native entity kind only exists as a
+                // vanilla ENTITY_TYPE singleton, so it registers at that registry's own
+                // RegisterEvent firing — never in a vine-created registry.
+                entityType = type;
+                continue;
+            }
             ResourceKey<Registry<Object>> key = registryKey(type.type().registryId());
             newRegistryEvent.create(new RegistryBuilder<>(key));
             pending.put(key.location(), type);
@@ -100,8 +121,8 @@ public final class NeoForgeStructuralMaterializer implements RegistryDriver {
 
     /**
      * Fills one of our registries when its RegisterEvent fires, and routes the
-     * vanilla BLOCK/ITEM firings to content materialization (sub-07); logs the
-     * custom-registry total when the last drains.
+     * vanilla BLOCK/ITEM/ENTITY_TYPE firings to content materialization (sub-07,
+     * sub-08 Stage A); logs the custom-registry total when the last drains.
      */
     private void onRegister(RegisterEvent event) {
         if (blockType != null && event.getRegistryKey().equals(Registries.BLOCK)) {
@@ -112,6 +133,9 @@ public final class NeoForgeStructuralMaterializer implements RegistryDriver {
         }
         if (blockType != null && event.getRegistryKey().equals(Registries.BLOCK_ENTITY_TYPE)) {
             NeoForgeContentMaterializer.registerBlockEntities(event, blockType);
+        }
+        if (entityType != null && event.getRegistryKey().equals(Registries.ENTITY_TYPE)) {
+            NeoForgeContentMaterializer.registerEntities(event, entityType);
         }
         StructuralRegistryView.StructuralType type = pending.remove(event.getRegistryKey().location());
         if (type == null) {

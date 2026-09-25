@@ -44,6 +44,23 @@ public final class DescriptorStore {
     private IdMapStore idMap;
     private boolean frozen;
 
+    private Runnable beforeSnapshot;
+
+    /**
+     * Installs a run-once action that completes structural authoring before the first
+     * snapshot is taken (sub-02 Stage F + sub-08 Stage A).
+     *
+     * <p>Why here: a cell materializes what a snapshot contains, and on Fabric the
+     * native registries freeze long before the engine's own freeze phase — so a
+     * descriptor authored in JSON must already be registered by the time any cell asks
+     * for the view. The store is the only object that knows both when the view is
+     * wanted and when the entries are complete, so the ordering rule lives here rather
+     * than in each driver's bootstrap.
+     */
+    public synchronized void beforeStructuralSnapshot(Runnable action) {
+        this.beforeSnapshot = Objects.requireNonNull(action, "action");
+    }
+
     /** Installs the persistent id map backing structural runtime ids (sub-02 Stage D). */
     public void idMap(IdMapStore map) {
         this.idMap = map;
@@ -235,6 +252,13 @@ public final class DescriptorStore {
      * after return regardless of later writes or freeze.
      */
     public synchronized StructuralRegistryView structuralView() {
+        if (beforeSnapshot != null) {
+            // Run once, and only once: the action registers entries, so a second run
+            // would re-read the same files for no reason.
+            Runnable action = beforeSnapshot;
+            beforeSnapshot = null;
+            action.run();
+        }
         List<StructuralRegistryView.StructuralType> snapshot = new ArrayList<>();
         for (TypeEntries<?> entries : types.values()) {
             if (entries.type.descriptorClass() == DescriptorClass.STRUCTURAL) {

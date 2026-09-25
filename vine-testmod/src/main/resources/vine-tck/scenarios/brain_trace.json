@@ -1,0 +1,34 @@
+{
+  "id": "vine_test:brain_trace",
+  "tags": [
+    "SMOKE",
+    "BRAIN"
+  ],
+  "steps": [
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_brain_trace 120"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "command",
+      "expect": [
+        "tck: brain ticks=120 calls=255 callDigest=199b4c0442ba8fbab8157d37a951a964c5d205bcc603335caa266ee3d35603a9",
+        "replay=85021250c5793a3a0ba7e5c01e07c1f08efbdb413b449ed14208550de694bef0 identical=true",
+        "tck: brain memory chaseTicks=50 patrolled=true"
+      ]
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_brain_trace 120"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "command",
+      "expect": [
+        "tck: brain ticks=120 calls=255",
+        "identical=true"
+      ]
+    }
+  ]
+}

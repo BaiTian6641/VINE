@@ -3,6 +3,9 @@ package dev.vineengine.vine.registry;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.DataResult;
+
 /**
  * Namespaced engine content ID ({@code "namespace:path"}) — the single identity
  * type for every piece of VINE content on every cell (sub-02 §2).
@@ -19,6 +22,25 @@ import java.util.regex.Pattern;
  * canonical sort for registry maps and deterministic cooked output.
  */
 public record VineId(String namespace, String path) implements Comparable<VineId> {
+
+    /**
+     * The canonical {@code "namespace:path"} string form, as a codec — the single
+     * representation every descriptor's JSON and every cooked file uses. Malformed
+     * ids are decode errors, never exceptions thrown out of DFU.
+     *
+     * <p>This is the codec sub-02's content descriptors used to carry privately:
+     * the seam is collapsed into the id type it belonged to, so ids and their
+     * representation cannot drift.
+     */
+    public static final Codec<VineId> CODEC = Codec.STRING.comapFlatMap(
+        value -> {
+            try {
+                return DataResult.success(VineId.parse(value));
+            } catch (IllegalArgumentException e) {
+                return DataResult.error(() -> "malformed VineId: " + e.getMessage());
+            }
+        },
+        VineId::toString);
 
     private static final Pattern NAMESPACE_PATTERN = Pattern.compile("[a-z0-9_.-]+");
     private static final Pattern PATH_PATTERN = Pattern.compile("[a-z0-9_./-]+");

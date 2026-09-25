@@ -77,7 +77,7 @@ public record BlockDescriptor(
      * to nothing) would be a lie in the data format.
      */
     public static final Codec<BlockDescriptor> CODEC = RecordCodecBuilder.create(instance -> instance.group(
-        ContentCodecs.VINE_ID.fieldOf("id").forGetter(BlockDescriptor::id),
+        VineId.CODEC.fieldOf("id").forGetter(BlockDescriptor::id),
         // Defaulted so every descriptor authored before Stage B keeps its exact
         // meaning (sub-02's structural JSON is data, not schema).
         Property.CODEC.listOf().optionalFieldOf("properties", List.of()).forGetter(BlockDescriptor::properties),

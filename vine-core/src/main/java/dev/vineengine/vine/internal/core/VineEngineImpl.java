@@ -27,6 +27,8 @@ import dev.vineengine.vine.data.VoxelTarget;
 import dev.vineengine.vine.internal.CapabilityBackend;
 import dev.vineengine.vine.internal.CommandBackend;
 import dev.vineengine.vine.internal.ConfigBackend;
+import dev.vineengine.vine.internal.BrainBackend;
+import dev.vineengine.vine.internal.EntityBackend;
 import dev.vineengine.vine.internal.NetBackend;
 import dev.vineengine.vine.internal.RegistryBackend;
 import dev.vineengine.vine.internal.SessionBackend;
@@ -47,14 +49,19 @@ import dev.vineengine.vine.internal.registry.StructuralJsonLoader;
 import dev.vineengine.vine.internal.net.VineNetImpl;
 import dev.vineengine.vine.internal.registry.DescriptorStore;
 import dev.vineengine.vine.internal.session.SessionService;
+import dev.vineengine.vine.internal.brain.BrainImpl;
+import dev.vineengine.vine.internal.entity.EntityBinding;
 import dev.vineengine.vine.internal.world.EngineWorldView;
 import dev.vineengine.vine.internal.world.WorldViewBinding;
 import dev.vineengine.vine.internal.spi.VineDriver;
 import dev.vineengine.vine.internal.spi.VoxelStorageDriver;
 import dev.vineengine.vine.net.VineNet;
 import dev.vineengine.vine.registry.DescriptorType;
+import dev.vineengine.vine.brain.VineBrain;
+import dev.vineengine.vine.world.Vec3;
 import dev.vineengine.vine.world.VineWorld;
 import dev.vineengine.vine.registry.Holder;
+import dev.vineengine.vine.registry.VineRegistries;
 import dev.vineengine.vine.registry.VineId;
 import dev.vineengine.vine.session.SessionFactory;
 import dev.vineengine.vine.session.SessionManager;
@@ -81,7 +88,7 @@ import dev.vineengine.vine.session.SessionManager;
  * real drivers exist.
  */
 final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, CommandBackend,
-        VoxelBackend, CapabilityBackend, SessionBackend, ConfigBackend, WorldBackend {
+        VoxelBackend, CapabilityBackend, SessionBackend, ConfigBackend, WorldBackend, EntityBackend, BrainBackend {
 
     private static final System.Logger LOG = System.getLogger(PhaseMachine.LOG_NAME);
 
@@ -115,20 +122,17 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
         registries.idMap(idMap);
         registries.defineType(VineContent.BLOCK_TYPE);
         registries.defineType(VineContent.ITEM_TYPE);
+        registries.defineType(VineContent.ENTITY_TYPE);
+        // Structural JSON must be complete before the first cell snapshots the view
+        // (see DescriptorStore#beforeStructuralSnapshot): on Fabric the native
+        // registries freeze during mod init, so a JSON-authored descriptor that
+        // arrived at the engine's own freeze phase would be materialized by nobody.
+        registries.beforeStructuralSnapshot(this::loadStructuralJsonOnce);
         machine.onPhase(EnginePhase.REGISTRIES_FROZEN, change -> {
-            // Structural JSON authoring (sub-02 Stage F) lands before the freeze:
-            // consumer types are defined, and JSON entries become ordinary
-            // registrations — read once, never hot-reloadable.
-            StructuralJsonLoader.Result jsonResult = StructuralJsonLoader.load(registries,
-                Thread.currentThread().getContextClassLoader() != null
-                    ? Thread.currentThread().getContextClassLoader()
-                    : VineEngineImpl.class.getClassLoader(),
-                ConsumerInitializers.codeSources());
-            // Logged for the TCK's cross-loader parity check; zero-work boots stay silent.
-            if (jsonResult.registered() + jsonResult.identicalTwins() > 0) {
-                LOG.log(System.Logger.Level.INFO, "[VINE] structural JSON: registered "
-                    + jsonResult.registered() + ", identical " + jsonResult.identicalTwins());
-            }
+            // Structural JSON authoring (sub-02 Stage F) lands before the freeze; a
+            // cell that materialized earlier already ran this through the store's
+            // snapshot hook, and a headless run reaches it here.
+            loadStructuralJsonOnce();
             registries.freeze();
             // Stage C's engine-side half of "a block with no ticking block entity
             // installs no ticker": the number a cell's own installed-ticker count
@@ -196,6 +200,32 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
         return features.supports(Objects.requireNonNull(feature, "feature"));
     }
 
+    /** Guards {@link #loadStructuralJsonOnce}: the pass registers entries, so once is enough. */
+    private boolean structuralJsonLoaded;
+
+    /**
+     * Reads every structural JSON descriptor once per JVM session (sub-02 Stage F).
+     * Idempotent, because two callers legitimately race for it: a cell asks for the
+     * structural view during its materialization window, and the freeze phase reaches
+     * it too in runs that never materialize anything.
+     */
+    private synchronized void loadStructuralJsonOnce() {
+        if (structuralJsonLoaded) {
+            return;
+        }
+        structuralJsonLoaded = true;
+        StructuralJsonLoader.Result jsonResult = StructuralJsonLoader.load(registries,
+            Thread.currentThread().getContextClassLoader() != null
+                ? Thread.currentThread().getContextClassLoader()
+                : VineEngineImpl.class.getClassLoader(),
+            ConsumerInitializers.codeSources());
+        // Logged for the TCK's cross-loader parity check; zero-work boots stay silent.
+        if (jsonResult.registered() + jsonResult.identicalTwins() > 0) {
+            LOG.log(System.Logger.Level.INFO, "[VINE] structural JSON: registered "
+                + jsonResult.registered() + ", identical " + jsonResult.identicalTwins());
+        }
+    }
+
     @Override
     public <D> void defineType(DescriptorType<D> type) {
         registries.defineType(type);
@@ -217,6 +247,26 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
     @Override
     public VineWorld world(VineId dimensionId) {
         return new EngineWorldView(dimensionId, WorldViewBinding.bound());
+    }
+
+    @Override
+    public boolean spawn(VineId entityId, VineWorld world, Vec3 position) {
+        // The engine validates identity before the cell is asked: a cell must never
+        // have to answer for content the engine does not know, and "unregistered id"
+        // is a caller bug rather than a world condition.
+        if (VineRegistries.<dev.vineengine.vine.entity.EntityDescriptor>get(
+                dev.vineengine.vine.content.VineContent.ENTITY_TYPE, entityId).isEmpty()) {
+            throw new IllegalArgumentException("no entity descriptor is registered under " + entityId
+                + " — spawning unregistered content is a caller bug");
+        }
+        return EntityBinding.bound().spawn(entityId, world.id(), position);
+    }
+
+    @Override
+    public VineBrain brain(VineId actorId, dev.vineengine.vine.data.VoxelData memory) {
+        // The brain's memory IS the caller's tree (sub-08 Stage B): one identity, so
+        // the storage layer persists exactly what the behaviour wrote.
+        return new BrainImpl(actorId, memory);
     }
 
     @Override

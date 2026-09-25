@@ -53,7 +53,7 @@ public final class NeoForgeWorldView implements WorldViewDriver {
 
     @Override
     public Optional<BlockState> stateAt(VineId dimensionId, BlockPos pos) {
-        ServerLevel level = level(dimensionId);
+        ServerLevel level = nativeLevel(dimensionId);
         if (level == null) {
             return Optional.empty();
         }
@@ -66,7 +66,7 @@ public final class NeoForgeWorldView implements WorldViewDriver {
 
     @Override
     public boolean setState(VineId dimensionId, BlockPos pos, BlockState state) {
-        ServerLevel level = level(dimensionId);
+        ServerLevel level = nativeLevel(dimensionId);
         if (level == null) {
             return false;
         }
@@ -94,7 +94,7 @@ public final class NeoForgeWorldView implements WorldViewDriver {
 
     @Override
     public Optional<VoxelTarget> holderTarget(VineId dimensionId, BlockPos pos) {
-        ServerLevel level = level(dimensionId);
+        ServerLevel level = nativeLevel(dimensionId);
         if (level == null) {
             return Optional.empty();
         }
@@ -110,7 +110,7 @@ public final class NeoForgeWorldView implements WorldViewDriver {
 
     @Override
     public boolean isLoaded(VineId dimensionId) {
-        return level(dimensionId) != null;
+        return nativeLevel(dimensionId) != null;
     }
 
     /**
@@ -118,8 +118,13 @@ public final class NeoForgeWorldView implements WorldViewDriver {
      * for it: no server yet (before start, after stop), an id the vanilla dimension
      * registry does not know (the cell has no such dimension), or a dimension the
      * registry knows but has not loaded.
+     *
+     * <p>Shared with the entity spawn path (sub-08 Stage A,
+     * {@code NeoForgeEntityDriver}): "which live level is this engine dimension"
+     * has exactly one answer on this cell, so the state view and the entity
+     * primitive must not each implement it.
      */
-    private static ServerLevel level(VineId dimensionId) {
+    public static ServerLevel nativeLevel(VineId dimensionId) {
         MinecraftServer server = NeoForge1211Driver.currentServer();
         if (server == null) {
             return null;

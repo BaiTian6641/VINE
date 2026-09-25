@@ -20,7 +20,7 @@
       "type": "AssertTrace",
       "trace": "json",
       "expect": [
-        "structural JSON: registered 1, identical 1",
+        "structural JSON: registered 2, identical 1",
         "structural json json_only present=true weight=7"
       ]
     }

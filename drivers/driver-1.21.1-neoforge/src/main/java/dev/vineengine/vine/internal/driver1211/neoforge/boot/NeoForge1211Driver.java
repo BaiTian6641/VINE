@@ -22,10 +22,12 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.storage.LevelResource;
 import net.neoforged.neoforge.event.level.LevelEvent;
 import dev.vineengine.vine.internal.data.VoxelStorageBinding;
+import dev.vineengine.vine.internal.entity.EntityBinding;
 import dev.vineengine.vine.internal.driver1211.common.data.VoxelProbe;
 import dev.vineengine.vine.internal.driver1211.common.persistence.FileWorldStore;
 import dev.vineengine.vine.internal.driver1211.neoforge.data.NeoForgeVoxelStorage;
 import dev.vineengine.vine.internal.driver1211.neoforge.data.NeoForgeWorldView;
+import dev.vineengine.vine.internal.driver1211.neoforge.entity.NeoForgeEntityDriver;
 import dev.vineengine.vine.internal.driver1211.common.DriverRuntime;
 import dev.vineengine.vine.internal.driver1211.common.command.EngineCommands;
 import dev.vineengine.vine.internal.driver1211.neoforge.command.NeoForgeCommandFactory;
@@ -167,6 +169,10 @@ public final class NeoForge1211Driver implements VineDriver {
         // this cell's live levels — bound once here, next to the storage seam it
         // mirrors, and reading the server the lifecycle listeners above track.
         WorldViewBinding.bind(new NeoForgeWorldView());
+        // Entity primitive (sub-08 Stage A): the cell's spawn path, bound next to
+        // the world-view seam it resolves its dimensions through, and before any
+        // world can load — the engine never sees an unbound entity seam.
+        EntityBinding.bind(new NeoForgeEntityDriver());
         // Capability interop (sub-04 Stage C/D): native queries answer from the
         // same item payload the storage driver writes.
         dev.vineengine.vine.internal.capability.CapabilityDriverBinding.bind(

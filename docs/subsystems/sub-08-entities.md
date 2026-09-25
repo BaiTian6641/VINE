@@ -93,6 +93,41 @@ multipart fixture.
   hot-reload limited to design data (behavior presets, stats).
 - **Acceptance:** JSON descriptor loads and spawns with descriptor attributes
   on 1.21.1-NF + 1.21.1-Fabric testmod.
+- **Landed (engine half, 2026-09-26):** `dev.vineengine.vine.entity` ships
+  `EntityDescriptor(id, attributes, dimensions, parts)`, `AttributeSpec`,
+  `AttributeModifier` (add / multiply-base / multiply-total), `Dimensions` and
+  `PartDescriptor`, all data with codecs, registered as structural type
+  `vine:entity` through sub-02's existing path — JSON authoring needed no loader
+  work at all, because discovery is per registry id
+  (`data/<ns>/vine/entity/<name>.json`). Spawning goes through the new engine
+  surface `VineEntities.spawn(entityId, VineWorld, Vec3)`, backed by a per-cell
+  `EntityDriver` bound once via `EntityBinding` (the fourth instance of the
+  bind-once seam, after storage, world view and capabilities statement).
+  The engine validates the descriptor's existence before the cell is asked, so a
+  cell never answers for content the engine does not know.
+  **Evidence (2026-09-26, both 1.21.1 cells):** the descriptors materialize and
+  spawn on both cells — `vine: materialized entity vine_test:testbeast
+  max_health=200.0 movement_speed=0.3 knockback_resistance=0.6` at registration and
+  `vine: entity spawned vine_test:testbeast max_health=200.0 movement_speed=0.3
+  knockback_resistance=0.7` at spawn, the live 0.7 being the descriptor's
+  `ADD 0.1` modifier read back from the spawned entity's own attribute instance —
+  with the `entity_spawn_attributes` scenario green on both cells (**37/37 each**).
+  Two ordering facts this stage forced, both now documented where they belong:
+  structural JSON must complete *before* a cell snapshots the structural view
+  (`DescriptorStore.beforeStructuralSnapshot`), because Fabric's native registries
+  freeze during mod init — without it a JSON-authored descriptor is materialized by
+  nobody; and attribute ids are the cell's own, so a missing one fails the boot
+  naming it rather than silently dropping an attribute.
+  One fixture sharpening: the descriptor now sets `eyeHeight` explicitly (2.2 rather
+  than vanilla's height × 0.85 = 2.72), so the explicit override is observably
+  different from the default the cell would otherwise compute.
+  Two shape notes against the §2 sketch: `ride` and `spawnRule` are *not*
+  fields yet — they arrive with Stage E (riding) and Stage F (territory), and
+  declaring them now would be a field nothing can exercise; and every attribute
+  is named by its **native** id (`minecraft:generic.max_health` on 1.21.1),
+  because attributes are the one entity surface whose registry stays the cell's
+  own authority — the engine wraps values and bounds, it does not shadow the
+  registry.
 - **Touches:** `dev.vineengine.vine.entity`, `dev.vineengine.vine.internal.entity`.
 - **Bootstrap prompt:**
   > Implement SUB-08 Stage A per `docs/subsystems/sub-08-entities.md` (read
@@ -108,6 +143,39 @@ multipart fixture.
   deterministic tick with injectable primitive-result tape.
 - **Acceptance:** golden tick-trace (wyvern wander→alert→chase) replays
   byte-identically on 1.21.1-NF + 1.21.1-Fabric.
+- **Landed (engine half, 2026-09-26):** `dev.vineengine.vine.brain` ships the
+  sealed node vocabulary (`Node` permitting `Sequence`, `Selector`, `Parallel`,
+  `ConditionLeaf`, `Action` — note `ConditionLeaf`, because the sketch's `Condition`
+  name belongs to the predicate interface), `NodeStatus`, `BrainContext`,
+  `Blackboard`/`BlackboardKey` (typed keys over a `VoxelData` tree, so the
+  blackboard *is* the persisted tree), `Primitives` (the only way a behaviour
+  reaches the world) and `VineBrain`/`VineBrains`, with the runtime in vine-core
+  (`BrainImpl`, `BlackboardImpl`, `StateMachineBuilderImpl`).
+  Three decisions worth recording:
+  (1) the state machine **lowers to an `Action`** rather than being a node kind of
+  its own — a state machine is composition (a state table plus a current-state
+  cell), and keeping it out of the sealed set means no cell can special-case it;
+  its current state lives under the reserved key `brain.fsm.state`, so a reloaded
+  actor resumes where it was;
+  (2) `TapePrimitives` — the injectable primitive-result tape — is *public API on
+  purpose*: it is the instrument the determinism claim is checked with, and it can
+  both capture a live run and replay it, failing loudly on the first divergence in
+  the call sequence;
+  (3) the blackboard's `VineId` codec collapsed sub-02's private `ContentCodecs`
+  seam into `VineId.CODEC`, deleting the private helper entirely.
+  The exemplar (`vine-testmod` `BrainExemplar`) runs a hunt loop
+  (wander → chase, both multi-tick) through capture then replay and prints the
+  call digest, the memory digest and the per-tick status trace; the TCK scenario
+  pins the digests, which is what makes "identical on both cells" a checked claim.
+  **Evidence (2026-09-26, both cells):** `brain_trace` green on 1.21.1-fabric and
+  1.21.1-neoforge with the *same* golden values — 120 ticks, 255 primitive calls,
+  call digest `199b4c04…03a9`, trace/memory digest `85021250…bef0` and
+  `identical=true` between the captured run and its replay — and the exemplar's own
+  capture/replay comparison runs inside each cell's boot, so the determinism claim
+  is checked twice per cell: once by the engine comparing its two passes, once by
+  the scenario pinning the digest. The traces also show the runtime genuinely
+  suspending and resuming (multi-tick `RUNNING` runs inside both states), which is
+  what a single-tick tree could not prove.
 - **Touches:** `dev.vineengine.vine.brain`, `vine-core`, TCK.
 - **Bootstrap prompt:**
   > Implement SUB-08 Stage B per the file. `VineBrain` fully headless in

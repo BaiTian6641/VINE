@@ -1,0 +1,37 @@
+{
+  "id": "vine_test:entity_spawn_attributes",
+  "tags": [
+    "SMOKE",
+    "ENTITY"
+  ],
+  "steps": [
+    {
+      "type": "AssertTrace",
+      "trace": "log",
+      "expect": [
+        "vine: materialized entity vine_test:testbeast",
+        "max_health=200.0"
+      ]
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_entity_spawn vine_test:testbeast 4 300 0"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "command",
+      "expect": [
+        "tck: entity spawn id=vine_test:testbeast at=4,300,0 ok=true"
+      ]
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "log",
+      "expect": [
+        "vine: entity spawned vine_test:testbeast",
+        "max_health=200.0",
+        "movement_speed=0.3"
+      ]
+    }
+  ]
+}

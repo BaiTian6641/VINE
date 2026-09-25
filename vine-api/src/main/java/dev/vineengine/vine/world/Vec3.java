@@ -12,6 +12,14 @@ package dev.vineengine.vine.world;
  */
 public record Vec3(double x, double y, double z) {
 
+    /** Single source of truth for every representation of this data (sub-02 §2). */
+    public static final com.mojang.serialization.Codec<Vec3> CODEC =
+        com.mojang.serialization.codecs.RecordCodecBuilder.create(instance -> instance.group(
+            com.mojang.serialization.Codec.DOUBLE.fieldOf("x").forGetter(Vec3::x),
+            com.mojang.serialization.Codec.DOUBLE.fieldOf("y").forGetter(Vec3::y),
+            com.mojang.serialization.Codec.DOUBLE.fieldOf("z").forGetter(Vec3::z)
+        ).apply(instance, Vec3::new));
+
     /** The origin. */
     public static final Vec3 ZERO = new Vec3(0.0, 0.0, 0.0);
 

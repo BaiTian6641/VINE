@@ -39,7 +39,7 @@ public record BlockEntityDescriptor(VineId schemaId, boolean ticking, int tickIn
 
     /** Single source of truth for every representation of this data (sub-02 §2). */
     public static final Codec<BlockEntityDescriptor> CODEC = RecordCodecBuilder.create(instance -> instance.group(
-        ContentCodecs.VINE_ID.fieldOf("schema").forGetter(BlockEntityDescriptor::schemaId),
+        VineId.CODEC.fieldOf("schema").forGetter(BlockEntityDescriptor::schemaId),
         Codec.BOOL.optionalFieldOf("ticking", false).forGetter(BlockEntityDescriptor::ticking),
         Codec.INT.optionalFieldOf("tickInterval", 1).forGetter(BlockEntityDescriptor::tickInterval)
     ).apply(instance, BlockEntityDescriptor::new));

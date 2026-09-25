@@ -1,0 +1,76 @@
+{
+  "id": "vine_test:testbeast",
+  "attributes": [
+    {
+      "attribute": "minecraft:generic.max_health",
+      "base": 200.0,
+      "min": 0.0,
+      "max": 400.0
+    },
+    {
+      "attribute": "minecraft:generic.movement_speed",
+      "base": 0.3,
+      "min": 0.0,
+      "max": 1.0
+    },
+    {
+      "attribute": "minecraft:generic.knockback_resistance",
+      "base": 0.6,
+      "min": 0.0,
+      "max": 1.0,
+      "modifiers": [
+        {
+          "id": "vine_test:beast_bulk",
+          "operation": "ADD",
+          "amount": 0.1
+        }
+      ]
+    }
+  ],
+  "dimensions": {
+    "width": 2.4,
+    "height": 3.2,
+    "eyeHeight": 2.2
+  },
+  "parts": [
+    {
+      "name": "head",
+      "parentBone": "head",
+      "size": {
+        "x": 1.4,
+        "y": 1.4,
+        "z": 1.6
+      },
+      "offset": {
+        "x": 0.0,
+        "y": 2.4,
+        "z": -0.9
+      },
+      "damageMultipliers": {
+        "minecraft:player_attack": 1.25,
+        "minecraft:arrow": 0.8
+      },
+      "flinchThreshold": 60.0,
+      "breakThreshold": 0.0
+    },
+    {
+      "name": "tail",
+      "parentBone": "tail",
+      "size": {
+        "x": 1.0,
+        "y": 1.0,
+        "z": 2.6
+      },
+      "offset": {
+        "x": 0.0,
+        "y": 1.6,
+        "z": 2.2
+      },
+      "damageMultipliers": {
+        "minecraft:player_attack": 1.0
+      },
+      "flinchThreshold": 0.0,
+      "breakThreshold": 120.0
+    }
+  ]
+}

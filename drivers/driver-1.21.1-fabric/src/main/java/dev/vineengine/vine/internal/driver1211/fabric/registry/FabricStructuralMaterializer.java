@@ -26,7 +26,9 @@ import dev.vineengine.vine.registry.VineId;
  *
  * <p>Sub-07 extension: the engine content kinds {@code vine:block} and
  * {@code vine:item} are routed away from the vine-created registries into the
- * <em>vanilla</em> BLOCK/ITEM registries via {@link FabricContentMaterializer}.
+ * <em>vanilla</em> BLOCK/ITEM registries via {@link FabricContentMaterializer};
+ * sub-08 Stage A routes {@code vine:entity} into the vanilla ENTITY_TYPE registry
+ * the same way.
  */
 public final class FabricStructuralMaterializer implements RegistryDriver {
 
@@ -46,6 +48,13 @@ public final class FabricStructuralMaterializer implements RegistryDriver {
             }
             if (type.type() == VineContent.ITEM_TYPE) {
                 FabricContentMaterializer.registerItems(type);
+                continue;
+            }
+            // Entity kinds (sub-08 Stage A) are vanilla-registry singletons like
+            // blocks/items: a native entity type cannot live in a vine-created
+            // registry and still be spawned.
+            if (type.type() == VineContent.ENTITY_TYPE) {
+                FabricContentMaterializer.registerEntities(type);
                 continue;
             }
             RegistryKey<Registry<Object>> key = RegistryKey.ofRegistry(identifier(type.type().registryId()));
