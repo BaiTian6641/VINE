@@ -171,3 +171,35 @@ tasks.register('tckReport', JavaExec) {
             '--ledger', new File(projectDir, 'QUARANTINE.md').absolutePath] +
             m0Cells.collectMany { ['--cells', it] }
 }
+
+// ---------------------------------------------------------------------------
+// sub-09 Stage B — headless evaluator golden fixtures: renders the server-side
+// evaluator's canonical pose and window tables for the testmod's authoring asset
+// and byte-compares them with the committed goldens. The classpath is built here
+// rather than taken from this project, and it is the headlessness proof: vine-api
+// + vine-core + their libraries + tck-core's own classes, with no driver, no
+// testmod, no Minecraft and no LWJGL on it. The runner prints every entry and
+// probes for client classes by name, so a client dependency would surface as a
+// linkage failure rather than be prevented by convention. Wired into `check`
+// because a drift in the canonical pose is a gameplay bug, not a test flake.
+// ---------------------------------------------------------------------------
+tasks.register('evaluatorFixtures', JavaExec) {
+    group = 'verification'
+    description = 'Byte-compares the headless sub-09 evaluator\'s canonical pose/window output with its goldens.'
+    classpath = project(':vine-tck:tck-core').sourceSets.main.output +
+            project(':vine-core').sourceSets.main.runtimeClasspath
+    mainClass = 'dev.vineengine.vine.internal.tck.EvaluatorFixtureRunner'
+    def evaluatorWrite = providers.gradleProperty('vine.tck.writeFixtures').map { it.toBoolean() }.orElse(false)
+    def evaluatorArgs = ['--root-dir', rootProject.layout.projectDirectory.asFile.absolutePath,
+            '--fixtures-dir', new File(projectDir, 'fixtures/animation').absolutePath]
+    if (evaluatorWrite.get()) {
+        // Regenerates the goldens: -Pvine.tck.writeFixtures=true. The written files are
+        // reviewed and committed like any other source change.
+        evaluatorArgs += '--write'
+    }
+    args = evaluatorArgs
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('evaluatorFixtures')
+}

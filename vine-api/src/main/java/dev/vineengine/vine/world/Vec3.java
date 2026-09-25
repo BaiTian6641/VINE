@@ -27,6 +27,21 @@ public record Vec3(double x, double y, double z) {
         return new Vec3(x, y, z);
     }
 
+    /** This point translated by the negative of {@code other}. */
+    public Vec3 minus(Vec3 other) {
+        return new Vec3(x - other.x(), y - other.y(), z - other.z());
+    }
+
+    /** This point scaled by {@code factor}. */
+    public Vec3 scaled(double factor) {
+        return new Vec3(x * factor, y * factor, z * factor);
+    }
+
+    /** This point translated by {@code other}. */
+    public Vec3 plus(Vec3 other) {
+        return new Vec3(x + other.x(), y + other.y(), z + other.z());
+    }
+
     /** This point translated by the given deltas. */
     public Vec3 offset(double dx, double dy, double dz) {
         return new Vec3(x + dx, y + dy, z + dz);

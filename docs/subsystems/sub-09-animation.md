@@ -68,6 +68,22 @@ outside drivers.
 - **Acceptance:** round-trip unit check on two reference assets; parser runs
   in a plain JVM (no Minecraft, no client).
 - **Touches:** `dev.vineengine.vine.internal.animation.model`.
+- **Landed (2026-09-26, single-document form; the split form is the named remainder):**
+  `vine-core/internal/animation/AnimationAssetParser` parses a Blockbench document —
+  `minecraft:geometry[0].bones` (name/parent/pivot/rotation; cubes/uv ignored for now)
+  plus the `animations` map (loop, `animation_length`, per-bone `position`/`rotation`/
+  `scale` channels keyed by string times, values as arrays or `{post|pre, …}` objects)
+  plus markers from `sound_effects`/`particle_effects`. It is strict where an authoring
+  mistake lives — dangling parent, cyclic chain, duplicate keyframe time, non-finite or
+  non-three-number values, an animated bone the geometry does not declare, a marker
+  outside the clip, an active window that ends before it starts — each failing with a
+  message naming asset, clip, bone and time. Determinism comes from sorted keys and
+  rejected duplicates, not from hoping a map iterates the same way twice.
+  **Remainder, named:** real consumer assets ship as the ecosystem's *two-file* pair
+  (`geo.json` + `animation.json`), while this parser takes one merged document (the
+  fixture's form). Stage D/E's loader must concatenate the pair, or the parser needs an
+  entry point taking both; the doc's Stage-A line describes that split form, so it stays
+  open until it exists.
 - **Bootstrap prompt:**
   > Implement SUB-09 Stage A per `docs/subsystems/sub-09-animation.md` (read
   > plan §5.14 + `docs/README.md` conventions). Parser + canonical model in
@@ -82,6 +98,40 @@ outside drivers.
   ticks; OBB pose table per canonical tick) pass on 1.21.1-NF +
   1.21.1-Fabric, headless.
 - **Touches:** `dev.vineengine.vine.animation`, `internal.animation.eval`, TCK.
+- **Landed (2026-09-26):** the evaluator is engine-side, headless and pure:
+  `PoseEvaluator` composes each bone's transform down its parent chain (parent-first in
+  sorted-name order, memoised, cycle-guarded), interpolates each channel segment with
+  the easing of the keyframe the segment *starts* at, wraps looping clips and clamps
+  one-shot clips, derives `TimingWindows` from VINE's marker namespace
+  (`vine:active_start`/`active_end`/`cancel_start`, 20 TPS), and builds a part's
+  world-space `OrientedBox` from its bone, the actor's position and yaw. The API side is
+  `dev.vineengine.vine.animation` (`AnimationAsset`, `SkeletonPose`, `Quaternion`,
+  `TimingWindows`, `OrientedBox`) behind `VineAnimations` + `AnimationBackend`, the
+  sixth instance of the bind-free backend pattern.
+  **Evidence:** the fixture asset (`wyvern_stub.json`, 5 bones, an idle and a strike
+  clip with VINE markers) is evaluated twice over — once by a plain-JVM harness
+  (`:vine-tck:evaluatorFixtures`, whose 16-entry classpath is printed on every run and
+  contains no driver, testmod, Minecraft or LWJGL jar, with three `Class.forName`
+  probes returning `ClassNotFoundException`) comparing byte-for-byte against committed
+  goldens (`wyvern_stub.poses.txt` sha256 `a24192aa…`, `wyvern_stub.windows.txt` sha256
+  `15d47baf…`), and once on each cell through the engine facade
+  (`vine_test tck_anim_probe`, digests `923ef907…` and `f686d6a3…`, windows
+  `startup=6 active=5 recovery=9 cancel=15 total=20` for the strike and a
+  recovery-only window for the idle) — with the `animation_pose` scenario green on
+  both 1.21.1 cells at **39/39 scenarios each**, alongside `build`, the three purity
+  gates, `verifyDatagen`, `crossCellRoundTrip` and both GameTest batches. Two deliberate demonstrations accompany it: the
+  golden check fails loudly on a one-character easing change (13 differing lines, then
+  reverted), and the loop wrap is pinned as an exact value
+  (`requested=2.4 → effective=0.3999999999999999`), because that is where a
+  "close enough" evaluator would drift from gameplay.
+  **Three decisions worth carrying forward:** the easing of a segment is the *starting*
+  keyframe's (documented on both the class and the sampler, because a client backend
+  reading the opposite convention would draw a different pose than gameplay acts on);
+  `Quaternion.then`'s javadoc now states that its argument is applied first (the
+  implementation was right and the sentence was backwards — a backend following the old
+  wording would have composed every chain incorrectly); and the goldens are regenerated
+  only with `-Pvine.tck.writeFixtures=true`, so a deliberate evaluator change commits
+  the regenerated fixtures in the same change.
 - **Bootstrap prompt:**
   > Implement SUB-09 Stage B per the file. Deterministic evaluator: pinned
   > math order, no wall-clock. TCK fixtures assert window-edge ticks and OBB

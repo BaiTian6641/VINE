@@ -48,6 +48,17 @@ public final class EchoCommand {
                             ctx.feedback("tck: sent echo number=" + number + " text=" + text);
                             return 1;
                         }))))
+            .then(VineCommand.literal("tck_anim_probe")
+                .executes(ctx -> {
+                    try {
+                        dev.vineengine.vine.testmod.animation.AnimationExemplar.probe();
+                    } catch (java.io.IOException e) {
+                        // The exemplar reads a resource; a cell without it is a packaging
+                        // bug, and saying so beats a stack trace in a command result.
+                        throw new IllegalStateException("animation exemplar could not read its asset", e);
+                    }
+                    return 1;
+                }))
             .then(VineCommand.literal("tck_beast_walk")
                 .then(VineCommand.argument("x", VineArgumentTypes.INT)
                     .then(VineCommand.argument("y", VineArgumentTypes.INT)

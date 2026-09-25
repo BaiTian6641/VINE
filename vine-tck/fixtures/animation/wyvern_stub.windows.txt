@@ -1,0 +1,84 @@
+# VINE sub-09 evaluator golden — clip windows at 20 TPS
+# Markers come from the asset's own effect maps under VINE's namespace; a clip with
+# none is recovery for its whole length (sub-09 §2, TimingWindows).
+asset geometry.vine_test.wyvern_stub
+clip animation.vine_test.wyvern_stub.idle loop=true length=2.0
+  window startup=0 active=0 recovery=40 cancel=0 total=40
+  span startup [0,0)
+  span active [0,0)
+  span recovery [0,40)
+  span cancel [0,40)
+  tick 0 recovery cancellable
+  tick 1 recovery cancellable
+  tick 2 recovery cancellable
+  tick 3 recovery cancellable
+  tick 4 recovery cancellable
+  tick 5 recovery cancellable
+  tick 6 recovery cancellable
+  tick 7 recovery cancellable
+  tick 8 recovery cancellable
+  tick 9 recovery cancellable
+  tick 10 recovery cancellable
+  tick 11 recovery cancellable
+  tick 12 recovery cancellable
+  tick 13 recovery cancellable
+  tick 14 recovery cancellable
+  tick 15 recovery cancellable
+  tick 16 recovery cancellable
+  tick 17 recovery cancellable
+  tick 18 recovery cancellable
+  tick 19 recovery cancellable
+  tick 20 recovery cancellable
+  tick 21 recovery cancellable
+  tick 22 recovery cancellable
+  tick 23 recovery cancellable
+  tick 24 recovery cancellable
+  tick 25 recovery cancellable
+  tick 26 recovery cancellable
+  tick 27 recovery cancellable
+  tick 28 recovery cancellable
+  tick 29 recovery cancellable
+  tick 30 recovery cancellable
+  tick 31 recovery cancellable
+  tick 32 recovery cancellable
+  tick 33 recovery cancellable
+  tick 34 recovery cancellable
+  tick 35 recovery cancellable
+  tick 36 recovery cancellable
+  tick 37 recovery cancellable
+  tick 38 recovery cancellable
+  tick 39 recovery cancellable
+  tick 40 end
+clip animation.vine_test.wyvern_stub.strike loop=false length=1.0
+  marker 0.3 minecraft:entity.vine_test.wyvern.growl
+  marker 0.3 vine:active_start
+  marker 0.55 vine:active_end
+  marker 0.55 vine_test:strike_spark
+  marker 0.75 vine:cancel_start
+  marker 0.95 minecraft:entity.vine_test.wyvern.roar
+  window startup=6 active=5 recovery=9 cancel=15 total=20
+  span startup [0,6)
+  span active [6,11)
+  span recovery [11,20)
+  span cancel [15,20)
+  tick 0 startup
+  tick 1 startup
+  tick 2 startup
+  tick 3 startup
+  tick 4 startup
+  tick 5 startup
+  tick 6 active
+  tick 7 active
+  tick 8 active
+  tick 9 active
+  tick 10 active
+  tick 11 recovery
+  tick 12 recovery
+  tick 13 recovery
+  tick 14 recovery
+  tick 15 recovery cancellable
+  tick 16 recovery cancellable
+  tick 17 recovery cancellable
+  tick 18 recovery cancellable
+  tick 19 recovery cancellable
+  tick 20 end

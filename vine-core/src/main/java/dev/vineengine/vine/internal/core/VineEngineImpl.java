@@ -24,6 +24,7 @@ import dev.vineengine.vine.data.VoxelData;
 import dev.vineengine.vine.data.VoxelDataFixer;
 import dev.vineengine.vine.data.VoxelSchema;
 import dev.vineengine.vine.data.VoxelTarget;
+import dev.vineengine.vine.internal.AnimationBackend;
 import dev.vineengine.vine.internal.CapabilityBackend;
 import dev.vineengine.vine.internal.CommandBackend;
 import dev.vineengine.vine.internal.ConfigBackend;
@@ -43,6 +44,8 @@ import dev.vineengine.vine.internal.data.NativeFields;
 import dev.vineengine.vine.internal.data.SchemaRegistry;
 import dev.vineengine.vine.internal.data.VoxelBlobCodec;
 import dev.vineengine.vine.internal.data.VoxelStorageBinding;
+import dev.vineengine.vine.internal.animation.AnimationAssetParser;
+import dev.vineengine.vine.internal.animation.PoseEvaluator;
 import dev.vineengine.vine.internal.registry.IdMapStore;
 import dev.vineengine.vine.internal.command.CommandJsonLoader;
 import dev.vineengine.vine.internal.registry.StructuralJsonLoader;
@@ -88,7 +91,8 @@ import dev.vineengine.vine.session.SessionManager;
  * real drivers exist.
  */
 final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, CommandBackend,
-        VoxelBackend, CapabilityBackend, SessionBackend, ConfigBackend, WorldBackend, EntityBackend, BrainBackend {
+        VoxelBackend, CapabilityBackend, SessionBackend, ConfigBackend, WorldBackend, EntityBackend, BrainBackend,
+        AnimationBackend {
 
     private static final System.Logger LOG = System.getLogger(PhaseMachine.LOG_NAME);
 
@@ -280,9 +284,40 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
 
     @Override
     public VineBrain brain(VineId actorId, dev.vineengine.vine.data.VoxelData memory) {
-        // The brain's memory IS the caller's tree (sub-08 Stage B): one identity, so
+        // the brain's memory IS the caller's tree (sub-08 Stage B): one identity, so
         // the storage layer persists exactly what the behaviour wrote.
         return new BrainImpl(actorId, memory);
+    }
+
+    // ------------------------------------------------------------------
+    // AnimationBackend (sub-09 Stage B): the headless pose evaluator.
+    //
+    // Pure functions over a parsed asset — no clock, no render frame, no client
+    // type, and no engine state, so the same call answers identically on every
+    // cell and in the plain-JVM fixture harness (sub-09 §2/§4).
+    // ------------------------------------------------------------------
+
+    @Override
+    public dev.vineengine.vine.animation.AnimationAsset parse(String assetJson) {
+        return AnimationAssetParser.parse(assetJson);
+    }
+
+    @Override
+    public dev.vineengine.vine.animation.SkeletonPose pose(
+            dev.vineengine.vine.animation.AnimationAsset asset, String clip, double seconds) {
+        return PoseEvaluator.pose(asset, clip, seconds);
+    }
+
+    @Override
+    public dev.vineengine.vine.animation.TimingWindows windows(
+            dev.vineengine.vine.animation.AnimationAsset asset, String clip) {
+        return PoseEvaluator.windows(asset, clip);
+    }
+
+    @Override
+    public dev.vineengine.vine.animation.OrientedBox partBox(dev.vineengine.vine.animation.SkeletonPose pose,
+            dev.vineengine.vine.entity.PartDescriptor part, Vec3 actorPosition, float actorYawDegrees) {
+        return PoseEvaluator.partBox(pose, part, actorPosition, actorYawDegrees);
     }
 
     @Override

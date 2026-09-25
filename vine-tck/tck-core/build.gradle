@@ -7,4 +7,11 @@ dependencies {
     // parses the testmod's scenario JSON data with Gson — TCK-internal only,
     // never on a consumer classpath (the Stage A boot smoke stays dep-free).
     implementation libs.gson
+    // The sub-09 evaluator fixture harness compiles against the engine's
+    // evaluator, and compileOnly is deliberate: vine-core must NOT enter
+    // tck-core's runtime classpath, because that classpath is what the boot
+    // smoke and scenario JVMs run with. :vine-tck:evaluatorFixtures assembles
+    // the evaluator's own classpath (vine-api + vine-core + their libraries) at
+    // the point of use, and prints it.
+    compileOnly project(':vine-core')
 }
