@@ -80,6 +80,87 @@ public final class EchoCommand {
                                             ctx.feedback("tck: beast walk started=" + spawned);
                                             return 1;
                                         }))))))))
+            .then(VineCommand.literal("tck_parts_spawn")
+                .then(VineCommand.argument("x", VineArgumentTypes.INT)
+                    .then(VineCommand.argument("y", VineArgumentTypes.INT)
+                        .then(VineCommand.argument("z", VineArgumentTypes.INT)
+                            .executes(ctx -> {
+                                boolean spawned = dev.vineengine.vine.testmod.parts.PartsExemplar.spawn(
+                                    dev.vineengine.vine.world.Vec3.of(
+                                        ctx.argument("x", Integer.class) + 0.5D,
+                                        ctx.argument("y", Integer.class),
+                                        ctx.argument("z", Integer.class) + 0.5D));
+                                ctx.feedback("tck: parts spawn started=" + spawned);
+                                return 1;
+                            })))))
+            .then(VineCommand.literal("tck_parts_hit")
+                .executes(ctx -> {
+                    dev.vineengine.vine.testmod.parts.PartsExemplar.hit();
+                    return 1;
+                }))
+            .then(VineCommand.literal("tck_parts_track")
+                .executes(ctx -> {
+                    dev.vineengine.vine.testmod.parts.PartsExemplar.track();
+                    return 1;
+                }))
+            .then(VineCommand.literal("tck_combat_spawn")
+                .then(VineCommand.argument("tx", VineArgumentTypes.INT)
+                    .then(VineCommand.argument("ty", VineArgumentTypes.INT)
+                        .then(VineCommand.argument("tz", VineArgumentTypes.INT)
+                            .then(VineCommand.argument("ax", VineArgumentTypes.INT)
+                                .then(VineCommand.argument("ay", VineArgumentTypes.INT)
+                                    .then(VineCommand.argument("az", VineArgumentTypes.INT)
+                                        .executes(ctx -> {
+                                            boolean spawned =
+                                                dev.vineengine.vine.testmod.combat.CombatExemplar.spawn(
+                                                    dev.vineengine.vine.world.Vec3.of(
+                                                        ctx.argument("tx", Integer.class) + 0.5D,
+                                                        ctx.argument("ty", Integer.class),
+                                                        ctx.argument("tz", Integer.class) + 0.5D),
+                                                    dev.vineengine.vine.world.Vec3.of(
+                                                        ctx.argument("ax", Integer.class) + 0.5D,
+                                                        ctx.argument("ay", Integer.class),
+                                                        ctx.argument("az", Integer.class) + 0.5D));
+                                            ctx.feedback("tck: combat spawn started=" + spawned);
+                                            return 1;
+                                        }))))))))
+            .then(VineCommand.literal("tck_combat_strike")
+                .then(VineCommand.argument("tx", VineArgumentTypes.INT)
+                    .then(VineCommand.argument("ty", VineArgumentTypes.INT)
+                        .then(VineCommand.argument("tz", VineArgumentTypes.INT)
+                            .executes(ctx -> {
+                                dev.vineengine.vine.testmod.combat.CombatExemplar.strike(
+                                    dev.vineengine.vine.world.Vec3.of(
+                                        ctx.argument("tx", Integer.class) + 0.5D,
+                                        ctx.argument("ty", Integer.class),
+                                        ctx.argument("tz", Integer.class) + 0.5D));
+                                return 1;
+                            })))))
+            .then(VineCommand.literal("tck_combat_after")
+                .executes(ctx -> {
+                    dev.vineengine.vine.testmod.combat.CombatExemplar.after();
+                    return 1;
+                }))
+            .then(VineCommand.literal("tck_campaign_verify")
+                .executes(ctx -> {
+                    dev.vineengine.vine.testmod.quest.CampaignExemplar.verify();
+                    return 1;
+                }))
+            .then(VineCommand.literal("tck_cutscene_play")
+                .executes(ctx -> {
+                    dev.vineengine.vine.testmod.cutscene.CutsceneExemplar.play();
+                    return 1;
+                }))
+            .then(VineCommand.literal("tck_cutscene_finish")
+                .executes(ctx -> {
+                    dev.vineengine.vine.testmod.cutscene.CutsceneExemplar.finish();
+                    return 1;
+                }))
+            .then(VineCommand.literal("tck_campaign_run")
+                .executes(ctx -> {
+                    dev.vineengine.vine.testmod.quest.CampaignExemplar.run();
+                    return 1;
+                }))
             .then(VineCommand.literal("tck_brain_trace")
                 .then(VineCommand.argument("ticks", VineArgumentTypes.INT)
                     .executes(ctx -> {

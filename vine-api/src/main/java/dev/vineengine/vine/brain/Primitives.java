@@ -48,6 +48,15 @@ public interface Primitives {
     /** Turns the actor's head/body toward {@code target} (a no-op when it is gone). */
     void lookAt(VineId target);
 
+    /**
+     * Takes the pending flinch, if a part of this actor crossed its flinch threshold
+     * since the last call (sub-08 Stage D). This is how a hit *interrupts* a behaviour:
+     * a node checks it, sees that the beast was just staggered, and yields to the
+     * stagger action instead of finishing its swing. Consuming rather than reading, so
+     * one flinch interrupts exactly once even when several nodes check in a tick.
+     */
+    boolean consumeFlinch();
+
     /** What a path request produced. */
     enum PathOutcome {
 

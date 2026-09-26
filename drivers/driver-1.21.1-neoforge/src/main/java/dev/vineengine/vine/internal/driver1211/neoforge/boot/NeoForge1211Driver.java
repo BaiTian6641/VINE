@@ -33,6 +33,7 @@ import dev.vineengine.vine.internal.driver1211.common.command.EngineCommands;
 import dev.vineengine.vine.internal.driver1211.neoforge.command.NeoForgeCommandFactory;
 import dev.vineengine.vine.internal.driver1211.neoforge.events.NeoForgeHookInstallers;
 import dev.vineengine.vine.internal.driver1211.neoforge.net.NeoForgeNetDriver;
+import dev.vineengine.vine.internal.driver1211.neoforge.net.NeoForgePartTransport;
 import dev.vineengine.vine.internal.driver1211.neoforge.registry.NeoForgeBehaviorWiring;
 import dev.vineengine.vine.internal.driver1211.neoforge.registry.NeoForgeDesignMaterializer;
 import dev.vineengine.vine.internal.driver1211.neoforge.registry.NeoForgeStructuralMaterializer;
@@ -91,8 +92,38 @@ public final class NeoForge1211Driver implements VineDriver {
         return currentServer;
     }
 
+    /**
+     * The engine handle this driver was booted with. Kept for the cell's content-cooking
+     * JVM ({@code datagenContent}), which has no game: the cooking pass resolves registered
+     * content through the same structural view the game's materialization reads, so the
+     * two can never disagree about what a consumer registered.
+     */
+    private static volatile DriverContext driverContext;
+
+    /** The engine handle from {@link #bootstrap}, or {@code null} before boot. */
+    public static DriverContext driverContext() {
+        return driverContext;
+    }
+
+    /**
+     * The cell's storage driver, kept so the world-save and server-stop hooks can flush
+     * every live tree. {@code open} hands out the same tree until it is flushed, so a tree
+     * the engine wrote is only in the holder once a flush has run — and a holder is what
+     * survives a save.
+     */
+    private static volatile NeoForgeVoxelStorage voxelStorage;
+
+    /** Writes every open engine tree into its holder; a no-op before the storage is built. */
+    private static void flushVoxelStorage() {
+        NeoForgeVoxelStorage storage = voxelStorage;
+        if (storage != null) {
+            storage.flushAll();
+        }
+    }
+
     @Override
     public void bootstrap(DriverContext ctx) {
+        driverContext = ctx;
         ctx.advancePhase(EnginePhase.REGISTRIES_OPEN);
         IEventBus modBus = modEventBus;
         if (modBus == null) {
@@ -119,6 +150,10 @@ public final class NeoForge1211Driver implements VineDriver {
         NeoForge.EVENT_BUS.addListener(ServerAboutToStartEvent.class,
             event -> ctx.advancePhase(EnginePhase.WORLD_LOAD));
         NeoForge.EVENT_BUS.addListener(net.neoforged.neoforge.event.server.ServerStoppedEvent.class, event -> {
+            // Every engine tree still open is written into its holder before the process
+            // lets go of the world (sub-03 Stage D): the last thing a stop must not lose is
+            // data the engine already wrote.
+            flushVoxelStorage();
             // The lifecycle contract this field's javadoc states ("null before start
             // / after stop") has to hold for readers of {@link #currentServer()}: the
             // world view answers "is this dimension loaded right now?" from it, and a
@@ -163,8 +198,9 @@ public final class NeoForge1211Driver implements VineDriver {
                 "cell lacks data components (hasDataComponents probe false) — VINE cannot store engine data here");
         }
         NeoForgeVoxelStorage.registerComponent(modBus);
-        NeoForgeVoxelStorage voxelStorage = new NeoForgeVoxelStorage();
-        voxelStorage.engine(VoxelStorageBinding.bind(voxelStorage));
+        NeoForgeVoxelStorage storage = new NeoForgeVoxelStorage();
+        storage.engine(VoxelStorageBinding.bind(storage));
+        voxelStorage = storage;
         // World view (sub-07 Stage B): the engine's block-state read/write path onto
         // this cell's live levels — bound once here, next to the storage seam it
         // mirrors, and reading the server the lifecycle listeners above track.
@@ -194,8 +230,22 @@ public final class NeoForge1211Driver implements VineDriver {
         NeoForge.EVENT_BUS.addListener(LevelEvent.Save.class, event -> {
             if (event.getLevel() instanceof ServerLevel) {
                 ctx.flushWorldStore();
+                // Same moment, same reason (sub-03 Stage D): the world store carries
+                // engine-owned world data, this flush carries every open holder tree.
+                flushVoxelStorage();
             }
         });
+
+        // Combat (sub-10 Stage D): the loader's two damage paths normalized into the
+        // engine's pipeline, installed before any world can be attacked in. The engine's
+        // own state decays on the server tick, next to the quests' batching pass —
+        // both are engine-owned per-tick work, so both are driven from one listener.
+        dev.vineengine.vine.internal.driver1211.neoforge.combat.NeoForgeMeleeHooks.install();
+        NeoForge.EVENT_BUS.addListener(
+            net.neoforged.neoforge.event.tick.ServerTickEvent.Post.class, event -> {
+                dev.vineengine.vine.combat.VineCombat.state().tick();
+                dev.vineengine.vine.quest.VineQuests.tick();
+            });
 
         NeoForgeHookInstallers.bind(ctx, ctx.bus());
 
@@ -204,6 +254,12 @@ public final class NeoForge1211Driver implements VineDriver {
         NeoForgeNetDriver net = new NeoForgeNetDriver();
         net.bindTransport();
         modBus.addListener(RegisterPayloadHandlersEvent.class, net::bindNative);
+        // Part-state sync (sub-08 Stage D): the engine encodes a part delta and counts its
+        // bytes; getting it to the clients tracking the actor's body is this cell's job, so
+        // the transport sink is installed here (once, before any world can tick an actor)
+        // and its envelope is registered next to the engine's own channels.
+        NeoForgePartTransport.install();
+        modBus.addListener(RegisterPayloadHandlersEvent.class, NeoForgePartTransport::bindNative);
 
         // Commands (sub-06 Stage A): every native dispatcher build attaches the
         // engine's descriptor snapshot (fires post-REGISTRIES_FROZEN on NF).

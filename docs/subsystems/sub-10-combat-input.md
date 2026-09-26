@@ -1,6 +1,6 @@
 # SUB-10 — Combat & input
 
-> **Status:** `planning` — one of `planning | in-progress | blocked(<reason>) | done`
+> **Status:** `in-progress` — one of `planning | in-progress | blocked(<reason>) | done`
 > **Milestone:** M2 (Stage E: M4, 26.x) · **Depends on:** SUB-05, SUB-08, SUB-09 · **Blocks:** —
 > **Cells:** all · **Loaders:** both
 > **Master plan:** §5.15 (+ §5.8, §5.13, §5.14) · **Module(s):** vine-api, vine-core, vine-spi, drivers
@@ -103,6 +103,35 @@ public interface CombatState {    // engine-owned, server-authoritative
 - **Touches:** driver-26.x-neoforge, driver-26.x-fabric.
 - **Bootstrap prompt:**
   > Implement sub-10 Stage E: mirror the 1.21.1 normalization (read both drivers first); version differences stay inside these drivers. Acceptance: full sub-10 TCK green on 26.x-NF + 26.x-Fabric. Conventions docs/README.md.
+
+### Stages A + C — Descriptors and the pipeline (landed)
+
+- [x] **Do:** `ActionDescriptor` / `AttackDescriptor` / `SweepShape` (box and arc) /
+  `CombatProfile` + `CombatOwnership` (the ownership declaration, with a partner preset required
+  for partner-owned items), `HitContext` with withers, `CombatModifier` as the only MODIFY-phase
+  extension, engine-owned `CombatState` (i-frames, hitstop, tick-decayed), and the closed
+  SWEEP → RESOLVE → MODIFY → APPLY pipeline with half-up rounding applied exactly once and a
+  reentrancy flag around APPLY. `CombatActorRef` lets a *player* swing, which is what makes the
+  subsystem usable from a loader's attack hook at all.
+- **Evidence:** the headless `combat.txt` golden (the plan's worked example to the digit:
+  40 × 1.6 × 1.3 × 1.1 × 1.2 = 109.824 → 110, plus the cooked partner preset bytes), and
+  `entity_combat_pipeline` on a live cell (110 damage on the head part, i-framed second hit
+  refused at APPLY, an adjacent vanilla cow untouched).
+- **Fixed while building it:** `CombatStateImpl.decay` counted windows down with
+  `Map.Entry#setValue`, which a `ConcurrentHashMap` rejects — it threw on the server tick,
+  once per tick, for as long as any window was open.
+
+### Stage D — 1.21.1 driver normalization (landed, in part)
+
+- [x] **Do:** per-cell attack/damage hooks (`NeoForgeMeleeHooks`, `FabricCombatHooks`) that
+  cancel a `VINE`-owned weapon's vanilla attack and run the pipeline, route a
+  `BETTER_COMBAT`-owned weapon's native damage through it exactly once, apply the result through
+  the loader's own damage path under the reentrancy guard, leave every unregistered weapon and
+  target alone, tick `CombatState` once per server tick, and cook the partner preset in
+  `datagenContent`.
+- **Remaining:** the live proof of "exactly one hit with Better Combat installed" needs a
+  client-side pass (the partner is a runtime mod, not a dependency), which is Theme B's
+  client-runner work.
 
 ## 4. Problems & blockers
 

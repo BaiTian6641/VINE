@@ -1,0 +1,36 @@
+# VINE sub-23 Stage A golden — cutscene frames
+# Parsed from the authored JSON through CutsceneDescriptor.CODEC, so a change
+# in the authoring shape or in the evaluation fails here.
+cutscene vine_test:wyvern_strike length=60 tracks=5 skippable=true
+  track camera start=0 end=59
+  track actor start=20 end=45
+  track audio start=18 end=18
+  track audio start=32 end=32
+  track title start=20 end=40
+frame tick=0 camera=(10.0,302.0,10.0) yaw=135.0 pitch=12.0 fov=70.0 actors=0 sounds=0 titles=0
+frame tick=1 camera=(9.971,301.996375,9.971) yaw=135.10875 pitch=11.971 fov=69.9275 actors=0 sounds=0 titles=0
+frame tick=10 camera=(8.0,301.75,8.0) yaw=142.5 pitch=10.0 fov=65.0 actors=0 sounds=0 titles=0
+frame tick=19 camera=(6.029,301.503625,6.029) yaw=149.89125 pitch=8.029 fov=60.0725 actors=0 sounds=0 titles=0
+frame tick=20 camera=(6.0,301.5,6.0) yaw=150.0 pitch=8.0 fov=60.0 actors=1 sounds=0 titles=1
+    actor vine_test:testbeast clip=animation.vine_test.wyvern_stub.strike seconds=0.0
+    title The wyvern strikes
+frame tick=21 camera=(5.925,301.495,5.85) yaw=151.5 pitch=7.4 fov=60.75 actors=1 sounds=0 titles=1
+    actor vine_test:testbeast clip=animation.vine_test.wyvern_stub.strike seconds=0.05
+    title The wyvern strikes
+frame tick=30 camera=(5.25,301.45,4.5) yaw=165.0 pitch=2.0 fov=67.5 actors=1 sounds=0 titles=1
+    actor vine_test:testbeast clip=animation.vine_test.wyvern_stub.strike seconds=0.5
+    title The wyvern strikes
+frame tick=32 camera=(5.1,301.44,4.2) yaw=168.0 pitch=0.8 fov=69.0 actors=1 sounds=1 titles=1
+    actor vine_test:testbeast clip=animation.vine_test.wyvern_stub.strike seconds=0.6
+    sound vine_test:impact
+    title The wyvern strikes
+frame tick=39 camera=(4.575,301.405,3.1500000000000004) yaw=178.5 pitch=-3.4 fov=74.25 actors=1 sounds=0 titles=1
+    actor vine_test:testbeast clip=animation.vine_test.wyvern_stub.strike seconds=0.95
+    title The wyvern strikes
+frame tick=40 camera=(4.5,301.4,3.0) yaw=180.0 pitch=-4.0 fov=75.0 actors=1 sounds=0 titles=1
+    actor vine_test:testbeast clip=animation.vine_test.wyvern_stub.strike seconds=1.0
+    title The wyvern strikes
+frame tick=41 camera=(4.5,301.4,3.0) yaw=180.0 pitch=-4.0 fov=75.0 actors=1 sounds=0 titles=0
+    actor vine_test:testbeast clip=animation.vine_test.wyvern_stub.strike seconds=1.05
+frame tick=50 camera=(4.5,301.4,3.0) yaw=180.0 pitch=-4.0 fov=75.0 actors=0 sounds=0 titles=0
+frame tick=59 camera=(4.5,301.4,3.0) yaw=180.0 pitch=-4.0 fov=75.0 actors=0 sounds=0 titles=0

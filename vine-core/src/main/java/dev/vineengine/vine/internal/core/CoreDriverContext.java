@@ -26,14 +26,17 @@ final class CoreDriverContext implements VineDriver.DriverContext {
     private final EngineEventBus bus;
     private final SessionService sessions;
     private final IdMapStore idMap;
+    private final dev.vineengine.vine.internal.quest.QuestService quests;
+    private volatile dev.vineengine.vine.internal.spi.WorldStoreSpi mountedStore;
 
     CoreDriverContext(PhaseMachine machine, DescriptorStore registries, EngineEventBus bus,
-            SessionService sessions, IdMapStore idMap) {
+            SessionService sessions, IdMapStore idMap, dev.vineengine.vine.internal.quest.QuestService quests) {
         this.machine = machine;
         this.registries = registries;
         this.bus = bus;
         this.sessions = sessions;
         this.idMap = idMap;
+        this.quests = quests;
     }
 
     @Override
@@ -61,17 +64,22 @@ final class CoreDriverContext implements VineDriver.DriverContext {
     @Override
     public void mountWorldStore(WorldStoreSpi spi) {
         WorldStoreSpi store = Objects.requireNonNull(spi, "spi");
+        mountedStore = store;
         idMap.mount(store);
         // Complete the map in key order (sub-02 Stage D): a world's numbering must
         // not depend on read order, registration order, or which cell runs it.
         idMap.assignMissing(registries.structuralKeys());
         sessions.mount(store);
+        quests.mount(store);
     }
 
     @Override
     public void flushWorldStore() {
         idMap.flush();
         sessions.flush();
+        if (mountedStore != null) {
+            quests.flush(mountedStore);
+        }
     }
 
     @Override

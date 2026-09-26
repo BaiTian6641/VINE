@@ -1,0 +1,43 @@
+{
+  "id": "vine_test:entity_campaign_beat",
+  "tags": [
+    "QUEST",
+    "CAMPAIGN"
+  ],
+  "steps": [
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_campaign_run"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "log",
+      "expect": [
+        "tck: campaign abandon=",
+        "tck: campaign start first=true huntBeforeDependency=false",
+        "tck: campaign cutscene-trigger player=",
+        "tck: campaign afterEvents state=COMPLETED count=2",
+        "tck: campaign claimFirst=[vine:xp] state=REWARDS_CLAIMED xpGained=400",
+        "tck: campaign start huntAfterClaim=true",
+        "tck: campaign cutscene-trigger player=",
+        "tck: campaign hunt state=COMPLETED",
+        "tck: campaign claimHunt=[vine:xp, vine:skill] state=REWARDS_CLAIMED xpGained=1300 levelsGained=3 skill=1",
+        "tck: campaign isolation watcherState=LOCKED watcherCount=0 watcherXpDelta=0 activeActor=0 activeWatcher=0"
+      ]
+    },
+    {
+      "type": "SaveReloadWorld"
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_campaign_verify"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "log",
+      "expect": [
+        "tck: campaign reloaded firstState=REWARDS_CLAIMED huntState=REWARDS_CLAIMED huntCount=3 claims=2 skill=1 watcherState=LOCKED progressionKept=true"
+      ]
+    }
+  ]
+}

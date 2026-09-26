@@ -1,0 +1,72 @@
+{
+  "id": "vine_test:entity_combat_pipeline",
+  "tags": [
+    "ENTITY",
+    "COMBAT"
+  ],
+  "steps": [
+    {
+      "type": "RunCommand",
+      "command": "forceload add 0 0 16 16"
+    },
+    {
+      "type": "RunCommand",
+      "command": "summon minecraft:cow 4 300 8"
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_combat_spawn 4 300 0 4 300 -2"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "command",
+      "expect": [
+        "tck: combat spawn started=true"
+      ]
+    },
+    {
+      "type": "AdvanceTicks",
+      "ticks": 2
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_combat_strike 4 300 0"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "log",
+      "expect": [
+        "tck: combat modifiers=2",
+        "tck: combat hit-1 landed=true damage=110.0 part=head broke=false flinched=true hitstop=3 knockback=2.500,0.400,0.000 endedAt=APPLY rejection=none",
+        "tck: combat hit-2-iframed landed=false damage=0.0 part=none broke=false flinched=false hitstop=0 knockback=0.000,0.000,0.000 endedAt=APPLY rejection=I_FRAMES"
+      ]
+    },
+    {
+      "type": "AdvanceTicks",
+      "ticks": 5
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_combat_after"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "log",
+      "expect": [
+        "tck: combat after hitstop=0",
+        "tck: combat wounds head=110.0 tail=0.0"
+      ]
+    },
+    {
+      "type": "RunCommand",
+      "command": "data get entity @e[type=minecraft:cow,limit=1] Health"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "command",
+      "expect": [
+        "10.0f"
+      ]
+    }
+  ]
+}

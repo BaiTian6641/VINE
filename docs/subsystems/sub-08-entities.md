@@ -1,6 +1,6 @@
 # SUB-08 — Entities & VineBrain
 
-> **Status:** `planning` — one of `planning | in-progress | blocked(<reason>) | done`
+> **Status:** `in-progress` — one of `planning | in-progress | blocked(<reason>) | done`
 > **Milestone:** M2 · **Depends on:** SUB-02, SUB-03, SUB-05 · **Blocks:** SUB-09, SUB-10
 > **Cells:** all · **Loaders:** both
 > **Master plan:** §5.13 · **Module(s):** vine-api, vine-core, vine-spi, drivers
@@ -270,6 +270,24 @@ multipart fixture.
   > Implement SUB-08 Stage F per the file. Territory is engine semantics, not
   > worldgen — emit transition intents; sub-13 owns placement. Acceptance:
   > herd/leash TCK green on both 1.21.1 cells.
+
+### Stage D — Multipart entities (landed)
+
+- [x] **Do:** an engine part runtime (per-part wound/broken/flinch state in the *actor's own*
+  tree through the cell's attach point, hit-zone multipliers, break and flinch thresholds, the
+  broken multiplier), geometry from the sub-09 evaluator (`VineParts.box` is the evaluator's
+  own `partBox` for the actor's transform, never a stored copy), native part bodies per cell
+  (NeoForge `PartEntity`; Fabric hosting the vanilla mechanism by hand), a quantized
+  delta-compressed part-state sync with a deadband and byte counters, and the flinch signal a
+  behaviour reads to interrupt itself (`Primitives.consumeFlinch`).
+- **Evidence:** `entity_parts` (wound, multiplier, flinch-once, break, geometry following the
+  pose across ticks) plus the headless `parts.delta.txt` golden (the hit script, the delta
+  bytes, the receiver's round trip, and the ≤2.5 KB/s budget arithmetic at 12 parts: 79 bytes
+  worst case, 1580 B/s at 20 tps).
+- **Fixed while building it:** `AbstractVoxelStorage.open` returned a *fresh* tree per call and
+  clobbered the live one, so a second open of the same holder silently discarded the first
+  writer's changes. Trees are now live per (holder, schema) until flushed, `flushAll()` writes
+  them at save/stop, and the engine's part/quest state rides that path.
 
 ## 4. Problems & blockers
 

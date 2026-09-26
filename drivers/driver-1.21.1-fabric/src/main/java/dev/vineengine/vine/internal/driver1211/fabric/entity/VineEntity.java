@@ -1,5 +1,11 @@
 package dev.vineengine.vine.internal.driver1211.fabric.entity;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.attribute.EntityAttribute;
 import net.minecraft.entity.attribute.EntityAttributeInstance;
@@ -9,12 +15,17 @@ import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.util.Identifier;
 import net.minecraft.world.World;
 
+import dev.vineengine.vine.animation.OrientedBox;
 import dev.vineengine.vine.entity.AttributeSpec;
 import dev.vineengine.vine.entity.EntityDescriptor;
+import dev.vineengine.vine.entity.PartDescriptor;
+import dev.vineengine.vine.entity.PartState;
 import dev.vineengine.vine.entity.VineEntityRef;
+import dev.vineengine.vine.entity.VineParts;
 import dev.vineengine.vine.internal.driver1211.fabric.registry.FabricContentMaterializer;
 import dev.vineengine.vine.internal.entity.EntityRuntime;
 import dev.vineengine.vine.registry.VineId;
+import dev.vineengine.vine.world.Vec3;
 
 /**
  * The 1.21.1 Fabric cell's native entity carrier (sub-08 Stage A): one vanilla
@@ -38,6 +49,15 @@ import dev.vineengine.vine.registry.VineId;
  * {@code ServerEntityEvents.ENTITY_UNLOAD} hook covers chunk unload, which vanilla
  * routes through the final {@code setRemoved} and cannot be overridden — so a
  * brain never outlives the body it was driving.
+ *
+ * <p><b>Hosting the engine's parts (sub-08 Stage D).</b> A descriptor that declares
+ * parts gets one more call per server tick: {@link EntityRuntime#tickParts} with this
+ * actor's {@link FabricPartHost}, which is what tells the engine where this body stands
+ * and hands it the actor's persistent state tree. A descriptor with no parts pays a
+ * single emptiness check and nothing else. The native half is one {@link VinePartEntity}
+ * per declared part, created on the first server tick and kept where the engine's
+ * computed box puts it — the engine owns the geometry, this class owns the bodies that
+ * carry it (and the {@code VinePartEntity} javadoc states what a part may never be).
  *
  * <p><b>Attributes.</b> Base values ride the type's
  * {@code DefaultAttributeContainer}, registered with the type by
@@ -144,6 +164,31 @@ public final class VineEntity extends PathAwareEntity {
     /** The per-actor world primitives the engine's loop is driven with; built alongside {@link #actorRef}. */
     private FabricEntityPrimitives actorPrimitives;
 
+    /** This actor's part host (sub-08 Stage D); built once and handed to the engine every tick. */
+    private FabricPartHost partHost;
+
+    /**
+     * The native bodies carrying this actor's parts, or {@code null} until the first
+     * server tick that declares parts (sub-08 Stage D). Fixed once built: the descriptor
+     * cannot change for this entity's lifetime.
+     */
+    private List<VinePartEntity> partBodies;
+
+    /**
+     * Live parts-declaring actors by engine ref (sub-08 Stage D): the routing table the
+     * part delta transport resolves a ref through, because only a body can say which
+     * players are tracking it. An actor joins it when its part host is built (its first
+     * server tick) and leaves it in {@link #vineDetach()} — the one place both the
+     * removal and the chunk-unload path pass through — so a delta for a gone actor is
+     * simply not sent, and no other entity ever pays for this table.
+     */
+    private static final Map<VineEntityRef, VineEntity> LIVE = new ConcurrentHashMap<>();
+
+    /** The live body for {@code ref}, or {@code null} when its actor is gone or unloaded. */
+    public static VineEntity bodyFor(VineEntityRef ref) {
+        return LIVE.get(ref);
+    }
+
     /** Tags this entity with its engine instance id — called only by the cell's spawn path. */
     public void vineInstance(java.util.UUID instance) {
         this.vineInstance = java.util.Objects.requireNonNull(instance, "instance");
@@ -155,11 +200,27 @@ public final class VineEntity extends PathAwareEntity {
     }
 
     /**
+     * The engine's identity for this body, or {@code null} while the spawn path has not
+     * tagged it. This is what the rest of the cell asks a target: an entity with a ref is a
+     * VINE actor whose fight the engine owns, and one without is vanilla's (sub-10 Stage D
+     * scopes its combat hooks by exactly this answer — Minimal Footprint §5.1).
+     */
+    public VineEntityRef vineRef() {
+        return this.vineInstance == null ? null : actorRef();
+    }
+
+    /**
      * Drives the engine's actor for this body (sub-08 Stage C): one callback per
      * server tick, handing the engine this actor's primitives. Nothing is attached
      * for a plain entity, and {@link EntityRuntime#tickActor} answers that case
      * without work, so Stage A's behaviour is unchanged — the only cost is the
      * instance-id check below.
+     *
+     * <p>A descriptor that declares parts (sub-08 Stage D) gets
+     * {@link EntityRuntime#tickParts} afterwards, then has its bodies placed on the
+     * boxes the engine computed. The guard is the descriptor's own part list, so a
+     * single-collider entity pays one emptiness check per tick and never touches a
+     * part host at all.
      */
     @Override
     public void tick() {
@@ -170,6 +231,73 @@ public final class VineEntity extends PathAwareEntity {
             return;
         }
         EntityRuntime.tickActor(actorRef(), actorPrimitives());
+        if (this.vineDescriptor.parts().isEmpty()) {
+            return;
+        }
+        EntityRuntime.tickParts(actorRef(), partHost());
+        if (!getWorld().isClient()) {
+            // The server owns the bodies: a client-side copy of the actor has the id
+            // but no engine actor, and the engine is what says where a part stands.
+            drivePartBodies();
+        }
+    }
+
+    /**
+     * Creates this actor's part bodies once, then keeps each one on the box the engine
+     * computed this tick (sub-08 Stage D). One {@link VineParts#box} per part is the
+     * whole algorithm: the engine owns the geometry, and the box's centre is the
+     * position its body carries (see {@link VinePartEntity#drive}).
+     */
+    private void drivePartBodies() {
+        List<VinePartEntity> bodies = this.partBodies;
+        if (bodies == null) {
+            bodies = this.partBodies = createPartBodies();
+        }
+        if (!EntityRuntime.hasParts(actorRef())) {
+            // No clip is playing yet: the engine has no pose, so it has no box to place
+            // a body on. The bodies wait on the actor where they were created, rather
+            // than being given a position this cell invented.
+            return;
+        }
+        VineEntityRef ref = actorRef();
+        // The host's own transform, read once: the same position and yaw the engine was
+        // handed this tick, so a box and the body carrying it cannot disagree.
+        Vec3 position = partHost().position();
+        float yaw = partHost().yawDegrees();
+        for (VinePartEntity body : bodies) {
+            Optional<OrientedBox> box = VineParts.box(ref, body.partName(), position, yaw);
+            if (box.isPresent()) {
+                body.drive(box.get(), yaw);
+            }
+            Optional<PartState> state = VineParts.part(ref, body.partName());
+            body.broken(state.isPresent() && state.get().broken());
+        }
+    }
+
+    /**
+     * The native bodies for this actor's declared parts, built from the type registered
+     * beside the entity types (sub-08 Stage D). Created on the first server tick that
+     * reaches here and positioned on the actor, so a part whose clip has not started yet
+     * sits at its owner instead of at the world origin a fresh entity defaults to.
+     */
+    private List<VinePartEntity> createPartBodies() {
+        EntityType<VinePartEntity> type = FabricContentMaterializer.partEntityType();
+        if (type == null) {
+            throw new IllegalStateException("the part body type was never materialized — its registration runs"
+                + " with the entity types at mod init");
+        }
+        List<PartDescriptor> parts = this.vineDescriptor.parts();
+        List<VinePartEntity> bodies = new ArrayList<>(parts.size());
+        for (PartDescriptor part : parts) {
+            VinePartEntity body = type.create(getWorld());
+            if (body == null) {
+                throw new IllegalStateException("the part body type refused to create a body for part '"
+                    + part.name() + "' of " + this.vineId);
+            }
+            body.attachTo(this, part.name());
+            bodies.add(body);
+        }
+        return List.copyOf(bodies);
     }
 
     /**
@@ -186,22 +314,54 @@ public final class VineEntity extends PathAwareEntity {
     }
 
     /**
-     * Drops whatever brain is attached to this actor; a no-op for an untagged body
-     * and idempotent, so the removal and unload hooks may both call it.
+     * Drops whatever brain is attached to this actor, plus its part bodies; a no-op for an
+     * untagged body and idempotent, so the removal and unload hooks may both call it.
      */
     void vineDetach() {
         if (this.vineInstance != null) {
             EntityRuntime.detach(actorRef());
+            LIVE.remove(actorRef());
+        }
+        discardPartBodies();
+    }
+
+    /**
+     * Drops this actor's part bodies (sub-08 Stage D): a body is a carrier for a live
+     * actor only, and one left behind would keep a gone actor's geometry. Called from
+     * {@link #vineDetach()}, the same place the brain and the part hosting are dropped,
+     * so removal and chunk unload both cover it.
+     */
+    private void discardPartBodies() {
+        List<VinePartEntity> bodies = this.partBodies;
+        if (bodies == null) {
+            return;
+        }
+        this.partBodies = null;
+        for (VinePartEntity body : bodies) {
+            body.discard();
         }
     }
 
     /** This actor's engine identity, built lazily once — the instance id is fixed at spawn. */
-    private VineEntityRef actorRef() {
+    VineEntityRef actorRef() {
         VineEntityRef ref = this.actorRef;
         if (ref == null) {
             this.actorRef = ref = new VineEntityRef(this.vineId, this.vineInstance);
         }
         return ref;
+    }
+
+    /** The part host for this actor, built lazily once (sub-08 Stage D). */
+    private FabricPartHost partHost() {
+        FabricPartHost host = this.partHost;
+        if (host == null) {
+            this.partHost = host = new FabricPartHost(this);
+            // Announced here, not at spawn: only an actor with parts is ever resolved by
+            // the delta transport, and a body the world refused at spawn never ticks — so
+            // it can never reach this table and the transport's lookup stays honest.
+            LIVE.put(actorRef(), this);
+        }
+        return host;
     }
 
     /** The primitives serving this actor, built lazily once and reused every tick. */

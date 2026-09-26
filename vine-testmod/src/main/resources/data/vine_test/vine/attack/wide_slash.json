@@ -1,0 +1,24 @@
+{
+  "id": "vine_test:wide_slash",
+  "motionValue": 1.6,
+  "damageType": "minecraft:player_attack",
+  "element": "vine_test:ember",
+  "sweep": {
+    "halfExtents": {
+      "x": 1.2,
+      "y": 1.6,
+      "z": 1.5
+    },
+    "offset": {
+      "x": 0.0,
+      "y": 1.6,
+      "z": -1.5
+    }
+  },
+  "knockback": {
+    "x": 2.0,
+    "y": 0.0,
+    "z": 0.0
+  },
+  "hitstopTicks": 3
+}

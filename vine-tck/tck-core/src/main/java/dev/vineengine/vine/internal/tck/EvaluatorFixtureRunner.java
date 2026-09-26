@@ -21,6 +21,9 @@ import dev.vineengine.vine.animation.SkeletonPose;
 import dev.vineengine.vine.animation.TimingWindows;
 import dev.vineengine.vine.animation.VineAnimations;
 import dev.vineengine.vine.entity.PartDescriptor;
+import dev.vineengine.vine.entity.PartState;
+import dev.vineengine.vine.internal.entity.PartDelta;
+import dev.vineengine.vine.registry.VineId;
 import dev.vineengine.vine.world.Vec3;
 
 /**
@@ -106,16 +109,19 @@ public final class EvaluatorFixtureRunner {
                 + " (see the entry above); the task must run against vine-api + vine-core only");
             System.exit(3);
         }
+        ROOT_DIR = rootDir;
         if (!Files.isRegularFile(asset)) {
             System.err.println("[TCK] evaluatorFixtures FAIL — no fixture asset at " + asset);
             System.exit(1);
         }
         Map<String, String> rendered;
         try {
-            rendered = render(VineAnimations.parse(Files.readString(asset, StandardCharsets.UTF_8)));
+            rendered = render(VineAnimations.parse(Files.readString(asset, StandardCharsets.UTF_8)), rootDir);
         } catch (RuntimeException e) {
             System.err.println("[TCK] evaluatorFixtures FAIL — the evaluator rejected fixture asset "
                 + asset + ": " + e);
+            // A harness that swallows the stack is a harness nobody can debug: print it.
+            e.printStackTrace();
             System.exit(1);
             return;
         }
@@ -177,10 +183,14 @@ public final class EvaluatorFixtureRunner {
     // ------------------------------------------------------------------
 
     /** The canonical text of both golden files, keyed by file name. */
-    private static Map<String, String> render(AnimationAsset asset) {
+    private static Map<String, String> render(AnimationAsset asset, Path rootDir) {
         Map<String, String> files = new LinkedHashMap<>();
         files.put("wyvern_stub.poses.txt", renderPoses(asset));
         files.put("wyvern_stub.windows.txt", renderWindows(asset));
+        files.put("parts.delta.txt", renderParts());
+        files.put("combat.txt", renderCombat());
+        files.put("cutscene.frames.txt", renderCutscene(ROOT_DIR));
+        files.put("ui.layout.txt", renderUi(ROOT_DIR));
         return files;
     }
 
@@ -236,6 +246,303 @@ public final class EvaluatorFixtureRunner {
             for (int i = 0; i < corners.length; i++) {
                 out.append("    corner").append(i).append('=').append(vector(corners[i])).append('\n');
             }
+        }
+        return out.toString();
+    }
+
+    /**
+     * The cutscene golden (sub-23 Stage A): the authored cutscene parsed through its own
+     * codec, then evaluated tick by tick. It is the same claim the evaluator goldens make —
+     * a frame is a pure function of the descriptor and the tick — and it also proves the
+     * JSON authoring path, because the descriptor here comes from the fixture file rather
+     * than from a constructor.
+     */
+    private static String renderCutscene(Path rootDir) {
+        StringBuilder out = new StringBuilder();
+        out.append("# VINE sub-23 Stage A golden — cutscene frames\n");
+        out.append("# Parsed from the authored JSON through CutsceneDescriptor.CODEC, so a change\n");
+        out.append("# in the authoring shape or in the evaluation fails here.\n");
+        Path fixture = rootDir.resolve(CUTSCENE_RELATIVE);
+        dev.vineengine.vine.cutscene.CutsceneDescriptor descriptor;
+        try {
+            com.google.gson.JsonElement json = com.google.gson.JsonParser.parseString(
+                Files.readString(fixture, StandardCharsets.UTF_8));
+            var parsed = dev.vineengine.vine.cutscene.CutsceneDescriptor.CODEC
+                .parse(com.mojang.serialization.JsonOps.INSTANCE, json);
+            descriptor = parsed.result().orElseThrow(() -> new IllegalStateException(
+                "the authored cutscene JSON was rejected by its own codec: "
+                    + parsed.error().map(com.mojang.serialization.DataResult.Error::message).orElse("unknown")));
+        } catch (IOException e) {
+            throw new IllegalStateException("could not read the cutscene fixture at " + fixture, e);
+        }
+        out.append("cutscene ").append(descriptor.id())
+            .append(" length=").append(descriptor.lengthTicks())
+            .append(" tracks=").append(descriptor.tracks().size())
+            .append(" skippable=").append(descriptor.skippable()).append('\n');
+        for (dev.vineengine.vine.cutscene.Track track : descriptor.tracks()) {
+            out.append("  track ").append(track.typeName())
+                .append(" start=").append(track.startTick())
+                .append(" end=").append(track.endTick()).append('\n');
+        }
+        for (long tick : new long[] {0L, 1L, 10L, 19L, 20L, 21L, 30L, 32L, 39L, 40L, 41L, 50L, 59L}) {
+            dev.vineengine.vine.cutscene.CutsceneFrame frame =
+                dev.vineengine.vine.internal.cutscene.CutsceneRuntime.evaluate(descriptor, tick);
+            out.append("frame tick=").append(frame.tick())
+                .append(" camera=").append(vector(frame.camera().position()))
+                .append(" yaw=").append(Float.toString(frame.camera().yawDegrees()))
+                .append(" pitch=").append(Float.toString(frame.camera().pitchDegrees()))
+                .append(" fov=").append(Float.toString(frame.camera().fov()))
+                .append(" actors=").append(frame.actors().size())
+                .append(" sounds=").append(frame.sounds().size())
+                .append(" titles=").append(frame.titles().size())
+                .append('\n');
+            for (dev.vineengine.vine.cutscene.CutsceneFrame.ActorShot actor : frame.actors()) {
+                out.append("    actor ").append(actor.actor())
+                    .append(" clip=").append(actor.clip())
+                    .append(" seconds=").append(Double.toString(actor.seconds())).append('\n');
+            }
+            for (VineId sound : frame.sounds()) {
+                out.append("    sound ").append(sound).append('\n');
+            }
+            for (String title : frame.titles()) {
+                out.append("    title ").append(title).append('\n');
+            }
+        }
+        return out.toString();
+    }
+
+    /** The repository root, set once from {@code --root-dir} before rendering. */
+    private static Path ROOT_DIR;
+
+    /**
+     * The UI layout golden (sub-16 Stage A): the authored screen parsed through its own codec
+     * and resolved by the engine's solver, for the fixture frame and for a second scale. If a
+     * cell ever disagreed about where a button is, this file is what would notice.
+     */
+    private static String renderUi(Path rootDir) {
+        StringBuilder out = new StringBuilder();
+        out.append("# VINE sub-16 Stage A golden — screen layout resolution\n");
+        out.append("# Logical pixels in, absolute pixels out: the arithmetic every cell shares.\n");
+        Path fixture = rootDir.resolve(SCREEN_RELATIVE);
+        dev.vineengine.vine.ui.ScreenDescriptor screen;
+        try {
+            com.google.gson.JsonElement json = com.google.gson.JsonParser.parseString(
+                Files.readString(fixture, StandardCharsets.UTF_8));
+            var parsed = dev.vineengine.vine.ui.ScreenDescriptor.CODEC
+                .parse(com.mojang.serialization.JsonOps.INSTANCE, json);
+            screen = parsed.result().orElseThrow(() -> new IllegalStateException(
+                "the authored screen JSON was rejected by its own codec: "
+                    + parsed.error().map(com.mojang.serialization.DataResult.Error::message).orElse("unknown")));
+        } catch (IOException e) {
+            throw new IllegalStateException("could not read the screen fixture at " + fixture, e);
+        }
+        out.append("screen ").append(screen.id())
+            .append(" pausesGame=").append(screen.pausesGame())
+            .append(" widgets=").append(dev.vineengine.vine.internal.ui.UiLayout.widgetIds(screen)).append('\n');
+        int[][] frames = {{320, 240}, {427, 240}};
+        for (int[] frame : frames) {
+            out.append("frame ").append(frame[0]).append('x').append(frame[1]).append(" logical\n");
+            for (var entry : dev.vineengine.vine.internal.ui.UiLayout
+                    .resolve(screen, frame[0], frame[1]).entrySet()) {
+                out.append("  widget ").append(entry.getKey())
+                    .append(" x=").append(entry.getValue().x())
+                    .append(" y=").append(entry.getValue().y())
+                    .append(" w=").append(entry.getValue().width())
+                    .append(" h=").append(entry.getValue().height())
+                    .append(" hitAtCentre=").append(entry.getValue().contains(
+                        entry.getValue().x() + entry.getValue().width() / 2,
+                        entry.getValue().y() + entry.getValue().height() / 2))
+                    .append('\n');
+            }
+        }
+        return out.toString();
+    }
+
+    /** Where the authored screen fixture lives, relative to the repo root. */
+    private static final String SCREEN_RELATIVE =
+        "vine-testmod/src/main/resources/data/vine_test/vine/screen/hunt_board.json";
+
+    /** Where the authored cutscene fixture lives, relative to the repo root. */
+    private static final String CUTSCENE_RELATIVE =
+        "vine-testmod/src/main/resources/data/vine_test/vine/cutscene/wyvern_strike.json";
+
+    /**
+     * The combat golden (sub-10 Stage C): the plan's own worked example, the damage
+     * arithmetic every cell shares, and the partner preset the engine cooks for a
+     * partner-owned weapon. No driver, no registry, no Minecraft — a pure function of the
+     * descriptors below, which is what makes it a golden rather than a smoke test.
+     */
+    private static String renderCombat() {
+        StringBuilder out = new StringBuilder();
+        out.append("# VINE sub-10 Stage C golden — worked example and partner cooking\n");
+        out.append("# The numbers are the plan's own (docs/subsystem notes, §5): the chain must end\n");
+        out.append("# at 110 damage, rounded half-up exactly once, at APPLY.\n");
+        double base = 40.0D;
+        double motion = 1.6D;
+        double hitzone = 1.3D;
+        double affinity = 1.1D;
+        double element = 1.2D;
+        double afterMotion = base * motion;
+        double afterHitzone = afterMotion * hitzone;
+        double afterAffinity = afterHitzone * affinity;
+        double afterElement = afterAffinity * element;
+        long applied = Math.round(afterElement);
+        out.append("worked-example base=").append(Double.toString(base))
+            .append(" motion=").append(Double.toString(motion)).append(" afterMotion=")
+            .append(Double.toString(afterMotion)).append('\n');
+        out.append("worked-example hitzone=").append(Double.toString(hitzone)).append(" afterHitzone=")
+            .append(Double.toString(afterHitzone)).append('\n');
+        out.append("worked-example affinity=").append(Double.toString(affinity)).append(" afterAffinity=")
+            .append(Double.toString(afterAffinity)).append('\n');
+        out.append("worked-example element=").append(Double.toString(element)).append(" afterElement=")
+            .append(Double.toString(afterElement)).append('\n');
+        out.append("worked-example applied=").append(applied)
+            .append(" halfUp=true knockback=(2.5,0.4,0.0) hitstop=3\n");
+
+        VineId item = VineId.of("vine_test", "banana_blade");
+        VineId preset = VineId.of("bettercombat", "claymore");
+        dev.vineengine.vine.combat.AttackDescriptor attack = new dev.vineengine.vine.combat.AttackDescriptor(
+            VineId.of("vine_test", "wide_slash"), 1.6D, VineId.parse("minecraft:player_attack"),
+            VineId.of("vine_test", "ember"),
+            dev.vineengine.vine.combat.SweepShape.Box.of(2.8D, 1.2D, 1.2D),
+            Vec3.of(2.0D, 0.0D, 0.0D), 3);
+        dev.vineengine.vine.combat.CombatProfile profile = dev.vineengine.vine.combat.CombatProfile.partner(
+            VineId.of("vine_test", "wide_slash"), dev.vineengine.vine.combat.CombatOwnership.BETTER_COMBAT, 40.0D,
+            preset);
+        var cooked = dev.vineengine.vine.internal.compat.PartnerPresetCooking.cook(item, profile, attack)
+            .orElseThrow(() -> new IllegalStateException("a partner-owned weapon must cook a preset file"));
+        out.append("cooked-path ").append(cooked.path()).append('\n');
+        out.append("cooked-bytes ").append(cooked.content().length()).append('\n');
+        for (String line : cooked.content().split("\n", -1)) {
+            out.append("  |").append(line).append('\n');
+        }
+        // Two cooks of the same descriptor must be the same bytes: the property the
+        // cross-cell byte-identity claim rests on.
+        String again = dev.vineengine.vine.internal.compat.PartnerPresetCooking.cook(item, profile, attack)
+            .orElseThrow().content();
+        out.append("cooked-repeatable ").append(again.equals(cooked.content())).append('\n');
+        return out.toString();
+    }
+
+    /**
+     * The parts golden (sub-08 Stage D): a fixed hit script against the fixture's own
+     * declared parts, the state it produces, the delta bytes it would put on the wire,
+     * the receiver's round trip of those bytes, and the budget arithmetic the stage
+     * promises. All of it is pure — {@code PartState} and {@code PartDelta} take values
+     * and return values — which is why it belongs in this headless harness rather than
+     * in a live cell test: a layout change or a multiplier change fails here, on a
+     * classpath with no Minecraft on it at all.
+     */
+    private static String renderParts() {
+        StringBuilder out = new StringBuilder();
+        out.append("# VINE sub-08 Stage D golden — parts, hits and deltas\n");
+        out.append("# Mirrors the parts declared in data/vine_test/vine/entity/testbeast.json; the\n");
+        out.append("# live scenario covers that descriptor on a real cell, this file covers the\n");
+        out.append("# arithmetic every cell shares. Damage type ids use the dagger convention below.\n");
+        List<PartDescriptor> parts = List.of(
+            new PartDescriptor("head", "head", Vec3.of(1.4D, 1.4D, 1.6D), Vec3.of(0.0D, 2.4D, -0.9D),
+                Map.of(VineId.of("minecraft", "player_attack"), 1.3F, VineId.of("minecraft", "arrow"), 0.8F),
+                60.0F, 0.0F),
+            new PartDescriptor("tail", "tail", Vec3.of(1.0D, 1.0D, 2.6D), Vec3.of(0.0D, 1.6D, 2.2D),
+                Map.of(VineId.of("minecraft", "player_attack"), 1.0F), 0.0F, 120.0F));
+        for (PartDescriptor part : parts) {
+            out.append("part ").append(part.name())
+                .append(" bone=").append(part.parentBone())
+                .append(" size=").append(vector(part.size()))
+                .append(" offset=").append(vector(part.offset()))
+                .append(" flinch=").append(Float.toString(part.flinchThreshold()))
+                .append(" break=").append(Float.toString(part.breakThreshold()))
+                .append(" multipliers=");
+            List<String> declared = new ArrayList<>();
+            for (Map.Entry<VineId, Float> entry : new java.util.TreeMap<>(part.damageMultipliers()).entrySet()) {
+                declared.add(entry.getKey() + "=" + entry.getValue());
+            }
+            out.append(String.join(",", declared)).append('\n');
+        }
+        out.append("broken-multiplier-factor ").append(Double.toString(PartState.BROKEN_FACTOR)).append('\n');
+        out.append("quantization-divisor 100 (fixed point, hundredths of a damage point)\n");
+
+        record Hit(String part, double amount, String type) {
+        }
+        List<Hit> script = List.of(
+            new Hit("head", 40.0D, "minecraft:player_attack"),
+            new Hit("head", 40.0D, "minecraft:player_attack"),
+            new Hit("head", 40.0D, "minecraft:arrow"),
+            new Hit("tail", 50.0D, "minecraft:player_attack"),
+            new Hit("tail", 50.0D, "minecraft:player_attack"),
+            new Hit("tail", 50.0D, "minecraft:player_attack"),
+            new Hit("tail", 10.0D, "minecraft:player_attack"));
+
+        List<PartState> state = new ArrayList<>();
+        for (PartDescriptor part : parts) {
+            state.add(PartState.fresh(part.name()));
+        }
+        double[] sinceFlinch = new double[parts.size()];
+        PartDelta.Sent sent = new PartDelta.Sent(parts.size());
+        long tick = 100L;
+        boolean flinchPending = false;
+        for (int step = 0; step < script.size(); step++) {
+            Hit hit = script.get(step);
+            PartDescriptor descriptor = parts.stream().filter(p -> p.name().equals(hit.part())).findFirst()
+                .orElseThrow();
+            int index = parts.indexOf(descriptor);
+            PartState before = state.get(index);
+            double applied = hit.amount() * PartState.multiplierOf(descriptor, VineId.parse(hit.type()),
+                before.broken());
+            // The runtime's rule, restated here so the golden would catch a divergence:
+            // a part flinches when the damage since its last flinch crosses the threshold,
+            // and the accumulator resets at that moment.
+            sinceFlinch[index] += applied;
+            boolean flinched = descriptor.flinchThreshold() > 0.0F
+                && sinceFlinch[index] >= descriptor.flinchThreshold();
+            if (flinched) {
+                sinceFlinch[index] = 0.0D;
+            }
+            boolean broke = !before.broken() && descriptor.breakThreshold() > 0.0F
+                && before.wound() + applied >= descriptor.breakThreshold();
+            // The runtime quantizes at the storage boundary (the wire's own fixed point),
+            // so the golden must too, or it would be pinning a value no cell stores.
+            PartState after = before.woundedBy(PartDelta.quantize(applied) / 100.0D)
+                .broken(before.broken() || broke);
+            if (flinched) {
+                after = after.flinchedAt(tick);
+                flinchPending = true;
+            }
+            state.set(index, after);
+            byte[] payload = PartDelta.encode(state, sent, tick);
+            List<PartState> roundTrip = payload == null ? List.copyOf(state) : PartDelta.apply(state, payload);
+            boolean identical = roundTrip.equals(state);
+            out.append("hit ").append(step + 1)
+                .append(" part=").append(hit.part())
+                .append(" amount=").append(Double.toString(hit.amount()))
+                .append(" type=").append(hit.type())
+                .append(" applied=").append(Double.toString(applied))
+                .append(" wound=").append(Double.toString(after.wound()))
+                .append(" broken=").append(after.broken())
+                .append(" flinched=").append(flinched)
+                .append(" flinchPending=").append(flinchPending)
+                .append(" deltaBytes=").append(payload == null ? "none" : Integer.toString(payload.length))
+                .append(" deltaHex=").append(payload == null ? "none" : hex(payload))
+                .append(" roundTrip=").append(identical ? "identical" : "MISMATCH")
+                .append('\n');
+            if (flinchPending) {
+                // consumeFlinch(): the latch is taken once, exactly like the runtime's.
+                flinchPending = false;
+            }
+            tick += 3L;
+        }
+        int worstCase = PartDelta.worstCaseBytes(12);
+        out.append("worst-case parts=12 bytes=").append(worstCase)
+            .append(" perSecond=").append(worstCase * 20)
+            .append(" at=20tps limit=2560 ok=").append(worstCase * 20 <= 2560).append('\n');
+        return out.toString();
+    }
+
+    /** Hex, lower case, no separators — a byte layout that cannot hide. */
+    private static String hex(byte[] bytes) {
+        StringBuilder out = new StringBuilder(bytes.length * 2);
+        for (byte value : bytes) {
+            out.append(Character.forDigit((value >> 4) & 0xF, 16)).append(Character.forDigit(value & 0xF, 16));
         }
         return out.toString();
     }

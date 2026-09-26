@@ -11,6 +11,7 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 
 import dev.vineengine.vine.brain.Primitives;
+import dev.vineengine.vine.entity.VineParts;
 import dev.vineengine.vine.registry.VineId;
 import dev.vineengine.vine.world.Vec3;
 
@@ -193,6 +194,17 @@ final class NeoForgeEntityPrimitives implements Primitives {
             // gone target is a no-op, exactly the interface's contract.
             this.actor.getLookControl().setLookAt(other);
         }
+    }
+
+    /**
+     * Takes the flinch a part hit latched for this actor (sub-08 Stage D) — the signal a
+     * behaviour reads to interrupt what it is doing. The engine owns the latch and answers
+     * false when nothing crossed a threshold (or nothing is hosted); this cell only names
+     * the actor the hit landed on.
+     */
+    @Override
+    public boolean consumeFlinch() {
+        return VineParts.consumeFlinch(this.actor.actorRef());
     }
 
     /** Whether the body is within {@link #ARRIVAL_DISTANCE} of {@code target}. */

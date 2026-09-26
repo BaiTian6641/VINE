@@ -13,6 +13,7 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.RaycastContext;
 
 import dev.vineengine.vine.brain.Primitives;
+import dev.vineengine.vine.entity.VineParts;
 import dev.vineengine.vine.registry.VineId;
 import dev.vineengine.vine.world.Vec3;
 
@@ -191,6 +192,17 @@ final class FabricEntityPrimitives implements Primitives {
             // a gone target is a no-op, exactly the interface's contract.
             this.actor.getLookControl().lookAt(other);
         }
+    }
+
+    /**
+     * Takes this actor's pending flinch from the engine (sub-08 Stage D). The engine owns
+     * the latch — a part crossing its flinch threshold sets it, one call clears it — so
+     * this cell only asks, with no state of its own that could disagree with what the
+     * hit did. An actor with nothing hosted (or no flinch pending) answers {@code false}.
+     */
+    @Override
+    public boolean consumeFlinch() {
+        return VineParts.consumeFlinch(this.actor.actorRef());
     }
 
     /** Whether the body is within {@link #ARRIVAL_DISTANCE} of {@code target}. */

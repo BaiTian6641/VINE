@@ -1,6 +1,6 @@
 # SUB-16 — Client 2D (GUI/HUD)
 
-> **Status:** `planning` — one of `planning | in-progress | blocked(<reason>) | done`
+> **Status:** `in-progress` — one of `planning | in-progress | blocked(<reason>) | done`
 > **Milestone:** M2→M3 · **Depends on:** SUB-01, SUB-05 · **Blocks:** SUB-17
 > **Cells:** all · **Loaders:** both
 > **Master plan:** §5.11 (+ §5.6, §5.20) · **Module(s):** vine-client-api, vine-core, vine-spi, drivers
@@ -114,6 +114,20 @@ public record Theme(VineId id, TextStyle baseText, NineSlice chrome, int guiScal
 
 *(26.x cells: port each stage's driver half during the M4 wave; design is
 cell-neutral, render path probe-guarded.)*
+
+### Stage A — Model and layout solver (landed, engine-side)
+
+- [x] **Do:** `LayoutSpec` + `Anchor`, the sealed `Widget` vocabulary (button, label, slot,
+  group), `ScreenDescriptor`, `HudLayer`, and the `ClientFeature` probes the engine relies on;
+  `UiLayout` resolves a screen to absolute rectangles from the descriptor alone.
+- **Evidence:** the headless `ui.layout.txt` golden — the authored screen parsed through its own
+  codec, resolved at two logical screen sizes.
+- **Corrected by the golden:** the first solver multiplied sizes by the GUI scale while taking
+  the screen size in logical pixels, which is how a menu is correct at scale 2 and off the
+  screen at scale 3. Everything is logical pixels now; a cell reports its screen size the way
+  vanilla does.
+- **Remaining:** the per-cell materialization (native screens, HUD drawing, keybinds) and the
+  screenshot pass.
 
 ## 4. Problems & blockers
 

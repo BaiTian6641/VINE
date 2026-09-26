@@ -38,6 +38,7 @@ import dev.vineengine.vine.entity.EntityDescriptor;
 import dev.vineengine.vine.internal.content.BehaviorDispatch;
 import dev.vineengine.vine.internal.driver1211.common.registry.RegistryHookTap;
 import dev.vineengine.vine.internal.driver1211.fabric.entity.VineEntity;
+import dev.vineengine.vine.internal.driver1211.fabric.entity.VinePartEntity;
 import dev.vineengine.vine.internal.spi.StructuralRegistryView;
 import dev.vineengine.vine.registry.Holder;
 import dev.vineengine.vine.registry.VineId;
@@ -333,6 +334,53 @@ public final class FabricContentMaterializer {
     }
 
     /**
+     * The one entity type that carries every actor's parts (sub-08 Stage D), or
+     * {@code null} before {@link #registerPartEntityType()} has run.
+     *
+     * <p>One type for all parts, not one per descriptor: parts are the cell's bodies
+     * rather than content, and a part is never summoned, saved or tracked — it exists
+     * only as a carrier its actor creates from this type, positions from the engine's
+     * box, and discards with itself (see {@link VinePartEntity}).
+     */
+    private static volatile EntityType<VinePartEntity> PART_TYPE;
+
+    /** The cell-owned part body type, or {@code null} before mod init registered it. */
+    public static EntityType<VinePartEntity> partEntityType() {
+        return PART_TYPE;
+    }
+
+    /**
+     * Registers this cell's part body type (sub-08 Stage D), beside the entity types it
+     * belongs to and at the same mod-init moment. Idempotent: the driver's
+     * materialization pass runs once, but a second call must not re-register an id.
+     *
+     * <p><b>Never summoned.</b> {@code /summon vine:part} would put an unpositioned,
+     * parentless body into a world — nothing legitimate does that, so the type refuses it.
+     * <b>Never saved</b>: a part is not world content, and {@code VinePartEntity} refuses
+     * the save hooks as well. The declared dimensions are the formality the game demands of
+     * every entity type: the collider that matters is the engine's oriented box, which a
+     * native entity cannot carry, and the only thing every body maintains each tick is its
+     * position — the centre of the box the engine computed.
+     */
+    public static void registerPartEntityType() {
+        if (PART_TYPE != null) {
+            return;
+        }
+        Identifier location = Identifier.of("vine", "part");
+        EntityType<VinePartEntity> type = EntityType.Builder
+            .<VinePartEntity>create((nativeType, nativeWorld) -> new VinePartEntity(nativeType, nativeWorld),
+                SpawnGroup.MISC)
+            .dimensions(1.0F, 1.0F)
+            .disableSummon()
+            .disableSaving()
+            .build(location.toString());
+        Registry.register(Registries.ENTITY_TYPE, location, type);
+        PART_TYPE = type;
+        LOG.info("vine: materialized part body type {} (sub-08 Stage D, Fabric, never summoned or saved)",
+            location);
+    }
+
+    /**
      * Registers every {@code vine:entity} entry into the vanilla entity-type
      * registry (sub-08 Stage A), one {@link VineEntity} native kind per descriptor.
      *
@@ -356,6 +404,7 @@ public final class FabricContentMaterializer {
      * these base values back.
      */
     public static void registerEntities(StructuralRegistryView.StructuralType type) {
+        registerPartEntityType();
         for (Holder<?> holder : type.entries()) {
             EntityDescriptor descriptor = (EntityDescriptor) holder.value();
             requireMatchingIds(holder, descriptor.id());

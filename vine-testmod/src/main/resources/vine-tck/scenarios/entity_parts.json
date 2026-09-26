@@ -1,0 +1,67 @@
+{
+  "id": "vine_test:entity_parts",
+  "tags": [
+    "ENTITY",
+    "PARTS"
+  ],
+  "steps": [
+    {
+      "type": "RunCommand",
+      "command": "forceload add 0 0 16 16"
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_parts_spawn 4 300 0"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "command",
+      "expect": [
+        "tck: parts spawn started=true"
+      ]
+    },
+    {
+      "type": "AdvanceTicks",
+      "ticks": 2
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_parts_hit"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "log",
+      "expect": [
+        "tck: parts hosted=true parts=[head,tail]",
+        "tck: parts head-hit-1 raw=40.0 applied=52.0 wound=52.0 broken=false flinched=false",
+        "tck: parts head-hit-2 raw=40.0 applied=52.0 wound=104.0 broken=false flinched=true",
+        "tck: parts flinch consumed=true again=false",
+        "tck: parts tail-hit-1 raw=50.0 applied=50.0 wound=50.0 broken=false flinched=false",
+        "tck: parts tail-hit-2 raw=50.0 applied=50.0 wound=100.0 broken=false flinched=false",
+        "tck: parts tail-hit-3 raw=50.0 applied=50.0 wound=150.0 broken=true flinched=false",
+        "tck: parts tail-hit-4 raw=10.0 applied=15.0 wound=165.0 broken=false flinched=false",
+        "tck: parts pose="
+      ]
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_parts_track"
+    },
+    {
+      "type": "AdvanceTicks",
+      "ticks": 15
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_parts_track"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "log",
+      "expect": [
+        "tck: parts track pose=",
+        "poseDelta=0.75"
+      ]
+    }
+  ]
+}

@@ -47,7 +47,15 @@ public abstract class AbstractVoxelStorage implements VoxelStorageDriver {
     private static final Logger LOG = LoggerFactory.getLogger(AbstractVoxelStorage.class);
 
     private volatile EngineVoxels voxels;
-    private final Map<Object, VoxelData> openTrees = new IdentityHashMap<>();
+    /**
+     * Live trees, keyed by holder identity and then by schema. Two subsytems writing to the
+     * same holder (an entity's parts, a capability, an item's durability) each get their own
+     * tree, and — critically — the <em>same</em> tree on every open, so a write made through
+     * one open is still there at the next. The entry is dropped once it has been flushed: the
+     * next open then re-reads the holder, which is how an update that arrived from elsewhere
+     * (an item stack re-synced from the client) becomes visible again.
+     */
+    private final Map<Object, Map<VineId, VoxelData>> openTrees = new IdentityHashMap<>();
 
     /**
      * Installs the engine's blob handle — the value {@code VoxelStorageBinding.bind}
@@ -68,9 +76,30 @@ public abstract class AbstractVoxelStorage implements VoxelStorageDriver {
     @Override
     public VoxelData open(VoxelTarget target, VineId schemaId) {
         Object stack = holderOf(target);
-        // Holder payloads are bundles: several schemas can share one holder (an
-        // entity carrying engine data *and* a capability state), so a schema's
-        // tree is one entry, never the whole payload.
+        synchronized (openTrees) {
+            Map<VineId, VoxelData> bySchema = openTrees.get(stack);
+            if (bySchema != null) {
+                VoxelData live = bySchema.get(schemaId);
+                if (live != null) {
+                    // The same tree the previous caller wrote into: a second open of one
+                    // holder must never hand back a stale copy, or the first writer's changes
+                    // would be silently overwritten at the next flush.
+                    return live;
+                }
+            }
+            // Holder payloads are bundles: several schemas can share one holder (an entity
+            // carrying engine data *and* a capability state), so a schema's tree is one
+            // entry, never the whole payload.
+            VoxelData tree = decode(stack, schemaId);
+            Map<VineId, VoxelData> bucket = openTrees.computeIfAbsent(stack, ignored ->
+                new java.util.LinkedHashMap<>(2));
+            bucket.put(schemaId, tree);
+            return tree;
+        }
+    }
+
+    /** Decodes one schema's tree out of a holder's stored bundle and applies native fields. */
+    private VoxelData decode(Object stack, VineId schemaId) {
         byte[] slice = bundleOf(stack).get(schemaId);
         VoxelData tree = slice == null ? voxels().create(schemaId) : voxels().load(slice);
         voxels().nativeFields(schemaId).forEach((path, componentId) -> {
@@ -82,9 +111,6 @@ public abstract class AbstractVoxelStorage implements VoxelStorageDriver {
                     componentId, path);
             }
         });
-        synchronized (openTrees) {
-            openTrees.put(stack, tree);
-        }
         return tree;
     }
 
@@ -93,20 +119,58 @@ public abstract class AbstractVoxelStorage implements VoxelStorageDriver {
         Object stack = holderOf(target);
         VoxelData tree;
         synchronized (openTrees) {
-            tree = openTrees.get(stack);
+            Map<VineId, VoxelData> bySchema = openTrees.get(stack);
+            tree = bySchema == null ? null : bySchema.get(schemaId);
         }
         if (tree == null) {
             LOG.warn("[VINE] voxeldata: flush for a target that was never opened — ignored");
             return;
         }
+        storeOne(stack, schemaId, tree);
+        // Flushed: drop the live tree so the next open re-reads the holder. Keeping it would
+        // serve writes that were made before some other party updated the holder natively.
+        synchronized (openTrees) {
+            Map<VineId, VoxelData> bySchema = openTrees.get(stack);
+            if (bySchema != null) {
+                bySchema.remove(schemaId);
+                if (bySchema.isEmpty()) {
+                    openTrees.remove(stack);
+                }
+            }
+        }
+    }
+
+    /**
+     * Flushes every tree this driver has open, in a stable order — what a cell calls when
+     * the world saves or stops. Without it a tree the engine wrote into would live only in
+     * memory: the engine holds parts' wound state and quest progress, and both have to reach
+     * the holder before the world closes.
+     *
+     * @return how many (holder, schema) trees were written
+     */
+    public int flushAll() {
+        java.util.List<Map.Entry<Object, Map<VineId, VoxelData>>> snapshot;
+        synchronized (openTrees) {
+            snapshot = new java.util.ArrayList<>(openTrees.entrySet());
+        }
+        int written = 0;
+        for (Map.Entry<Object, Map<VineId, VoxelData>> entry : snapshot) {
+            for (Map.Entry<VineId, VoxelData> schema : new java.util.ArrayList<>(entry.getValue().entrySet())) {
+                storeOne(entry.getKey(), schema.getKey(), schema.getValue());
+                written++;
+            }
+        }
+        return written;
+    }
+
+    /** Writes one schema's tree into its holder's bundle, read-modify-write. */
+    private void storeOne(Object stack, VineId schemaId, VoxelData tree) {
         voxels().nativeFields(schemaId).forEach((path, componentId) -> {
-            if (writeNativeInt(stack, componentId, tree.getInt(path)) == false) {
+            if (!writeNativeInt(stack, componentId, tree.getInt(path))) {
                 LOG.warn("[VINE] voxeldata: unknown native component '{}' for path '{}' — skipped",
                     componentId, path);
             }
         });
-        // Read-modify-write of the bundle keeps the holder's other schemas intact —
-        // the failure this shape exists to prevent.
         java.util.Map<VineId, byte[]> bundle = new java.util.LinkedHashMap<>(bundleOf(stack));
         bundle.put(schemaId, voxels().save(tree));
         storeBlob(stack, VoxelBlobCodec.saveBundle(bundle));

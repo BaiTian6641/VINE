@@ -282,6 +282,20 @@ public final class DescriptorStore {
         slot.nextRuntimeId = slot.byId.size();
     }
 
+    /**
+     * Snapshot of the entries registered <em>by consumers</em> under {@code registryId},
+     * whatever class the type is (empty when the type was never defined).
+     *
+     * <p>Needed because a design kind keeps two lists: what consumer init registered (here)
+     * and what datapacks loaded ({@link #designEntries}). A reader that knows only one of
+     * them silently misses half the content — which is exactly the bug this accessor exists
+     * to make impossible for the quest service.
+     */
+    public synchronized java.util.Map<VineId, Object> registeredEntries(VineId registryId) {
+        TypeEntries<?> entries = types.get(registryId);
+        return entries == null ? java.util.Map.of() : java.util.Map.copyOf(entries.map);
+    }
+
     /** Snapshot of the current design entries for {@code registryId} (empty when unloaded). */
     public synchronized java.util.Map<VineId, Object> designEntries(VineId registryId) {
         DesignEntries slot = designEntries.get(registryId);

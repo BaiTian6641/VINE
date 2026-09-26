@@ -64,6 +64,7 @@ public final class VineTestmod implements VineInitializer {
         CapabilityExemplar.register();  // capability exemplar (sub-04): vine_test:mana stateful type + ITEM-scope provider
         SessionExemplar.register();  // session exemplar (sub-14): vine_test:hunt type + consumer rules
         TestContent.register(engine);
+        dev.vineengine.vine.testmod.quest.CampaignExemplar.register();  // quest exemplar (sub-15): a two-quest campaign beat
         DesignProbeExemplar.registerType();
         dev.vineengine.vine.testmod.net.CodecExemplar.registerSchema();  // block/item exemplars (sub-07, M0 minimal):
                                         //   vine_test:testblock + vine_test:testitem

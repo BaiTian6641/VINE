@@ -92,7 +92,8 @@ import dev.vineengine.vine.session.SessionManager;
  */
 final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, CommandBackend,
         VoxelBackend, CapabilityBackend, SessionBackend, ConfigBackend, WorldBackend, EntityBackend, BrainBackend,
-        AnimationBackend {
+        AnimationBackend, dev.vineengine.vine.internal.PartBackend, dev.vineengine.vine.internal.CombatBackend,
+        dev.vineengine.vine.internal.QuestBackend, dev.vineengine.vine.internal.CutsceneBackend {
 
     private static final System.Logger LOG = System.getLogger(PhaseMachine.LOG_NAME);
 
@@ -114,8 +115,18 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
     private final ConfigService config = new ConfigService();
     private final ExtensionPointsImpl extensions = new ExtensionPointsImpl();
     private final IdMapStore idMap = new IdMapStore();
+    private final dev.vineengine.vine.internal.combat.CombatPipelineImpl combat =
+        new dev.vineengine.vine.internal.combat.CombatPipelineImpl();
+    private final dev.vineengine.vine.internal.quest.QuestService quests =
+        new dev.vineengine.vine.internal.quest.QuestService();
+    private final dev.vineengine.vine.internal.cutscene.CutsceneRuntime cutscenes =
+        new dev.vineengine.vine.internal.cutscene.CutsceneRuntime();
 
     VineEngineImpl() {
+        // Quests are a design registry, so the service lists them through the store rather
+        // than the runtime id map; installed here so a consumer init that registers a quest
+        // and immediately asks about it sees a consistent registry.
+        quests.registry(registries);
         // Phase changes are engine events too (sub-01 Stage B): every entry is
         // posted to the bus, then the replaying one-shot subscribers fire.
         machine.onTransition(entered -> bus.post(new PhaseChange(entered)));
@@ -127,6 +138,17 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
         registries.defineType(VineContent.BLOCK_TYPE);
         registries.defineType(VineContent.ITEM_TYPE);
         registries.defineType(VineContent.ENTITY_TYPE);
+        // Combat descriptors (sub-10 Stage A): structural, like every kind whose timing is
+        // read against animation clips.
+        registries.defineType(VineContent.ACTION_TYPE);
+        registries.defineType(VineContent.ATTACK_TYPE);
+        // Quest kinds (sub-15): design registries, so a pack author edits and reloads them.
+        registries.defineType(dev.vineengine.vine.quest.VineQuests.CHAPTER_TYPE);
+        registries.defineType(dev.vineengine.vine.quest.VineQuests.QUEST_TYPE);
+        registries.defineType(VineContent.CUTSCENE_TYPE);
+        // Client 2D descriptors (sub-16 Stage A): structural, laid out by the engine.
+        registries.defineType(VineContent.SCREEN_TYPE);
+        registries.defineType(VineContent.HUD_LAYER_TYPE);
         // Structural JSON must be complete before the first cell snapshots the view
         // (see DescriptorStore#beforeStructuralSnapshot): on Fabric the native
         // registries freeze during mod init, so a JSON-authored descriptor that
@@ -150,6 +172,19 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
             // consumer registration.
             SessionService.ensureStoreSchema();
             IdMapStore.ensureSchema();
+            // Part state (sub-08 Stage D) is engine data stored in the actor's own
+            // tree: its schema is engine-owned and must exist before the freeze.
+            dev.vineengine.vine.internal.entity.PartRuntime.ensureSchema();
+            dev.vineengine.vine.internal.quest.QuestService.ensureSchema();
+            // The engine's own objective and reward kinds, registered before any consumer can
+            // collide with them.
+            quests.registerBuiltins();
+            // The brain loop asks the pipeline whether an actor is frozen (sub-10 hitstop);
+            // the dependency points engine-side, so a headless run with no pipeline still
+            // answers "never frozen".
+            dev.vineengine.vine.internal.entity.EntityRuntime.hitstopSource(
+                ref -> combat.stateImpl().hitstopTicks(
+                    new dev.vineengine.vine.combat.CombatActorRef.Actor(ref)));
             schemas.freeze();
             capabilities.freeze();
             sessions.freeze();
@@ -180,7 +215,7 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
         features = new FeatureMatrix(cell.features());
         LOG.log(System.Logger.Level.INFO, "[VINE] features " + features.ids());
         reportUnsafeScan();
-        driver.bootstrap(new CoreDriverContext(machine, registries, bus, sessions, idMap));
+        driver.bootstrap(new CoreDriverContext(machine, registries, bus, sessions, idMap, quests));
     }
 
     @Override
@@ -270,6 +305,225 @@ final class VineEngineImpl implements VineEngine, RegistryBackend, NetBackend, C
         return EntityBinding.bound().spawn(entityId, world.id(), position, instance)
             ? java.util.Optional.of(new dev.vineengine.vine.entity.VineEntityRef(entityId, instance))
             : java.util.Optional.empty();
+    }
+
+    // ---- CutsceneBackend (sub-23): server-driven cinematics ----------------------
+
+    @Override
+    public void play(VineId cutscene, java.util.Set<java.util.UUID> viewers) {
+        cutscenes.play(cutscene, viewers);
+    }
+
+    @Override
+    public void stop() {
+        cutscenes.stop();
+    }
+
+    @Override
+    public boolean playing() {
+        return cutscenes.playing();
+    }
+
+    @Override
+    public java.util.Optional<VineId> current() {
+        return cutscenes.current();
+    }
+
+    @Override
+    public java.util.Set<java.util.UUID> viewers() {
+        return cutscenes.viewers();
+    }
+
+    @Override
+    public void tickCutscenes() {
+        cutscenes.tickCutscenes();
+    }
+
+    @Override
+    public java.util.Optional<dev.vineengine.vine.cutscene.CutsceneFrame> frame() {
+        return cutscenes.frame();
+    }
+
+    @Override
+    public dev.vineengine.vine.cutscene.CutsceneFrame evaluate(VineId cutscene, long tick) {
+        return cutscenes.evaluate(cutscene, tick);
+    }
+
+    @Override
+    public void addFrameListener(java.util.function.BiConsumer<java.util.UUID,
+            dev.vineengine.vine.cutscene.CutsceneFrame> listener) {
+        cutscenes.addFrameListener(listener);
+    }
+
+    /** The cutscene runtime itself, for the frame transport a cell drives (sub-23 Stage B). */
+    public dev.vineengine.vine.internal.cutscene.CutsceneRuntime cutsceneRuntime() {
+        return cutscenes;
+    }
+
+    // ---- QuestBackend (sub-15): progress, claims and progression -----------------
+
+    @Override
+    public <P> void registerObjectiveType(VineId id, dev.vineengine.vine.quest.ObjectiveType<P> type) {
+        quests.registerObjectiveType(id, type);
+    }
+
+    @Override
+    public <P> void registerRewardType(VineId id, dev.vineengine.vine.quest.RewardType<P> type) {
+        quests.registerRewardType(id, type);
+    }
+
+    @Override
+    public void fireEvent(VineId eventType, java.util.UUID player, dev.vineengine.vine.data.VoxelData payload) {
+        quests.fireEvent(eventType, player, payload);
+    }
+
+    @Override
+    public dev.vineengine.vine.quest.QuestProgress progress(java.util.UUID player, VineId quest) {
+        return quests.progress(player, quest);
+    }
+
+    @Override
+    public java.util.List<dev.vineengine.vine.quest.QuestProgress> active(java.util.UUID player) {
+        return quests.active(player);
+    }
+
+    @Override
+    public boolean start(java.util.UUID player, VineId quest) {
+        return quests.start(player, quest);
+    }
+
+    @Override
+    public java.util.List<VineId> claim(java.util.UUID player, VineId quest) {
+        return quests.claim(player, quest);
+    }
+
+    @Override
+    public void tick() {
+        quests.tick();
+    }
+
+    @Override
+    public boolean abandon(java.util.UUID player, VineId quest) {
+        return quests.abandon(player, quest);
+    }
+
+    @Override
+    public void addCompletionListener(java.util.function.BiConsumer<java.util.UUID, VineId> listener) {
+        quests.addCompletionListener(listener);
+    }
+
+    @Override
+    public int xp(java.util.UUID player) {
+        return quests.xp(player);
+    }
+
+    @Override
+    public int addXp(java.util.UUID player, int amount) {
+        return quests.addXp(player, amount);
+    }
+
+    @Override
+    public int skill(java.util.UUID player, VineId skill) {
+        return quests.skill(player, skill);
+    }
+
+    @Override
+    public void setSkill(java.util.UUID player, VineId skill, int level) {
+        quests.setSkill(player, skill, level);
+    }
+
+    /** The quest service itself, for the per-tick flush a cell drives (sub-15). */
+    public dev.vineengine.vine.internal.quest.QuestService questService() {
+        return quests;
+    }
+
+    // ---- CombatBackend (sub-10 Stage C): the server-authoritative pipeline -------
+
+    @Override
+    public dev.vineengine.vine.combat.CombatResult strike(dev.vineengine.vine.combat.CombatActorRef attacker,
+            dev.vineengine.vine.entity.VineEntityRef target, VineId attackId, double baseDamage,
+            dev.vineengine.vine.world.Vec3 attackerPosition, float attackerYawDegrees) {
+        return combat.strike(attacker, target, attackId, baseDamage, attackerPosition, attackerYawDegrees);
+    }
+
+    @Override
+    public dev.vineengine.vine.combat.CombatState state() {
+        return combat.state();
+    }
+
+    @Override
+    public void addModifier(dev.vineengine.vine.combat.CombatModifier modifier) {
+        combat.addModifier(modifier);
+    }
+
+    @Override
+    public int modifierCount() {
+        return combat.modifierCount();
+    }
+
+    /** The pipeline's state object, for the per-tick decay a cell drives (sub-10 Stage D). */
+    public dev.vineengine.vine.internal.combat.CombatPipelineImpl combatPipeline() {
+        return combat;
+    }
+
+    // ---- PartBackend (sub-08 Stage D): multipart hosting ------------------------
+
+    @Override
+    public void attach(dev.vineengine.vine.entity.VineEntityRef ref,
+            dev.vineengine.vine.animation.AnimationAsset asset, String clip) {
+        dev.vineengine.vine.internal.entity.PartRuntime.attach(ref, asset, clip);
+    }
+
+    @Override
+    public void detachParts(dev.vineengine.vine.entity.VineEntityRef ref) {
+        dev.vineengine.vine.internal.entity.PartRuntime.detach(ref);
+    }
+
+    @Override
+    public boolean isHosted(dev.vineengine.vine.entity.VineEntityRef ref) {
+        return dev.vineengine.vine.internal.entity.PartRuntime.isHosted(ref);
+    }
+
+    @Override
+    public void play(dev.vineengine.vine.entity.VineEntityRef ref, String clip, long tick) {
+        dev.vineengine.vine.internal.entity.PartRuntime.play(ref, clip, tick);
+    }
+
+    @Override
+    public java.util.List<dev.vineengine.vine.entity.PartState> parts(
+            dev.vineengine.vine.entity.VineEntityRef ref) {
+        return dev.vineengine.vine.internal.entity.PartRuntime.parts(ref);
+    }
+
+    @Override
+    public java.util.Optional<dev.vineengine.vine.entity.PartState> part(
+            dev.vineengine.vine.entity.VineEntityRef ref, String name) {
+        return dev.vineengine.vine.internal.entity.PartRuntime.part(ref, name);
+    }
+
+    @Override
+    public java.util.Optional<dev.vineengine.vine.animation.OrientedBox> box(
+            dev.vineengine.vine.entity.VineEntityRef ref, String name, dev.vineengine.vine.world.Vec3 position,
+            float yawDegrees) {
+        return dev.vineengine.vine.internal.entity.PartRuntime.box(ref, name, position, yawDegrees);
+    }
+
+    @Override
+    public java.util.Optional<dev.vineengine.vine.animation.SkeletonPose> pose(
+            dev.vineengine.vine.entity.VineEntityRef ref) {
+        return dev.vineengine.vine.internal.entity.PartRuntime.pose(ref);
+    }
+
+    @Override
+    public java.util.Optional<dev.vineengine.vine.entity.VineParts.PartHit> applyHit(
+            dev.vineengine.vine.entity.VineEntityRef ref, String name, double amount,
+            dev.vineengine.vine.registry.VineId damageType) {
+        return dev.vineengine.vine.internal.entity.PartRuntime.applyHit(ref, name, amount, damageType);
+    }
+
+    @Override
+    public boolean consumeFlinch(dev.vineengine.vine.entity.VineEntityRef ref) {
+        return dev.vineengine.vine.internal.entity.PartRuntime.consumeFlinch(ref);
     }
 
     @Override

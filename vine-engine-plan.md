@@ -8,15 +8,26 @@
 >
 > **Minecraft is the engine. VINE is the engine SDK. Your mods are the games.**
 
-Status: planning (rev 2026-09-23 #2: platform/plugin surfaces, datapack-registry
-descriptor riding, party primitive; split into stage-granular subsystem plans)
+Status: in progress (rev 2026-09-26: engine halves of the RPG/Monster-Hunter
+target landed — multipart entities, the combat pipeline, quests/progression,
+cutscenes and the 2D layout model — verified on both 1.21.1 cells. Still
+planning: the client half (native screens/HUD/player animation and the scripted
+client runner) and the 26.x cells.)
 Decisions locked: name (VINE), distribution (per-version jars, one source),
 target matrix (4 driver cells + 26.x drop policy, see §3), locale model
 (§5.18), client surface designed day-zero / implemented in phases (§5.11),
 backend-partner policy (§5.20), authoring model (§5.2), posture
 (source-available, personal pace, §11).
 Execution docs: `docs/README.md` → `docs/subsystems/sub-*.md` — 22 agent-facing
-sub-plans, one per subsystem, staged for parallel construction.
+sub-plans, one per subsystem, staged for parallel construction. `docs/QUICKSTART.md`
+is the consumer-facing entry point: five capabilities with the smallest code that
+uses each, the data file it needs, and the command that proves it.
+
+Verified on both 1.21.1 cells (2026-09-26): `gradlew build` (purity gates, six
+headless goldens byte-identical), the scenario batteries (`43/43` on
+1.21.1-fabric and `43/43` on 1.21.1-neoforge — including the multipart, combat
+pipeline, campaign-beat-with-save/reload and cutscene scenarios), and the
+cross-cell round trip.
 
 ---
 

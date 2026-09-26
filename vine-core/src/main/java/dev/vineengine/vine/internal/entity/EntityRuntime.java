@@ -28,6 +28,18 @@ public final class EntityRuntime {
 
     private static final Map<VineEntityRef, VineBrain> BRAINS = new ConcurrentHashMap<>();
 
+    /**
+     * Answers "is this actor frozen right now" for the brain loop (sub-10 hitstop). Installed
+     * once by the engine's own pipeline; absent means nothing freezes, which is the correct
+     * answer for every engine that has no combat at all.
+     */
+    @FunctionalInterface
+    public interface HitstopSource {
+        int hitstopTicks(VineEntityRef ref);
+    }
+
+    private static volatile HitstopSource hitstop = ref -> 0;
+
     private EntityRuntime() {
     }
 
@@ -50,7 +62,28 @@ public final class EntityRuntime {
     public static void detach(VineEntityRef ref) {
         if (ref != null) {
             BRAINS.remove(ref);
+            PartRuntime.detach(ref);
         }
+    }
+
+    /**
+     * Binds (or refreshes) {@code ref}'s part host and advances its pose clock once.
+     * The cell drives its own body as before; this is where the engine learns where
+     * that body stands so it can place the parts it owns. An actor with no parts
+     * hosted pays one map put and nothing else.
+     */
+    public static void tickParts(VineEntityRef ref, dev.vineengine.vine.internal.spi.PartHost host) {
+        PartRuntime.tick(ref, host);
+    }
+
+    /** Whether {@code ref} is hosting parts — for probes and tests. */
+    public static boolean hasParts(VineEntityRef ref) {
+        return PartRuntime.isHosted(ref);
+    }
+
+    /** Stops part hosting for {@code ref} (its stored wound state stays in the tree). */
+    public static void detachParts(VineEntityRef ref) {
+        PartRuntime.detach(ref);
     }
 
     /**
@@ -63,7 +96,22 @@ public final class EntityRuntime {
         Objects.requireNonNull(ref, "ref");
         Objects.requireNonNull(primitives, "primitives");
         VineBrain brain = BRAINS.get(ref);
-        return brain == null ? java.util.Optional.empty() : java.util.Optional.of(brain.tick(primitives));
+        if (brain == null) {
+            return java.util.Optional.empty();
+        }
+        if (hitstop.hitstopTicks(ref) > 0) {
+            // Frozen: the body is stunned, so the decision loop holds its state without
+            // advancing. Not ticking at all (rather than ticking and ignoring) is what keeps
+            // a hitstop from being a free action window for a creature that is meant to be
+            // reeling.
+            return java.util.Optional.empty();
+        }
+        return java.util.Optional.of(brain.tick(primitives));
+    }
+
+    /** Installs the hitstop source (the combat pipeline); {@code null} restores "never frozen". */
+    public static void hitstopSource(HitstopSource source) {
+        hitstop = source == null ? ref -> 0 : source;
     }
 
     /** Whether {@code ref} has a brain attached — for probes and tests. */

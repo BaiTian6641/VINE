@@ -1,0 +1,31 @@
+{
+  "id": "vine_test:entity_cutscene",
+  "tags": [
+    "CUTSCENE"
+  ],
+  "steps": [
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_cutscene_play"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "log",
+      "expect": [
+        "tck: cutscene playing=true id=vine_test:wyvern_strike viewers=2",
+        "tck: cutscene frameAfter2 tick=2 camera="
+      ]
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_cutscene_finish"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "log",
+      "expect": [
+        "tck: cutscene ended playing=false framesA=60 framesB=60 identical=true lastTick=59"
+      ]
+    }
+  ]
+}

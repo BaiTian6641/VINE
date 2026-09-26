@@ -133,6 +133,11 @@ public final class TapePrimitives implements Primitives {
     }
 
     @Override
+    public boolean consumeFlinch() {
+        return Boolean.parseBoolean(serve("consumeFlinch", "", () -> Boolean.toString(delegate.consumeFlinch())));
+    }
+
+    @Override
     public void lookAt(VineId target) {
         serve("lookAt", target.toString(), () -> {
             delegate.lookAt(target);

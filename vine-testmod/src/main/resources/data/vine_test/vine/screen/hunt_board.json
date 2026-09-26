@@ -1,0 +1,51 @@
+{
+  "id": "vine_test:hunt_board",
+  "pausesGame": false,
+  "root": {
+    "kind": "group",
+    "columns": 2,
+    "rowHeight": 20,
+    "columnWidth": 120,
+    "layout": {
+      "x": 0,
+      "y": 0,
+      "width": 240,
+      "height": 20,
+      "anchor": "center"
+    },
+    "children": [
+      {
+        "kind": "button",
+        "id": "vine_test:hunt_board_accept",
+        "label": "Accept",
+        "layout": {
+          "x": 0,
+          "y": 0,
+          "width": 110,
+          "height": 18
+        }
+      },
+      {
+        "kind": "button",
+        "id": "vine_test:hunt_board_leave",
+        "label": "Leave",
+        "layout": {
+          "x": 0,
+          "y": 0,
+          "width": 110,
+          "height": 18
+        }
+      },
+      {
+        "kind": "label",
+        "text": "No hunts posted",
+        "layout": {
+          "x": 0,
+          "y": 0,
+          "width": 110,
+          "height": 10
+        }
+      }
+    ]
+  }
+}

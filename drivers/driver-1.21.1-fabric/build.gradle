@@ -26,6 +26,24 @@ dependencies {
     runtimeOnly project(':vine-testmod')
 }
 
+// ---------------------------------------------------------------------------
+// Content cooking (sub-02 Stage E + sub-10 §2 partner presets): the cooking JVM is
+// a plain JVM with no game, so it binds a driver that needs no loader. That inert
+// driver — and the cooking entry point — live in a source set of their own: they
+// never enter the mod jar, and the game keeps binding exactly one driver (two
+// VineDriver services on one classpath is an engine boot failure).
+// ---------------------------------------------------------------------------
+sourceSets {
+    datagen {
+        java.srcDir 'src/datagen/java'
+        // No resources.srcDir: src/datagen/resources is already the default, and declaring it
+        // makes Gradle see the same service file twice and fail the copy.
+        // Compiled against everything the driver compiles against: the entry reuses the
+        // engine's own cooking class and the common content cooker — never a copy.
+        compileClasspath += sourceSets.main.output + configurations.compileClasspath
+    }
+}
+
 loom {
     runs {
         server {
@@ -79,15 +97,29 @@ tasks.register('runGameTestServer') {
 }
 
 // ---------------------------------------------------------------------------
-// sub-02 Stage E — driver-owned content cooking: consumer source assets ->
-// per-cell derived resources (blockstates, models, sounds.json). Deterministic;
-// the TCK's verifyDatagen task byte-compares the result against golden fixtures.
+// sub-02 Stage E + sub-10 §2 — driver-owned content cooking: consumer source assets
+// -> per-cell derived resources (blockstates, models, sounds.json) *and* the combat
+// partner's own weapon preset for every registered partner-owned weapon. Deterministic
+// (the preset bytes are the engine's); the TCK's verifyDatagen task byte-compares the
+// whole cooked tree against golden fixtures.
 // ---------------------------------------------------------------------------
 tasks.register('datagenContent', JavaExec) {
     group = 'vine'
-    description = 'Cooks consumer source assets into this cell\'s derived resources (sub-02 Stage E).'
-    classpath = sourceSets.main.runtimeClasspath
-    mainClass = 'dev.vineengine.vine.internal.driver1211.common.datagen.ContentCooker'
+    description = 'Cooks consumer source assets and combat partner presets into this cell\'s derived resources (sub-02 Stage E, sub-10).'
+    // Everything the driver compiles against, deliberately WITHOUT this module's
+    // resources dir: the loader driver's service entry lives there, and the cooking JVM
+    // must bind the datagen driver only. The consumer's own output is on the classpath
+    // because presets are cooked from what that consumer registered in the engine, not
+    // from a second reading of its sources.
+    classpath = files(
+            sourceSets.datagen.output,
+            sourceSets.main.output.classesDirs,
+            configurations.runtimeClasspath,
+            project(':vine-testmod').sourceSets.main.output)
+    // The cell's own entry point (sub-10 Stage D): it delegates the asset cooking to the
+    // shared ContentCooker and then cooks the partner presets, which are read from the
+    // descriptors consumers registered — that pass needs the engine, so it is per cell.
+    mainClass = 'dev.vineengine.vine.internal.driver1211.fabric.datagen.FabricContentCooker'
     def outDir = layout.buildDirectory.dir('datagen/1.21.1-fabric').get().asFile
     args = [
             '--cell', '1.21.1-fabric',

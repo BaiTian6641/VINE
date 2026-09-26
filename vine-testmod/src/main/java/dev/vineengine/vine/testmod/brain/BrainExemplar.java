@@ -170,6 +170,14 @@ public final class BrainExemplar {
             }
 
             @Override
+            public boolean consumeFlinch() {
+                // No parts are hosted in this scripted world, so no hit has ever landed:
+                // false is the honest answer, and it keeps the recording a pure function
+                // of the call sequence (sub-08 Stage D brings the signal live).
+                return false;
+            }
+
+            @Override
             public PathOutcome requestPath(Vec3 target) {
                 // Every request is satisfied in this world; what changes over time is what
                 // the actor can see, not whether it can walk there.

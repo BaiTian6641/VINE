@@ -1,0 +1,9 @@
+# VINE sub-16 Stage A golden — screen layout resolution
+# Logical pixels in, absolute pixels out: the arithmetic every cell shares.
+screen vine_test:hunt_board pausesGame=false widgets=[vine_test:hunt_board_accept, vine_test:hunt_board_leave]
+frame 320x240 logical
+  widget vine_test:hunt_board_accept x=40 y=110 w=110 h=18 hitAtCentre=true
+  widget vine_test:hunt_board_leave x=160 y=110 w=110 h=18 hitAtCentre=true
+frame 427x240 logical
+  widget vine_test:hunt_board_accept x=93 y=110 w=110 h=18 hitAtCentre=true
+  widget vine_test:hunt_board_leave x=213 y=110 w=110 h=18 hitAtCentre=true

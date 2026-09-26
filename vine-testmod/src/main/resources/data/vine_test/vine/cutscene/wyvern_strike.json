@@ -1,0 +1,70 @@
+{
+  "id": "vine_test:wyvern_strike",
+  "lengthTicks": 60,
+  "skippable": true,
+  "tracks": [
+    {
+      "type": "camera",
+      "keys": [
+        {
+          "tick": 0,
+          "position": { "x": 10.0, "y": 302.0, "z": 10.0 },
+          "yaw": 135.0,
+          "pitch": 12.0,
+          "fov": 70.0,
+          "easing": "smooth"
+        },
+        {
+          "tick": 20,
+          "position": { "x": 6.0, "y": 301.5, "z": 6.0 },
+          "yaw": 150.0,
+          "pitch": 8.0,
+          "fov": 60.0,
+          "easing": "linear"
+        },
+        {
+          "tick": 40,
+          "position": { "x": 4.5, "y": 301.4, "z": 3.0 },
+          "yaw": 180.0,
+          "pitch": -4.0,
+          "fov": 75.0,
+          "easing": "cut"
+        },
+        {
+          "tick": 59,
+          "position": { "x": 4.5, "y": 301.4, "z": 3.0 },
+          "yaw": 180.0,
+          "pitch": -4.0,
+          "fov": 75.0
+        }
+      ]
+    },
+    {
+      "type": "actor",
+      "actor": "vine_test:testbeast",
+      "animation": "animation.vine_test.wyvern_stub.strike",
+      "startTick": 20,
+      "endTick": 45,
+      "loop": false
+    },
+    {
+      "type": "audio",
+      "sound": "vine_test:wyvern_roar",
+      "tick": 18,
+      "volume": 1.0
+    },
+    {
+      "type": "audio",
+      "sound": "vine_test:impact",
+      "tick": 32,
+      "volume": 0.8
+    },
+    {
+      "type": "title",
+      "text": "The wyvern strikes",
+      "startTick": 20,
+      "endTick": 40,
+      "style": "vine:subtitle"
+    }
+  ]
+}

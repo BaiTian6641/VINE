@@ -8,13 +8,17 @@ import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.level.Level;
+import net.neoforged.neoforge.entity.PartEntity;
 
 import dev.vineengine.vine.entity.AttributeSpec;
 import dev.vineengine.vine.entity.EntityDescriptor;
 import dev.vineengine.vine.entity.VineEntityRef;
+import dev.vineengine.vine.entity.VineParts;
+import dev.vineengine.vine.internal.driver1211.neoforge.net.NeoForgePartTransport;
 import dev.vineengine.vine.internal.driver1211.neoforge.registry.NeoForgeContentMaterializer;
 import dev.vineengine.vine.internal.entity.EntityRuntime;
 import dev.vineengine.vine.registry.VineId;
+import dev.vineengine.vine.world.Vec3;
 
 /**
  * The 1.21.1 NeoForge cell's native entity carrier (sub-08 Stage A): one vanilla
@@ -39,6 +43,15 @@ import dev.vineengine.vine.registry.VineId;
  * through the final {@code setRemoved} and cannot be overridden — so a brain never
  * outlives the body it was driving.
  *
+ * <p><b>Parts (sub-08 Stage D).</b> A descriptor that declares parts makes this body a
+ * multipart entity in the loader's own sense: one native {@link PartEntityBody} per declared
+ * part, created here (server-side only), advertised through {@link #isMultipartEntity()} and
+ * {@link #getParts()}, and placed every server tick at the centre of the box the engine
+ * computed — this class never derives a part's geometry itself. The engine learns where the
+ * body stands and which way it faces from {@link NeoForgePartHost}, and keeps the part state
+ * in the body's own stored tree, so the cell owns where the parts are and the engine owns
+ * what they mean. A descriptor with no parts gets no bodies and pays one list test per tick.
+ *
  * <p><b>Attributes.</b> Base values ride the type's {@code AttributeSupplier},
  * registered with the type by
  * {@link NeoForgeContentMaterializer#registerEntities} through NeoForge's
@@ -56,8 +69,17 @@ import dev.vineengine.vine.registry.VineId;
  */
 public final class VineEntity extends PathfinderMob {
 
+    /** No parts declared (or a client-side copy): one shared empty array, never mutated. */
+    private static final PartEntityBody[] NO_PARTS = new PartEntityBody[0];
+
     private final VineId vineId;
     private final EntityDescriptor vineDescriptor;
+
+    /**
+     * The native bodies carrying this entity's parts, one per declared part in declaration
+     * order, or {@link #NO_PARTS} when the descriptor declares none.
+     */
+    private final PartEntityBody[] partBodies;
 
     /**
      * Creates the carrier for {@code descriptor}. Called only from the type's
@@ -69,6 +91,30 @@ public final class VineEntity extends PathfinderMob {
         this.vineId = id;
         this.vineDescriptor = descriptor;
         installModifiers(descriptor);
+        this.partBodies = createPartBodies(level, descriptor);
+        if (this.partBodies.length > 0) {
+            // Vanilla's own multipart id rule (MC-158205): a part's id has to be a
+            // successor of its parent's, so the block is reserved here and handed out by
+            // the setId below — which the level may call again when it assigns ids.
+            this.setId(ENTITY_COUNTER.getAndAdd(this.partBodies.length + 1) + 1);
+        }
+    }
+
+    /**
+     * Creates one body per declared part, server-side only. A client's copy of a spawned
+     * entity has no engine actor (the spawn path is what tags an instance), so a client-side
+     * body would be a collider nobody ever places; the client's parts are the engine's own
+     * business, not this cell's.
+     */
+    private PartEntityBody[] createPartBodies(Level level, EntityDescriptor descriptor) {
+        if (level.isClientSide() || descriptor.parts().isEmpty()) {
+            return NO_PARTS;
+        }
+        PartEntityBody[] bodies = new PartEntityBody[descriptor.parts().size()];
+        for (int i = 0; i < bodies.length; i++) {
+            bodies[i] = new PartEntityBody(this, descriptor.parts().get(i));
+        }
+        return bodies;
     }
 
     @Override
@@ -157,21 +203,108 @@ public final class VineEntity extends PathfinderMob {
     /** The per-actor world primitives the engine's loop is driven with; built alongside {@link #actorRef}. */
     private NeoForgeEntityPrimitives actorPrimitives;
 
+    /** The per-actor part host, built once and handed to the engine every server tick. */
+    private NeoForgePartHost partHost;
+
     /**
      * Drives the engine's actor for this body (sub-08 Stage C): one callback per server
      * tick, handing the engine this actor's primitives. Nothing is attached for a plain
      * entity, and {@link EntityRuntime#tickActor} answers that case without work, so
      * Stage A's behaviour is unchanged — the only cost is the instance-id check below.
+     *
+     * <p>Parts (sub-08 Stage D) ride the same tick, and only for a descriptor that declares
+     * them: the engine is handed this body's host before anything can ask it about a part,
+     * then — if a clip is hosting them — the native bodies are placed at the centres the
+     * engine computed. A descriptor with no parts pays one empty-list test.
      */
     @Override
     public void tick() {
         super.tick();
         if (this.vineInstance == null) {
-            // Never tagged by the engine's spawn path (or a client-side copy of a
-            // spawned entity): there is no actor to drive.
+            // Never tagged by the engine's spawn path (or a client-side copy of a spawned
+            // entity): there is no actor to drive — and no engine box to place parts at, so
+            // a body that does exist (a server-side copy reloaded from the save) stays on
+            // its parent rather than at the origin it was built at.
+            keepPartsWithParent();
             return;
         }
-        EntityRuntime.tickActor(actorRef(), actorPrimitives());
+        VineEntityRef ref = actorRef();
+        EntityRuntime.tickActor(ref, actorPrimitives());
+        if (!this.vineDescriptor.parts().isEmpty()) {
+            // The host is (re)bound every tick, exactly as the actor's primitives are:
+            // the engine reads the body's live position and yaw from it, and hosting a
+            // clip needs a host that is already bound.
+            EntityRuntime.tickParts(ref, partHost());
+            drivePartBodies(ref);
+        }
+    }
+
+    /**
+     * Places every native part body at the centre of the box the engine computed for it this
+     * tick. The cell derives no geometry: the box is the engine's, and the body is only its
+     * axis-aligned proxy in the world.
+     */
+    private void drivePartBodies(VineEntityRef ref) {
+        if (this.partBodies.length == 0) {
+            // Client-side copy (parts are created server-side only): nothing to place.
+            return;
+        }
+        if (!VineParts.isHosted(ref)) {
+            // No clip is hosting the parts, so the engine has no pose and no box to hand
+            // back; the bodies then stay on their parent, which is where an unanimated part
+            // honestly is.
+            keepPartsWithParent();
+            return;
+        }
+        Vec3 position = Vec3.of(this.getX(), this.getY(), this.getZ());
+        float yaw = this.getYRot();
+        for (PartEntityBody body : this.partBodies) {
+            // The box is looked up by the part's engine name, never by an index: the name is
+            // what the part's state and its geometry share.
+            VineParts.box(ref, body.partName(), position, yaw)
+                .ifPresent(box -> body.placeAt(box.center()));
+        }
+    }
+
+    /** Places every body at this entity's own position; a no-op for an entity with no parts. */
+    private void keepPartsWithParent() {
+        if (this.partBodies.length == 0) {
+            return;
+        }
+        Vec3 position = Vec3.of(this.getX(), this.getY(), this.getZ());
+        for (PartEntityBody body : this.partBodies) {
+            body.placeAt(position);
+        }
+    }
+
+    /**
+     * Whether this body is a multipart entity in the loader's sense: true exactly when it
+     * carries native part bodies, which is the server-side copy of a descriptor that
+     * declares parts. The level reads this once, when the body starts being tracked, to put
+     * the parts into its part table — the same route vanilla's dragon uses.
+     */
+    @Override
+    public boolean isMultipartEntity() {
+        return this.partBodies.length > 0;
+    }
+
+    /** The native bodies carrying the parts, in declaration order (never null, never rebuilt). */
+    @Override
+    public PartEntity<?>[] getParts() {
+        return this.partBodies;
+    }
+
+    /**
+     * Keeps every part's id a successor of this body's, which is what vanilla's own
+     * multipart fix (MC-158205) requires; the level may re-assign this body's id and the
+     * parts have to follow it.
+     */
+    @Override
+    public void setId(int id) {
+        super.setId(id);
+        for (int i = 0; i < this.partBodies.length; i++) {
+            this.partBodies[i].setId(id + i + 1);
+        }
     }
 
     /**
@@ -188,31 +321,81 @@ public final class VineEntity extends PathfinderMob {
     }
 
     /**
-     * Drops whatever brain is attached to this actor; a no-op for an untagged body and
-     * idempotent, so the removal and unload hooks may both call it. The driver's unload
-     * listener calls it, which is why it is package-private rather than private.
+     * Drops everything the engine holds for this body: its brain, its part hosting (through
+     * {@link EntityRuntime#detach}), and the native part bodies themselves — a part must never
+     * outlive the body it belongs to, before or after a chunk unload. A no-op for an untagged
+     * body and idempotent, so the removal and unload hooks may both call it. The driver's
+     * unload listener calls it, which is why it is package-private rather than private.
      */
     void vineDetach() {
         if (this.vineInstance != null) {
+            // Detach first: it mints the ref when this body never ticked, and a removed body
+            // has to end up unregistered from the part-delta transport, not registered by it.
             EntityRuntime.detach(actorRef());
+        }
+        discardPartBodies();
+    }
+
+    /**
+     * Discards the native part bodies and forgets this body as their actor's live carrier. A
+     * discarded part is what the loader's own part machinery understands as gone; the level
+     * also drops the parts from its part table on the same leave-level path.
+     */
+    private void discardPartBodies() {
+        if (this.partBodies.length == 0) {
+            return;
+        }
+        NeoForgePartTransport.unbind(this);
+        for (PartEntityBody body : this.partBodies) {
+            body.discard();
         }
     }
 
-    /** This actor's engine identity, built lazily once — the instance id is fixed at spawn. */
-    private VineEntityRef actorRef() {
+    /**
+     * This actor's engine identity, built lazily once — the instance id is fixed at spawn.
+     * Minting it is also the moment the actor's identity exists for the part-delta transport,
+     * which routes a delta by the body carrying it. Package-private because the actor's
+     * primitives answer engine questions about the same actor.
+     */
+    VineEntityRef actorRef() {
         VineEntityRef ref = this.actorRef;
         if (ref == null) {
             this.actorRef = ref = new VineEntityRef(this.vineId, this.vineInstance);
+            // The actor's identity is what a part delta is routed by, so the transport is
+            // told about this body exactly when that identity is minted; a descriptor that
+            // declares no parts is not remembered at all.
+            NeoForgePartTransport.bind(this);
         }
         return ref;
     }
 
-    /** The primitives serving this actor, built lazily once and reused every tick. */
+    /**
+     * This body's engine identity, or {@code null} when no spawn path tagged it (a client's
+     * copy of a spawned entity, or a body the engine never spawned). The identity is the pair
+     * the engine assigned at spawn, so a cell that needs to name the actor a native entity is
+     * — the combat hooks, for one — asks here rather than rebuilding it.
+     */
+    public VineEntityRef vineActorRef() {
+        return this.vineInstance == null ? null : actorRef();
+    }
+
+    /**
+     * The primitives serving this actor, built lazily once and reused every tick.
+     */
     private NeoForgeEntityPrimitives actorPrimitives() {
         NeoForgeEntityPrimitives primitives = this.actorPrimitives;
         if (primitives == null) {
             this.actorPrimitives = primitives = new NeoForgeEntityPrimitives(this);
         }
         return primitives;
+    }
+
+    /** The part host serving this actor, built lazily once and reused every tick. */
+    private NeoForgePartHost partHost() {
+        NeoForgePartHost host = this.partHost;
+        if (host == null) {
+            this.partHost = host = new NeoForgePartHost(this);
+        }
+        return host;
     }
 }

@@ -1,0 +1,8 @@
+{
+  "id": "vine_test:wide_slash",
+  "animation": "animation.vine_test.wyvern_stub.strike",
+  "bufferTicks": 4,
+  "comboWindowTicks": 8,
+  "cancelInto": [],
+  "cooldownTicks": 12
+}

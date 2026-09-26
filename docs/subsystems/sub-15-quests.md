@@ -1,6 +1,6 @@
 # SUB-15 — Quests & activities
 
-> **Status:** `planning` — one of `planning | in-progress | blocked(<reason>) | done`
+> **Status:** `in-progress` — one of `planning | in-progress | blocked(<reason>) | done`
 > **Milestone:** M3 · **Depends on:** SUB-02, SUB-14 (SUB-16 soft — default GUI) · **Blocks:** —
 > **Cells:** all · **Loaders:** both
 > **Master plan:** §5.21, §5.2, §5.19 · **Module(s):** vine-api | vine-client-api | vine-core | vine-spi | drivers
@@ -195,6 +195,25 @@ session outcomes back as objective events.
   > Author SUB-15 Stage F: the TCK quest scenario covering the full lifecycle
   > plus `/reload` mid-progress counter preservation. Acceptance: scenario
   > passes on one driver per loader family; counters survive descriptor edits.
+
+### Stage A — Model, service and progression (landed)
+
+- [x] **Do:** descriptor records + codecs (`ChapterDescriptor`, `QuestDescriptor`,
+  `ObjectiveInstance`, `RewardInstance`, `RepeatPolicy`), the two design registries
+  (`vine:quest_chapter`, `vine:quest`), `ObjectiveType`/`RewardType` extension points with
+  the engine's own `vine:count` / `vine:xp` / `vine:skill` kinds, `QuestProgress` and the
+  four-state machine, per-player progress in the world store (the same per-world store the
+  session and id-map state use), batched-and-coalesced event intake, reward claims recorded
+  before they are paid, XP/level/skill progression, and the completion listener a cutscene
+  hangs off.
+- **Evidence:** `entity_campaign_beat` (a two-quest beat, a real `SaveReloadWorld` between
+  the beat and the read-back, per-player isolation) and the campaign golden in the fixture
+  runner. `docs/QUICKSTART.md` carries the consumer-side idiom.
+- **Deviation, recorded:** the plan authors quests as hot-reloadable datapack JSON. The
+  design registry machinery does exist (`design_registry` proves a datapack override is
+  read at world load), but quests are currently registered from consumer init, and the
+  JSON fixtures that could not be loaded were removed rather than left as misleading dead
+  data. Moving quest authoring onto the datapack path is the next step for this subsystem.
 
 ## 4. Problems & blockers
 

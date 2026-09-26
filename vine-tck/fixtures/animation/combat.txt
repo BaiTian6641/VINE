@@ -1,0 +1,18 @@
+# VINE sub-10 Stage C golden — worked example and partner cooking
+# The numbers are the plan's own (docs/subsystem notes, §5): the chain must end
+# at 110 damage, rounded half-up exactly once, at APPLY.
+worked-example base=40.0 motion=1.6 afterMotion=64.0
+worked-example hitzone=1.3 afterHitzone=83.2
+worked-example affinity=1.1 afterAffinity=91.52000000000001
+worked-example element=1.2 afterElement=109.82400000000001
+worked-example applied=110 halfUp=true knockback=(2.5,0.4,0.0) hitstop=3
+cooked-path data/vine_test/weapon_attributes/banana_blade.json
+cooked-bytes 87
+  |{
+  |  "parent": "bettercombat:claymore",
+  |  "attributes": {
+  |    "attack_range": 4.2
+  |  }
+  |}
+  |
+cooked-repeatable true

@@ -61,6 +61,20 @@ public final class TestContent {
      */
     public static final VineId OVERBUDGET_ID = VineId.of("vine_test", "overbudget");
 
+    /** The Java-registered action/attack (sub-10 Stage A): the ember cleave. */
+    public static VineId emberCleaveId() {
+        return VineId.of("vine_test", "ember_cleave");
+    }
+
+    /** The Java-registered weapon item: the ember blade, owned by the engine. */
+    public static final VineId EMBER_BLADE_ID = VineId.of("vine_test", "ember_blade");
+
+    /** A partner-owned weapon: the engine cooks Better Combat's preset for it instead. */
+    public static final VineId PARTNER_BLADE_ID = VineId.of("vine_test", "partner_blade");
+
+    /** The clip whose markers drive the cleave's windows (sub-09): clips are named, not identified. */
+    private static final String STRIKE_CLIP = "animation.vine_test.wyvern_stub.strike";
+
     private TestContent() {
     }
 
@@ -81,6 +95,34 @@ public final class TestContent {
                     dev.vineengine.vine.testmod.data.VoxelExemplar.SCHEMA_ID)));
         VineRegistries.register(VineContent.ITEM_TYPE, TESTITEM_ID,
             new ItemDescriptor(TESTITEM_ID, new ItemTuning(64), ModelHint.generated()));
+        // Combat descriptors, Java path (sub-10 Stage A): a beast's own action and attack,
+        // plus a weapon item that declares the engine as its combat owner. The JSON path
+        // registers vine_test:wide_slash/ember_cleave from data/vine_test/vine/{action,attack},
+        // and the boot probe below prints both, which is this stage's acceptance.
+        VineRegistries.register(VineContent.ACTION_TYPE, emberCleaveId(),
+            new dev.vineengine.vine.combat.ActionDescriptor(emberCleaveId(), STRIKE_CLIP, 4, 8,
+                java.util.Set.of(), 12));
+        VineRegistries.register(VineContent.ATTACK_TYPE, emberCleaveId(),
+            new dev.vineengine.vine.combat.AttackDescriptor(emberCleaveId(), 1.6D,
+                dev.vineengine.vine.registry.VineId.parse("minecraft:player_attack"),
+                dev.vineengine.vine.registry.VineId.parse("vine_test:ember"),
+                // A swing that reaches where a standing creature's head is: the box is a
+                // chest-height volume in front of the attacker, not one centred at the feet.
+                new dev.vineengine.vine.combat.SweepShape.Box(
+                    dev.vineengine.vine.world.Vec3.of(1.2D, 1.6D, 1.5D),
+                    dev.vineengine.vine.world.Vec3.of(0.0D, 1.6D, -1.5D)),
+                dev.vineengine.vine.world.Vec3.of(2.0D, 0.0D, 0.0D), 3));
+        VineRegistries.register(VineContent.ITEM_TYPE, EMBER_BLADE_ID,
+            new ItemDescriptor(EMBER_BLADE_ID, new ItemTuning(1), ModelHint.generated(),
+                java.util.Optional.of(dev.vineengine.vine.combat.CombatProfile.vine(emberCleaveId(), 40.0D))));
+        // A partner-owned weapon (sub-10 §2): the engine installs none of its own sweep or
+        // cooldown logic for it and instead cooks Better Combat's own preset from this same
+        // descriptor. The bytes are produced by the engine, so both cells write the same file.
+        VineRegistries.register(VineContent.ITEM_TYPE, PARTNER_BLADE_ID,
+            new ItemDescriptor(PARTNER_BLADE_ID, new ItemTuning(1), ModelHint.generated(),
+                java.util.Optional.of(dev.vineengine.vine.combat.CombatProfile.partner(emberCleaveId(),
+                    dev.vineengine.vine.combat.CombatOwnership.BETTER_COMBAT, 40.0D,
+                    dev.vineengine.vine.registry.VineId.parse("bettercombat:claymore")))));
         VineRegistries.register(VineContent.BLOCK_TYPE, STATEBLOCK_ID,
             new BlockDescriptor(STATEBLOCK_ID, STATEBLOCK_PROPERTIES, BlockTuning.STONE_LIKE,
                 ModelHint.cubeAll()));
@@ -92,8 +134,16 @@ public final class TestContent {
             var item = VineRegistries.get(VineContent.ITEM_TYPE, TESTITEM_ID)
                 .orElseThrow(() -> new IllegalStateException(
                     "testmod item vanished at freeze — structural registration broken"));
+            var attack = VineRegistries.get(VineContent.ATTACK_TYPE, emberCleaveId())
+                .orElseThrow(() -> new IllegalStateException(
+                    "testmod attack vanished at freeze — sub-10 Stage A registration broken"));
+            var action = VineRegistries.get(VineContent.ACTION_TYPE, emberCleaveId())
+                .orElseThrow(() -> new IllegalStateException(
+                    "testmod action vanished at freeze — sub-10 Stage A registration broken"));
             System.out.println("vine-testmod: content holders resolved post-freeze block="
-                + block.id() + " item=" + item.id());
+                + block.id() + " item=" + item.id()
+                + " action=" + action.id() + " attack=" + attack.id()
+                + " weapon=" + EMBER_BLADE_ID);
         });
     }
 
