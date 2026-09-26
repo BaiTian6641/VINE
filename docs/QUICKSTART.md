@@ -117,6 +117,30 @@ Data: `data/mymod/vine/screen/*.json`. Layout is resolved by the engine in logic
 (`UiLayout.resolve`), so both cells place a button in the same spot; the `ui.layout.txt`
 golden pins it.
 
+## 6. A scripted client run
+
+The engine ships a scripted client: a JSON step list the dev client executes (`create_world`,
+`wait`, `command`, `play_cutscene`, `open_screen`, `screenshot`, `quit`), so a client-visible
+feature can be shown working without a human at the keyboard.
+
+```
+cmd /c "gradlew.bat :drivers:driver-1.21.1-fabric:vineTckClient -Pvine.tck.clientScript=C:/Users/weyst/VINE/vine-tck/client/1.21.1-fabric.json"
+cmd /c "gradlew.bat :drivers:driver-1.21.1-neoforge:vineTckClient -Pvine.tck.clientScript=C:/Users/weyst/VINE/vine-tck/client/1.21.1-neoforge.json"
+```
+
+With the property absent the client behaves exactly as a normal dev client (no auto-quit). A
+step that cannot be performed stops the run with one line naming it and a non-zero exit —
+`open_screen` is refused today, because the native screen materialization is the next piece of
+sub-16. Screenshots land in the cell's `run/screenshots/`; committed copies live in
+`vine-tck/fixtures/client/`.
+
+Two facts the cells had to learn, worth knowing before you write a script: a materialized
+engine entity type with **no** client renderer crashes the client the moment it is in view
+(both cells register an empty renderer for every engine type), and a harness-launched client
+loses window focus, so `pauseOnLostFocus` is cleared for scripted runs or every step waits on a
+paused server. A fresh world spawns at a random spot, so a script that works at fixed
+coordinates starts with a `forceload`.
+
 ## Verify everything
 
 ```

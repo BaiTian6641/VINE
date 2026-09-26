@@ -49,6 +49,25 @@ neoForge {
     }
 
     runs {
+        // The scripted client run (sub-21 Stage F): a real dev client driven by a JSON step
+        // script. `-Pvine.tck.clientScript=<path>` is the only thing that arms it — with the
+        // property absent this is a plain dev client, exactly as before.
+        client {
+            client()
+            String tckClientScript = providers.gradleProperty('vine.tck.clientScript').getOrNull()
+            if (tckClientScript != null) {
+                systemProperty 'vine.tck.clientScript', tckClientScript
+            }
+            dependencies {
+                // Same reason as the server run: MDG dev runs exclude ordinary library deps
+                // from the runtime classpath, and the engine modules plus the testmod's
+                // commands must be present for the script to drive anything.
+                additionalRuntimeClasspath project(':vine-api')
+                additionalRuntimeClasspath project(':vine-core')
+                additionalRuntimeClasspath project(':vine-spi')
+                additionalRuntimeClasspath project(':vine-testmod')
+            }
+        }
         // The TCK's GameTest path (sub-21 Stage B): the loader's own test lifecycle
         // around the same in-process scenarios the /vine_test tck_run command runs.
         // The empty structure it needs ships as a real 1.21 structure NBT at
@@ -104,6 +123,46 @@ tasks.named('runServer') {
     if (providers.gradleProperty('vine.tck.loopback').map { it.toBoolean() }.getOrElse(false)) {
         jvmArgs '-Dvine.tck.loopback=true'
     }
+}
+
+
+// ---------------------------------------------------------------------------
+// sub-21 Stage F — the scripted client run. Kept out of `check`: it needs a GPU,
+// a window and a JSON script, and it is an acceptance path a human (or the TCK)
+// invokes by name, like the boot smokes. The client run reads the script path at
+// configuration time (see the `client` run above); this alias validates the input,
+// clears the previous screenshots, then drives that run.
+// ---------------------------------------------------------------------------
+def clientScriptProperty = providers.gradleProperty('vine.tck.clientScript')
+
+def validateClientScript = tasks.register('validateClientScript') {
+    description = 'Checks that -Pvine.tck.clientScript names an existing JSON ClientScript.'
+    doLast {
+        String path = clientScriptProperty.getOrNull()
+        if (path == null) {
+            throw new GradleException(
+                    'vineTckClient needs -Pvine.tck.clientScript=<absolute path to a JSON ClientScript>')
+        }
+        if (!new File(path).isFile()) {
+            throw new GradleException("vine.tck.clientScript is not a file: ${path}")
+        }
+    }
+}
+
+def clearClientScreenshots = tasks.register('clearClientScreenshots', Delete) {
+    description = 'Clears the run dir\'s screenshots folder so a run cannot pass on a stale image.'
+    delete layout.projectDirectory.dir('run/screenshots')
+}
+
+clearClientScreenshots.configure { mustRunAfter validateClientScript }
+tasks.named('runClient') { mustRunAfter clearClientScreenshots }
+
+tasks.register('vineTckClient') {
+    group = 'vine'
+    description = 'Runs the 1.21.1-neoforge dev client against a JSON ClientScript (-Pvine.tck.clientScript=<path>) and exits with the client\'s own code.'
+    dependsOn validateClientScript
+    dependsOn clearClientScreenshots
+    dependsOn 'runClient'
 }
 
 

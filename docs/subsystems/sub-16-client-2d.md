@@ -127,7 +127,9 @@ cell-neutral, render path probe-guarded.)*
   screen at scale 3. Everything is logical pixels now; a cell reports its screen size the way
   vanilla does.
 - **Remaining:** the per-cell materialization (native screens, HUD drawing, keybinds) and the
-  screenshot pass.
+  screenshot pass. A scripted client run exists on both cells (`vineTckClient`, see
+  `docs/QUICKSTART.md`), and its `open_screen` step is *refused loudly* today — deliberately:
+  the runner may not pretend a screen opened when no cell can materialize one yet.
 
 ## 4. Problems & blockers
 

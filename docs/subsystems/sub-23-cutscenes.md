@@ -51,6 +51,20 @@ contains, never how a cell draws it.
 - **Acceptance:** a scripted client run shows a cutscene frame (screenshot committed) and returns control afterwards.
 - **Touches:** drivers (client halves), sub-16/17 surfaces.
 
+### Stage B — delivery (landed) and Stage C status
+
+- [x] **Playback runtime:** one cutscene at a time, explicit viewers, a pure per-tick frame,
+  a public frame listener, and a transport seam a cell installs.
+- [x] **Scriptable client runs on both cells** (`vineTckClient`), which is what a director
+  needs to *see* a cutscene: the client creates a world, runs engine commands, plays the
+  cutscene through the testmod command and screenshots the result. Evidence:
+  `vine-tck/fixtures/client/1.21.1-{fabric,neoforge}-cutscene.png`.
+- [ ] **Stage C — client application (remaining):** the frames are produced and delivered, but
+  a cell does not yet move the camera/actors or draw the titles, so the screenshot shows the
+  world rather than the shot. The pieces are in place: the frame carries position/yaw/pitch/fov,
+  actor clips with seconds and title lines, and the runner proves the client survives a
+  cinematic.
+
 ## 4. Problems & blockers
 
 - **Camera authority vs vanilla.** Taking over a player's camera is exactly the kind of thing a loader or another mod may also want to do. v1 keeps it *presentational*: the server sends a frame, the client applies it only while the cutscene it was told about is still playing, and any player input or a `stop` cancels it. No Mixin is used for the camera in v1; if one is needed, it stays in the driver jar per §5.9.

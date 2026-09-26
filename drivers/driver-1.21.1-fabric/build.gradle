@@ -67,6 +67,20 @@ loom {
             vmArg "-Dfabric-api.gametest.report-file=${project.layout.buildDirectory.file('gametest.xml').get().asFile}"
             runDir 'run/gametest'
         }
+        // Scripted client run (sub-21's client half): a real dev client boots, creates a
+        // single-player world with cheats, drives the ClientScript the harness names,
+        // writes its screenshots into run/screenshots and quits. The system property is
+        // set only when -Pvine.tck.clientScript is passed, so invoking this run config
+        // (or runTckClient) without the property is an ordinary dev client that never
+        // auto-quits — the same entry point, no second code path.
+        tckClient {
+            client()
+            runDir 'run'
+            String script = providers.gradleProperty('vine.tck.clientScript').getOrNull()
+            if (script != null) {
+                vmArg "-Dvine.tck.clientScript=${script}"
+            }
+        }
     }
 }
 
@@ -94,6 +108,34 @@ tasks.register('runGameTestServer') {
     group = 'vine'
     description = 'Alias of runGametest (headless GameTest boot, sub-18 Stage E).'
     dependsOn 'runGametest'
+}
+
+// ---------------------------------------------------------------------------
+// sub-21's client half — the scripted client run the TCK harness invokes:
+//
+//   gradlew :drivers:driver-1.21.1-fabric:vineTckClient \
+//       -Pvine.tck.clientScript=<absolute path to a ClientScript JSON>
+//
+// The run dir's screenshots folder is cleared by its own Delete task, ordered before the
+// client starts: a stale PNG from an earlier run can then never be mistaken for this run's
+// output. A task (not a doFirst action) because this build stores the configuration cache,
+// and a task's inputs are resolved at configuration time. The task is deliberately not
+// wired into `check` — it opens a window and drives a real client.
+def clearTckScreenshots = tasks.register('clearVineTckClientScreenshots', Delete) {
+    group = 'vine'
+    description = 'Clears this cell\'s run/screenshots before a scripted client run.'
+    delete layout.projectDirectory.dir('run/screenshots')
+}
+
+tasks.named('runTckClient') {
+    dependsOn clearTckScreenshots
+    mustRunAfter clearTckScreenshots
+}
+
+tasks.register('vineTckClient') {
+    group = 'vine'
+    description = 'Dev client that runs -Pvine.tck.clientScript (a ClientScript JSON) and exits.'
+    dependsOn 'runTckClient'
 }
 
 // ---------------------------------------------------------------------------

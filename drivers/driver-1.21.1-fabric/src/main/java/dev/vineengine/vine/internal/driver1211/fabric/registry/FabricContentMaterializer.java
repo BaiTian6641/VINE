@@ -334,6 +334,15 @@ public final class FabricContentMaterializer {
     }
 
     /**
+     * Every entity type this cell materialized — what the client half registers renderers
+     * for ({@code VineEntityRenderers}), since a type with no renderer is a client crash
+     * rather than an invisible entity.
+     */
+    public static java.util.List<EntityType<?>> materializedEntityTypes() {
+        return java.util.List.copyOf(ENTITY_TYPES.values());
+    }
+
+    /**
      * The one entity type that carries every actor's parts (sub-08 Stage D), or
      * {@code null} before {@link #registerPartEntityType()} has run.
      *

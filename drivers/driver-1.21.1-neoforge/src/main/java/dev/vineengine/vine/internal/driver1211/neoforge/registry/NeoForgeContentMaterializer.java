@@ -351,12 +351,22 @@ public final class NeoForgeContentMaterializer {
     private static final int ENTITY_TRACKING_RANGE = 10;
 
     /** Materialized entity types by descriptor id — what the cell's {@code EntityDriver} resolves. */
-    private static final java.util.Map<VineId, EntityType<?>> ENTITY_TYPES =
+    private static final java.util.Map<VineId, EntityType<VineEntity>> ENTITY_TYPES =
         new java.util.concurrent.ConcurrentHashMap<>();
 
     /** The native entity type materialized for {@code id}, or null when none was. */
     public static EntityType<?> entityTypeFor(VineId id) {
         return ENTITY_TYPES.get(id);
+    }
+
+    /**
+     * Every entity type this cell materialized — the client half of the same registration:
+     * each one needs an {@code EntityRenderer} before an instance can be spawned, because
+     * vanilla's {@code LevelRenderer} dereferences the dispatcher's renderer without a null
+     * check.
+     */
+    public static java.util.Collection<EntityType<VineEntity>> entityTypes() {
+        return java.util.List.copyOf(ENTITY_TYPES.values());
     }
 
     /**
