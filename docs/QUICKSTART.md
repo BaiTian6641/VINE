@@ -155,7 +155,18 @@ Scenario runners write into shared run directories: run one Gradle-driven server
 
 Client acceptance scripts live in `vine-tck/client/`, one per cell and concern: a baseline world
 (cutscene, HUD layer, screen with buttons), a swing with a VINE-owned weapon, a swing with a
-Better Combat-owned weapon, and a two-player fight where one player's far strike must miss. They
+Better Combat-owned weapon, a two-player fight where one player's far strike must miss, and a
+vanilla-bystander punch. Steps come in two kinds that matter: `command` runs as the player, and
+`server_command` runs on the integrated server with console authority — use the latter whenever
+the step names other entities or has to read server truth, because a cell's player-source path
+resolves entity selectors in its own way (measured: the NeoForge cell's matches nothing), and
+because a `server_command` whose command returns zero fails the step, which turns a fixture
+predicate into an assertion.
+
+The vanilla-bystander script is currently Fabric-only in effect: NeoForge's half fails loudly at
+its first selector assertion (a summoned vanilla mob is not selectable afterwards on that cell,
+`@p`/`@a`/`@e[type=player]` all matching meanwhile) — the evidence and every approach tried are
+in sub-18. Treat that as a known cell-level open question, not as a gate. They
 are driven with `-Pvine.tck.clientScript=<absolute path>`; each prints the engine's own lines
 (`tck: parts status head=…`, `tck: two-player …`) and writes a screenshot, so a run is read from
 the engine's numbers rather than from the input that caused them.
