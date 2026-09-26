@@ -75,7 +75,7 @@
       "type": "AssertTrace",
       "trace": "idmap",
       "expect": [
-        "idmap example=0 optional=absent optional2=16"
+        "idmap example=0 optional=absent optional2=17"
       ]
     },
     {
