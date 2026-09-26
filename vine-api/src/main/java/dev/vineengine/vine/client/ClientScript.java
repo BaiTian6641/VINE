@@ -46,8 +46,8 @@ public record ClientScript(String name, List<Step> steps) {
      * cell can implement, and an unknown step is an authoring error the parser reports rather
      * than a silently ignored line.
      */
-    public sealed interface Step permits Step.CreateWorld, Step.Wait, Step.Command, Step.SelectSlot, Step.Attack,
-            Step.PlayCutscene, Step.OpenScreen, Step.Screenshot, Step.Quit {
+    public sealed interface Step permits Step.CreateWorld, Step.Wait, Step.Command, Step.ServerCommand,
+            Step.SelectSlot, Step.Attack, Step.PlayCutscene, Step.OpenScreen, Step.Screenshot, Step.Quit {
 
         /** The {@code "type"} discriminator an authored step writes. */
         String kind();
@@ -60,6 +60,7 @@ public record ClientScript(String name, List<Step> steps) {
                 case "create_world" -> CreateWorld.CODEC;
                 case "wait" -> Wait.CODEC;
                 case "command" -> Command.CODEC;
+                case "server_command" -> ServerCommand.CODEC;
                 case "select_slot" -> SelectSlot.CODEC;
                 case "attack" -> Attack.CODEC;
                 case "play_cutscene" -> PlayCutscene.CODEC;
@@ -127,6 +128,32 @@ public record ClientScript(String name, List<Step> steps) {
             @Override
             public String kind() {
                 return "command";
+            }
+        }
+
+        /**
+         * Runs a command on the integrated server with console authority, instead of as the
+         * player. Command text that names other entities ({@code @e[...]}) resolves against the
+         * server's own view here, which is what a fixture asserting server truth needs: a
+         * cell's player-source command path may resolve selectors in a client-side context and
+         * silently match nothing. The command's result count is the step's result — a zero is a
+         * failed step, so a predicate that was expected to fire but did not cannot pass quietly.
+         */
+        record ServerCommand(String command) implements Step {
+
+            /** Single source of truth for every representation of this data (sub-02 §2). */
+            public static final com.mojang.serialization.MapCodec<ServerCommand> CODEC =
+                RecordCodecBuilder.mapCodec(instance -> instance.group(
+                    Codec.STRING.fieldOf("command").forGetter(ServerCommand::command)
+                ).apply(instance, ServerCommand::new));
+
+            public ServerCommand {
+                java.util.Objects.requireNonNull(command, "command");
+            }
+
+            @Override
+            public String kind() {
+                return "server_command";
             }
         }
 

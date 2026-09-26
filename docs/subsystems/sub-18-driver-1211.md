@@ -250,6 +250,37 @@ Each bootstrap assumes the agent has read this file, plan §5.8–§5.10, and
 
 ## 4. Problems & blockers
 
+- **NeoForge cell: a summoned vanilla mob is not selectable afterwards (open, measured 2026-09-26).**
+  While adding the "an adjacent unregistered mob stays vanilla" check, one scripted run per cell did
+  the same thing: `summon minecraft:zombie 4.5 300 0.5 {…}` then
+  `execute if entity @e[type=minecraft:zombie,limit=1,sort=nearest] run say …`.
+
+  | observed | Fabric | NeoForge |
+  |---|---|---|
+  | `summon` result count | 1 | 1 |
+  | `@e[type=minecraft:player]`, `@p`, `@a` | match | match |
+  | `@e[type=minecraft:zombie]` (same server, 20 ticks later) | matches | **matches nothing** |
+  | `data get entity @e[…zombie…] Pos` | returns the zombie's position | `No entity was found` |
+  | the client's crosshair during a swing | names the zombie | names the zombie |
+
+  So on this cell the entity is created (the summon succeeds, and the client — which is connected to
+  that same server — sees it well enough to aim at it), yet no selector on the server resolves it,
+  with console authority or the player's. Approaches tried: player-source commands (the cell's
+  original path) and console-authority commands via the new `server_command` step (both cells);
+  `limit=1,sort=nearest` and unrestricted `@e[type=…]`; with and without an NBT predicate;
+  20 and 60 ticks after the summon; midnight plus `Fire:-20s` to rule out daylight burning (which
+  *was* real on both cells before that fix: a burning zombie read 16.0f before any punch).
+  Ruled out: chunk loading (the platform `fill` returns the expected 52 blocks and the teleported
+  player stands on it), selectors in general (`@p`/`@a`/players match), and the engine's hooks
+  (the engine cannot address unregistered content at all — `VineCombat.strike` takes a
+  `VineEntityRef` target, so an unregistered mob is unreachable by construction).
+
+  Consequence: the Fabric cell has the runtime half of this check (vanilla punch, 20.0f → 19.06f,
+  deterministic across runs, at `vine-tck/client/1.21.1-fabric-vanilla-bystander.json`); this cell's
+  script of the same shape fails loudly at the first selector assertion. Not a gate on either cell
+  until this is understood.
+
+
 - **Two loaders, one repo, shared `vine-core`:** loom remap vs MDG straight
   compile of the same artifacts. Mitigation: sub-00 keeps shared modules
   loader-agnostic Java 21; loader plugins live only in driver subprojects.

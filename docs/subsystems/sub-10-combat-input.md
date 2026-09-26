@@ -175,7 +175,19 @@ public interface CombatState {    // engine-owned, server-authoritative
     Minecraft player's yaw 0 faces world +Z, so a cell passes `player.getYaw() + 180`.
     Negative control: with the conversion removed, the identical swing at the identical aim
     lands **no** wound.
-  - **A stance is not a claim:** the same attacker, weapon and aim from thirty blocks away reports
+  - **An adjacent unregistered mob stays vanilla — runtime proof on Fabric 1.21.1:**
+  `1.21.1-fabric-vanilla-bystander.json` summons a still, persistent zombie two blocks in front of
+  the scripted player (midnight + `Fire:-20s`, because an undead mob burning in daylight otherwise
+  puts damage on the scoreboard that no punch caused), waits for full attack strength, runs a real
+  left click with an empty hand through the player's own input path, and asserts server-side:
+  health `20.0f` before, `19.06f` after. That number is vanilla arithmetic — a 1-damage fist less
+  the zombie's own 2 armour points (`2 - 1/2 = 1.5`, `/25` = 6% reduction) — and it is what proves
+  no hook touched the mob: had this cell's attack or damage hook intercepted an unregistered
+  target, the strike would have gone to the pipeline, which cannot address it (its target is a
+  `VineEntityRef`), so the health would have moved by the engine's number or not at all. The check
+  is single-cell for now: on the NeoForge cell a summoned vanilla mob is not selectable afterwards,
+  which is recorded as an open cell-level finding in sub-18.
+- **A stance is not a claim:** the same attacker, weapon and aim from thirty blocks away reports
     `MISSED` and moves no wound (`TwoPlayerFight`), and the two players' strikes sum exactly on
     the shared state rather than doubling. **Fabric, measured 2026-09-26** (`1.21.1-fabric-two-players`,
     16/16 steps, exit 0): `alpha-head landed=true endedAt=APPLY part=head damage=83.0 broke=false

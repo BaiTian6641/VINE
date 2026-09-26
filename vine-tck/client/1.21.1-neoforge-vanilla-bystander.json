@@ -1,0 +1,71 @@
+{
+  "name": "1.21.1-neoforge-vanilla-bystander",
+  "steps": [
+    {
+      "type": "create_world"
+    },
+    {
+      "type": "wait",
+      "ticks": 40
+    },
+    {
+      "type": "server_command",
+      "command": "forceload add -16 -16 16 16"
+    },
+    {
+      "type": "server_command",
+      "command": "fill 3 299 -4 6 299 8 stone"
+    },
+    {
+      "type": "server_command",
+      "command": "time set midnight"
+    },
+    {
+      "type": "server_command",
+      "command": "tp @p 4.5 301 -1.5 0 35"
+    },
+    {
+      "type": "wait",
+      "ticks": 20
+    },
+    {
+      "type": "server_command",
+      "command": "summon minecraft:zombie 4.5 300 0.5 {NoAI:1b,PersistenceRequired:1b,Fire:-20s,Health:20.0f}"
+    },
+    {
+      "type": "wait",
+      "ticks": 60
+    },
+    {
+      "type": "server_command",
+      "command": "data get entity @e[type=minecraft:zombie,limit=1,sort=nearest] Pos"
+    },
+    {
+      "type": "server_command",
+      "command": "execute if entity @e[type=minecraft:zombie,limit=1,sort=nearest,nbt={Health:20.0f}] run say bystander-health-before=20"
+    },
+    {
+      "type": "attack",
+      "swings": 1
+    },
+    {
+      "type": "wait",
+      "ticks": 40
+    },
+    {
+      "type": "server_command",
+      "command": "data get entity @e[type=minecraft:zombie,limit=1,sort=nearest] Health"
+    },
+    {
+      "type": "server_command",
+      "command": "execute if entity @e[type=minecraft:zombie,limit=1,sort=nearest,nbt={Health:19.06f}] run say bystander-health-after=19.06"
+    },
+    {
+      "type": "screenshot",
+      "name": "1.21.1-neoforge-vanilla-bystander"
+    },
+    {
+      "type": "quit"
+    }
+  ]
+}

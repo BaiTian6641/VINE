@@ -366,6 +366,11 @@ public final class ClientScriptRunner {
                     index++;
                     continue;
                 }
+                case ClientScript.Step.ServerCommand serverCommand -> {
+                    runServerCommand(minecraft, stepName(index), serverCommand.command());
+                    index++;
+                    continue;
+                }
                 case ClientScript.Step.SelectSlot slot -> {
                     selectSlot(minecraft, slot);
                     index++;
@@ -485,6 +490,37 @@ public final class ClientScriptRunner {
             .getHolderOrThrow(generateTerrain ? WorldPresets.NORMAL : WorldPresets.FLAT)
             .value()
             .createWorldDimensions();
+    }
+
+    /**
+     * Runs {@code text} on the integrated server with console authority and returns whether its
+     * result count was non-zero.
+     *
+     * <p>Console authority is the point: a player-source command may resolve entity selectors in
+     * a context that sees no server entities (measured on this cell: {@code @e[type=...]} matched
+     * nothing while the same command as the server matched), so a fixture that asserts server
+     * truth has to speak as the server.
+     */
+    private static void runServerCommand(Minecraft minecraft, String step, String text) {
+        net.minecraft.server.MinecraftServer server = minecraft.getSingleplayerServer();
+        if (server == null) {
+            throw new StepFailure(step, "no integrated server to run a server_command on");
+        }
+        String command = text.startsWith("/") ? text.substring(1) : text;
+        LOGGER.info("vine-tck: server_command /{}", command);
+        // Through the dispatcher rather than performPrefixedCommand: only this returns the result
+        // count, which is what makes a fixture predicate an assertion.
+        int result;
+        try {
+            result = server.getCommands().getDispatcher().execute(command, server.createCommandSourceStack());
+        } catch (com.mojang.brigadier.exceptions.CommandSyntaxException e) {
+            throw new StepFailure(step, "server_command did not parse: /" + command + " — " + e.getMessage());
+        }
+        LOGGER.info("vine-tck: server_command result={}", result);
+        if (result == 0) {
+            throw new StepFailure(step, "server_command returned 0 (expected the command to have an"
+                + " effect): /" + command);
+        }
     }
 
     private static void runCommand(Minecraft minecraft, String text) {

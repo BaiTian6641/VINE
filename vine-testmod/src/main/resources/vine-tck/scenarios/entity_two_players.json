@@ -1,0 +1,55 @@
+{
+  "id": "vine_test:entity_two_players",
+  "tags": [
+    "ENTITY",
+    "COMBAT",
+    "MULTIPLAYER"
+  ],
+  "steps": [
+    {
+      "type": "RunCommand",
+      "command": "forceload add 0 0 16 16"
+    },
+    {
+      "type": "RunCommand",
+      "command": "fill 3 299 -4 6 299 8 stone"
+    },
+    {
+      "type": "AdvanceTicks",
+      "ticks": 5
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_two_players 4 300 0"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "command",
+      "expect": [
+        "tck: two-player spawn started=true"
+      ]
+    },
+    {
+      "type": "AdvanceTicks",
+      "ticks": 20
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_two_players_fight"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "log",
+      "expect": [
+        "hosted=true",
+        "tck: two-player alpha-head landed=true endedAt=APPLY part=head",
+        "tck: two-player beta-tail-1 landed=true endedAt=APPLY part=tail",
+        "tck: two-player beta-tail-2 landed=true endedAt=APPLY part=tail",
+        "broke=true",
+        "tck: two-player beta-tail-3 landed=true endedAt=APPLY part=tail",
+        "tck: two-player beta-forged landed=false endedAt=SWEEP part=none damage=0.0 broke=false flinched=false rejection=MISSED",
+        "(broken)] reconciled=true"
+      ]
+    }
+  ]
+}

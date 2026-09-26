@@ -330,6 +330,9 @@ public final class ClientScriptRunner {
             waitTicks = wait.ticks();
             return waitTicks == 0;
         }
+        if (step instanceof ClientScript.Step.ServerCommand serverCommand) {
+            return runServerCommand(client, serverCommand.command());
+        }
         if (step instanceof ClientScript.Step.Command command) {
             beginCommand(client, command);
             return false;
@@ -402,6 +405,40 @@ public final class ClientScriptRunner {
     // ---------------------------------------------------------------------------------------
     // command
     // ---------------------------------------------------------------------------------------
+
+    /**
+     * Runs {@code text} on the integrated server with console authority, failing the step when the
+     * command's result count is zero.
+     *
+     * <p>Console authority is the point: a fixture that asserts server truth should not depend on
+     * how a cell resolves a player-source command (this cell's player path already runs on the
+     * server, the NeoForge cell's runs through the client's chat path, where an entity selector
+     * can match nothing at all). The result count doubles as the assertion: a predicate that was
+     * supposed to fire but did not returns zero and stops the run.
+     */
+    private boolean runServerCommand(MinecraftClient client, String text) {
+        MinecraftServer server = client.getServer();
+        if (server == null) {
+            fail("server_command", "no integrated server to run a server_command on");
+            return false;
+        }
+        String command = text.startsWith("/") ? text.substring(1) : text;
+        LOGGER.info("vine-tck: server_command /{}", command);
+        int result;
+        try {
+            // Through the dispatcher: executeWithPrefix returns void, and the result count is what
+            // makes a fixture predicate an assertion.
+            result = server.getCommandManager().getDispatcher().execute(command, server.getCommandSource());
+        } catch (com.mojang.brigadier.exceptions.CommandSyntaxException e) {
+            fail("server_command", "did not parse: /" + command + " — " + e.getMessage());
+            return false;
+        }
+        LOGGER.info("vine-tck: server_command result={}", result);
+        if (result == 0) {
+            fail("server_command", "returned 0 (expected the command to have an effect): /" + command);
+        }
+        return true;
+    }
 
     private void beginCommand(MinecraftClient client, ClientScript.Step.Command step) {
         String text = step.command().startsWith("/") ? step.command().substring(1) : step.command();

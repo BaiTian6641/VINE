@@ -63,6 +63,9 @@ public final class TwoPlayerFight {
 
     /** The beast this scenario is fighting, remembered between the spawn and the fight. */
     private static VineEntityRef beast;
+    /** Per part, the sum of what the engine reported applying this fight — checked at the end. */
+    private static final java.util.Map<String, Double> applied = new java.util.LinkedHashMap<>();
+
     /** Where it was spawned: the fight's geometry is stated relative to this. */
     private static Vec3 start;
 
@@ -83,6 +86,7 @@ public final class TwoPlayerFight {
         }
         beast = spawned.get();
         TwoPlayerFight.start = start;
+        applied.clear();
         System.out.println("tck: two-player spawned ref=" + beast + " at=" + start.asString());
         return true;
     }
@@ -112,14 +116,33 @@ public final class TwoPlayerFight {
         // The stance without the geometry: same attacker, same weapon, same aim, far away.
         report("beta-forged", strike(BETA, beast, new Vec3(start.x(), start.y(), start.z() + OUT_OF_REACH), 0.0F));
 
-        // One truth, read for each participant.
-        System.out.println("tck: two-player state alpha=" + status(beast) + " beta=" + status(beast)
-            + " same=" + status(beast).equals(status(beast)));
+        // One state, two players — and the numbers have to add up rather than merely exist. The
+        // engine keeps one wound per part for the actor (not a copy per participant), so the
+        // honest check is not "the same value read twice" but this: the wound now equals the sum
+        // of what the engine itself reported applying, per part. A double-counted hit, a dropped
+        // one, or a per-player copy would all break that equality — which is the thing a
+        // multiplayer wound model can actually get wrong.
+        System.out.println("tck: two-player final " + status(beast)
+            + " reconciled=" + reconciled(beast));
     }
 
     /** One strike, in the engine's yaw convention, at the blade's own base damage. */
     private static CombatResult strike(UUID player, VineEntityRef beast, Vec3 from, float yaw) {
         return VineCombat.strike(CombatActorRef.player(player), beast, CLEAVE, BASE_DAMAGE, from, yaw);
+    }
+
+    /**
+     * Whether every part's wound equals the sum of the applied amounts this fight's strikes
+     * reported — the engine's own two numbers, checked against each other.
+     */
+    private static boolean reconciled(VineEntityRef beast) {
+        for (PartState part : VineParts.parts(beast)) {
+            Double sum = applied.get(part.name());
+            if (sum == null || Math.abs(sum - part.wound()) > 0.0001D) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** The beast's parts as one line, in declaration order. */
@@ -139,6 +162,9 @@ public final class TwoPlayerFight {
      * produced, whether that broke the part, and — for a miss — what the engine refused.
      */
     private static void report(String label, CombatResult result) {
+        if (result.landed() && result.part().isPresent()) {
+            applied.merge(result.part().get(), result.damage(), Double::sum);
+        }
         System.out.println("tck: two-player " + label
             + " landed=" + result.landed()
             + " endedAt=" + result.endedAt()
