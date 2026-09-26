@@ -141,6 +141,24 @@ public final class PartsExemplar {
         lastBox = box.orElse(null);
     }
 
+    /**
+     * Prints the exemplar beast's part state — what a scripted client's swing actually did,
+     * read from the engine rather than inferred from the swing that caused it.
+     */
+    public static void status() {
+        if (last == null) {
+            System.out.println("tck: parts status none");
+            return;
+        }
+        StringBuilder out = new StringBuilder("tck: parts status");
+        for (PartState part : VineParts.parts(last)) {
+            out.append(' ').append(part.name()).append('=').append(part.wound())
+                .append(part.broken() ? "(broken)" : "");
+        }
+        out.append(" flinched=").append(VineParts.consumeFlinch(last));
+        System.out.println(out);
+    }
+
     /** Prints one hit's outcome — the engine's numbers, never a re-computation. */
     private static void report(String label, Optional<VineParts.PartHit> hit) {
         if (hit.isEmpty()) {

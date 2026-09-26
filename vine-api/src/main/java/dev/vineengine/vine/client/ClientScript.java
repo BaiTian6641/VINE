@@ -46,8 +46,8 @@ public record ClientScript(String name, List<Step> steps) {
      * cell can implement, and an unknown step is an authoring error the parser reports rather
      * than a silently ignored line.
      */
-    public sealed interface Step permits Step.CreateWorld, Step.Wait, Step.Command, Step.PlayCutscene,
-            Step.OpenScreen, Step.Screenshot, Step.Quit {
+    public sealed interface Step permits Step.CreateWorld, Step.Wait, Step.Command, Step.SelectSlot, Step.Attack,
+            Step.PlayCutscene, Step.OpenScreen, Step.Screenshot, Step.Quit {
 
         /** The {@code "type"} discriminator an authored step writes. */
         String kind();
@@ -60,6 +60,8 @@ public record ClientScript(String name, List<Step> steps) {
                 case "create_world" -> CreateWorld.CODEC;
                 case "wait" -> Wait.CODEC;
                 case "command" -> Command.CODEC;
+                case "select_slot" -> SelectSlot.CODEC;
+                case "attack" -> Attack.CODEC;
                 case "play_cutscene" -> PlayCutscene.CODEC;
                 case "open_screen" -> OpenScreen.CODEC;
                 case "screenshot" -> Screenshot.CODEC;
@@ -125,6 +127,56 @@ public record ClientScript(String name, List<Step> steps) {
             @Override
             public String kind() {
                 return "command";
+            }
+        }
+
+        /**
+         * Puts a hotbar slot in the player's hand. Needed because a scripted client can only
+         * swing what it is holding, and {@code /give} fills the first free slot rather than the
+         * hand.
+         */
+        record SelectSlot(int slot) implements Step {
+
+            /** Single source of truth for every representation of this data (sub-02 §2). */
+            public static final com.mojang.serialization.MapCodec<SelectSlot> CODEC =
+                RecordCodecBuilder.mapCodec(instance -> instance.group(
+                    Codec.INT.fieldOf("slot").forGetter(SelectSlot::slot)
+                ).apply(instance, SelectSlot::new));
+
+            public SelectSlot {
+                if (slot < 0 || slot > 8) {
+                    throw new IllegalArgumentException("SelectSlot: slot must be 0..8, got " + slot);
+                }
+            }
+
+            @Override
+            public String kind() {
+                return "select_slot";
+            }
+        }
+
+        /**
+         * Swings at whatever the player is looking at — the client-side input a scripted run
+         * needs to exercise a weapon. The step is presentation and input only: what a swing
+         * <em>hits</em> is decided by the server's own sweep, never by this step.
+         */
+        record Attack(int swings) implements Step {
+
+            /** Single source of truth for every representation of this data (sub-02 §2). */
+            public static final com.mojang.serialization.MapCodec<Attack> CODEC =
+                RecordCodecBuilder.mapCodec(instance -> instance.group(
+                    Codec.INT.optionalFieldOf("swings", 1).forGetter(Attack::swings)
+                ).apply(instance, Attack::new));
+
+            public Attack {
+                if (swings < 1) {
+                    throw new IllegalArgumentException("Attack: swings must be at least 1, got " + swings);
+                }
+            }
+
+            @Override
+            public String kind() {
+                return "attack";
             }
         }
 

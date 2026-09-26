@@ -98,6 +98,11 @@ public final class EchoCommand {
                     dev.vineengine.vine.testmod.parts.PartsExemplar.hit();
                     return 1;
                 }))
+            .then(VineCommand.literal("tck_parts_status")
+                .executes(ctx -> {
+                    dev.vineengine.vine.testmod.parts.PartsExemplar.status();
+                    return 1;
+                }))
             .then(VineCommand.literal("tck_parts_track")
                 .executes(ctx -> {
                     dev.vineengine.vine.testmod.parts.PartsExemplar.track();
