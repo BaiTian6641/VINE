@@ -1,0 +1,63 @@
+{
+  "name": "1.21.1-neoforge-two-players",
+  "steps": [
+    {
+      "type": "create_world"
+    },
+    {
+      "type": "wait",
+      "ticks": 40
+    },
+    {
+      "type": "command",
+      "command": "forceload add -16 -16 16 16"
+    },
+    {
+      "type": "wait",
+      "ticks": 10
+    },
+    {
+      "type": "command",
+      "command": "fill 3 299 -2 6 299 1 stone"
+    },
+    {
+      "type": "command",
+      "command": "tp @s 4.5 300 -1.5 0 0"
+    },
+    {
+      "type": "wait",
+      "ticks": 10
+    },
+    {
+      "type": "command",
+      "command": "vine_test tck_two_players 4 300 0"
+    },
+    {
+      "type": "wait",
+      "ticks": 10
+    },
+    {
+      "type": "command",
+      "command": "vine_test tck_two_players_fight"
+    },
+    {
+      "type": "wait",
+      "ticks": 10
+    },
+    {
+      "type": "command",
+      "command": "vine_test tck_parts_status"
+    },
+    {
+      "type": "wait",
+      "ticks": 5
+    },
+    {
+      "type": "screenshot",
+      "name": "1.21.1-neoforge-two-players"
+    },
+    {
+      "type": "quit"
+    }
+  ]
+}

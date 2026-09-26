@@ -156,7 +156,7 @@ public final class FabricCombatHooks {
             CombatProfile profile, DamageSource source) {
         CombatResult result = VineCombat.strike(CombatActorRef.player(attacker.getUuid()), targetRef,
             profile.attack(), profile.baseDamage(),
-            Vec3.of(attacker.getX(), attacker.getY(), attacker.getZ()), attacker.getYaw());
+            Vec3.of(attacker.getX(), attacker.getY(), attacker.getZ()), engineYaw(attacker));
         if (!result.landed()) {
             return;
         }
@@ -166,6 +166,34 @@ public final class FabricCombatHooks {
         } finally {
             APPLYING.set(false);
         }
+    }
+
+    /**
+     * The attacker's facing in the convention {@link VineCombat#strike} documents — the one
+     * {@code CombatPipelineImpl}'s sweep volume is composed with, so a swing and a target's
+     * part boxes can never disagree about which way the fight points.
+     *
+     * <p><b>Why a conversion is needed here and not in the engine.</b> A Minecraft player's yaw
+     * {@code 0} faces world {@code +Z}, while the engine's yaw {@code 0} maps the attacker's
+     * model space straight onto world space — and every authored weapon sweep offset and every
+     * part in the plan points along model-space {@code −Z} (the ember cleave's box offset is
+     * {@code (0, 1.6, −1.5)}, the testbeast's head is at {@code z = −0.9}). So the engine's yaw
+     * {@code 0} has the actor facing world {@code −Z}, and the two conventions differ by half a
+     * turn: passing the native angle through straight would put the sweep <em>behind</em> the
+     * player, and a weapon swung at a creature in front of it would hit nothing — a zero wound
+     * on the part the swing was aimed at, with every other line of the run looking correct.
+     *
+     * <p>The engine cannot do this itself: it is handed degrees by two loaders whose players
+     * agree on this convention only by accident of both being Minecraft, and its own pose
+     * evaluator's convention is fixed by the authoring format. The conversion belongs where the
+     * native angle enters the engine, which is exactly here and in the other cell's equivalent.
+     * Parts need no such adjustment — {@code FabricPartHost} hands the actor's own yaw to
+     * {@code PoseEvaluator.partBox}, which maps model space with the same rotation the sweep
+     * uses, so a cell's parts and its sweeps already agree; only the player angle, which arrives
+     * from the cell's native convention rather than the evaluator's, has to be converted.
+     */
+    private static float engineYaw(LivingEntity attacker) {
+        return attacker.getYaw() + 180.0F;
     }
 
     /**

@@ -160,7 +160,14 @@ public final class NeoForgeMeleeHooks {
      */
     private static CombatResult strike(Player attacker, VineEntityRef target, CombatProfile profile) {
         return VineCombat.strike(CombatActorRef.player(attacker.getUUID()), target, profile.attack(),
-            profile.baseDamage(), Vec3.of(attacker.getX(), attacker.getY(), attacker.getZ()), attacker.getYRot());
+            profile.baseDamage(), Vec3.of(attacker.getX(), attacker.getY(), attacker.getZ()),
+            // The engine reads yaw in the pose evaluator's convention: yaw 0 points the actor's
+            // model-space forward (-Z) at world -Z, so a sweep's -Z offset lies in front of it.
+            // A Minecraft player's yaw 0 faces world +Z, the opposite way, so the player's own
+            // yaw has to be turned half a revolution before the engine can aim its sweep;
+            // passing it straight through points the weapon behind the player and the swing
+            // misses whatever is in front of it.
+            attacker.getYRot() + 180.0F);
     }
 
     /**

@@ -291,6 +291,16 @@ multipart fixture.
 
 ## 4. Problems & blockers
 
+- **Tracking distance is a client-visibility limit, not a spawn failure.** A materialized engine
+  type carries vanilla's default tracking range (5 chunks, i.e. 80 blocks): an actor further than
+  that from a player is dropped by that client, and a spawn-refusal log line does not mean the
+  body is absent — the server may still hold it. Measured on both 1.21.1 cells while chasing a
+  scripted client that saw zero engine entities: the fixture teleported the player to y=300
+  *before* building ground, the player free-fell past 80 blocks, and the beast left the client's
+  world; the same probe with the platform placed before the teleport keeps the beast tracked.
+  Fixtures that place actors above the void must build the ground first — and a future riding or
+  territory feature that moves actors far from players inherits the same limit.
+
 - **Registration timing per loader** — lifecycle events fire in different
   phases. Mitigation: drivers document their point; engine exposes one
   `EntityPhase.READY` signal. Owner: sub-08 + driver files.

@@ -129,38 +129,98 @@ public interface CombatState {    // engine-owned, server-authoritative
   the loader's own damage path under the reentrancy guard, leave every unregistered weapon and
   target alone, tick `CombatState` once per server tick, and cook the partner preset in
   `datagenContent`.
-- **Landed with a live client (NeoForge 1.21.1, 2026-09-26; Fabric pending the blocker below):**
-  a scripted client world → forceload → beast spawned and hosted → `/tp` the player two blocks
-  south of it, facing it → `/give` + `select_slot` → one `attack`, then the engine's own
-  `tck_parts_status` line:
+- **Landed with a live client (both 1.21.1 cells, 2026-09-26):** a scripted client world →
+  forceload → beast spawned and hosted → `/tp` the player two blocks south of it, facing it →
+  `/give` + `select_slot` → one `attack`, then the engine's own `tck_parts_status` line (Fabric
+  measured: head `0.0 → 83.0`, tail `0.0`, `flinched=true`, `swing 1 of 1 at entity
+  'entity.vine_test.testbeast'`, 22/22 steps, exit 0):
   - **VINE-owned weapon** (`vine_test:ember_blade`, Better Combat absent): head wound `0 → 83`
     (40 base × 1.6 motion × 1.3 head hit-zone = 83.2, rounded half-up), tail untouched —
     exactly one strike, through the engine's own chain rather than the client's claim.
   - **Better Combat-owned weapon** (`vine_test:partner_blade`, Better Combat + its deps installed
-    in the dev client): the same `+83` on the head, never 166. Better Combat's own weapon-registry
-    log names the item as `{"attributes":{"attack_range":4.5}}` — the engine-cooked claymore
-    preset — where its fallback (`bettercombat:sword`) would have written `0.0`. The engine
-    installed no sweep for the item and consumed the partner's swing exactly once.
+    in the dev client): the same `+83` on the head, never 166. The engine installed no sweep for
+    the item and consumed the partner's swing exactly once — the hand-off (the partner's own hit
+    routed into the pipeline through the native damage event) is what this run proves.
+  - **Who ships the cooked preset — the shipped path does *not* reach the partner (both cells,
+    measured 2026-09-26).** Cooking is engine-side and cell-independent (both cells' datagen emit
+    byte-identical bytes, sha256 `c55cb4e5…`), but a preset written only to `build/datagen`
+    reaches no running game. The testmod ships that file in its jar, and that is still not enough:
+    in this cell's dev run the testmod is **not a mod** — it carries no `META-INF/neoforge.mods.toml`
+    and the run's own `Mod List` holds only `bettercombat`, `cloth_config`, `geckolib`,
+    `minecraft`, `neoforge`, `playeranimator`, `tiny_config`, `vine` — so its `data/` never becomes
+    a datapack. With no run-local bridge jar present, Better Combat's `Weapon Attribute registry
+    received` line (41 entries) contains **no** `vine_test:*` key, and the item is resolved by BC's
+    fallback rule `sword|blade` → `bettercombat:sword`, `attack_range 0.0`. The `attack_range: 4.5`
+    the first run showed came from the bridge jar, not from the shipped file. The shipped preset
+    therefore still needs a delivery path the partner actually loads — the testmod's jar gaining
+    mod metadata, or a real pack running its own datagen into a datapack. The engine's own
+    use of the descriptor is unaffected either way (the `+83` is the same with and without the
+    preset), which is exactly why the gap was invisible until the bridge was removed.
+    **Fabric, measured the same way:** the testmod jar is likewise not a mod (the run's own
+    `Loading 62 mods:` list holds `vine`, `vine_partner_preset` is gone with the bridge, and no
+    `vine-testmod` entry), so BC parsed **41** `Loaded container:` lines and none named
+    `vine_test`; its client-side `Weapon Attribute registry received:` JSON (41 entries) has no
+    `vine_test:*` key either. Our item is not registered even by the fallback — the fallback
+    requires an item-declared attack-damage modifier (`WeaponAttributesFallback` checks
+    `hasAttributeModifier(item, ATTACK_DAMAGE)`) and engine-materialized items declare none — so
+    BC treats `vine_test:partner_blade` as a non-weapon and the swing is a *vanilla* attack whose
+    hit the engine's native damage hook owns (`profile.owner() == BETTER_COMBAT`). The registry's
+    own sword entries sit at `"attack_range":0.0` (`minecraft:iron_sword`), i.e. exactly the range
+    the fallback would have given the blade had it applied. Fabric's jar set, verified by sha1
+    through Modrinth's own API: `bettercombat-fabric-2.4.0+1.21.1.jar`
+    (`sha256 2ecd3284…`), `cloth-config-15.0.140-fabric.jar` (`sha256 33894e95…`),
+    `player-animation-lib-fabric-2.0.4+1.21.1.jar` (`sha256 86ef8a23…`).
   - **Yaw convention (normative for cell authors):** `VineCombat.strike` takes yaw in the pose
     evaluator's convention — yaw 0 puts the actor's forward (model −Z) at world −Z — while a
     Minecraft player's yaw 0 faces world +Z, so a cell passes `player.getYaw() + 180`.
     Negative control: with the conversion removed, the identical swing at the identical aim
     lands **no** wound.
-  - **Who ships the cooked preset:** cooking is engine-side and cell-independent (both cells'
-    datagen emit byte-identical bytes, sha256 `c55cb4e5…`), but a preset written only to
-    `build/datagen` reaches no running game. The pack that owns the item ships it — a real pack
-    through its own datagen, the testmod by shipping that same file in its jar — and the run above
-    is evidence of the shipped path, not of a bridge jar built for the test.
   - **A stance is not a claim:** the same attacker, weapon and aim from thirty blocks away reports
     `MISSED` and moves no wound (`TwoPlayerFight`), and the two players' strikes sum exactly on
-    the shared state rather than doubling.
-- **Blocked on a cell bug (Fabric):** the scripted Fabric client holds zero engine entities while
-  the server reports the beast spawned and hosted — the client never receives the entity, so no
-  swing can be aimed at it. Root-caused to the cell's spawn/tracking path; fix in progress.
-- **Open question — hit flakiness:** roughly one run in three lands nothing while the client
-  provably swings at the right entity; the suspect is the sweep's top edge against the idle clip's
-  head box (the intersection is only ~0.4–1.1 blocks deep). Whether that is a fixture-geometry
-  problem or an engine sweep problem is being decided from evidence.
+    the shared state rather than doubling. **Fabric, measured 2026-09-26** (`1.21.1-fabric-two-players`,
+    16/16 steps, exit 0): `alpha-head landed=true endedAt=APPLY part=head damage=83.0 broke=false
+    flinched=true`; `beta-tail-1 … part=tail damage=64.0`; `beta-tail-2 … damage=64.0 broke=true`;
+    `beta-tail-3/-4 … damage=96.0` (the broken-part factor); `beta-forged landed=false
+    endedAt=SWEEP part=none damage=0.0 rejection=MISSED`; `state alpha=[head=83.0 tail=320.0(broken)]
+    beta=[head=83.0 tail=320.0(broken)] same=true` — one wound moved by Alpha, the tail broken,
+    the forged stance rejected with no wound movement, and one truth read twice.
+    **Fixture mismatch worth fixing in `TwoPlayerFight` (testmod, not the engine):** its
+    `TAIL_STRIKES_TO_BREAK = 4` / "a strike lands 40 there" assumes the profile's base damage,
+    but a pipeline strike is `40 base × 1.6 motion = 64` on the tail, so the 120 break threshold
+    is crossed on Beta's **second** strike (wound 128) — the four strikes still land, the tail
+    still ends broken, the run is green, but the scenario's own note names the wrong strike.
+    `tck_parts_status` after that fight prints `tck: parts status none` (the parts exemplar's own
+    `last` is unset by the two-player path; the fight's own `state …` line is the read for it).
+- **Fabric blocker root-caused and fixed (2026-09-26, measured):** the scripted Fabric client
+  held zero engine entities while the server reported the beast spawned and hosted — and the
+  cause was **not** the cell's spawn/tracking path. The fixture teleported the player to the
+  beast's level *before* it built the ground, so the client's own player free-fell (measured:
+  the swing line read `from 4.50,164.99,-1.50` — 135 blocks below the intended `y=300`); past
+  the materialized type's tracking distance (`EntityType.getMaxTrackDistance()` × 16 = 80
+  blocks, `ServerChunkLoadingManager.EntityTracker`) the server stopped tracking the beast to
+  that player and the client dropped it, so no swing could be aimed at it. A late `/tp` back is
+  not a remedy (`vine-swing-run10` re-teleported 3 ticks before the swing and the client still
+  held `0 engine entities`). The cell is correct as built: with the platform placed **before**
+  the teleport the client carries the beast, its crosshair resolves, and the same fixture's
+  swing lands — `attack 1: swing 1 of 1 at entity 'entity.vine_test.testbeast'`. The scripts now
+  order hygiene → forceload → platform → teleport, and `create_world` deletes the save first.
+- **Hit flakiness — root-caused and fixed (NeoForge, 2026-09-26; 3/3 consecutive runs green).**
+  The symptom was the client's crosshair picking **nothing** (`vine-tck: swing at miss`), not the
+  sweep missing a part: the earlier reading — "the client provably swung" from the attack-strength
+  reset — was wrong, because vanilla's `Minecraft.startAttack()` resets the ticker and swings on
+  its *MISS* branch exactly as it does on the ENTITY branch, so that signature is a *miss*
+  signature. Nothing was picked because there was no beast where the client looked: the
+  `tck_parts_spawn` had been **refused**, since the client's `wait` counted *client* ticks while
+  the integrated server was behind (`Can't keep up! ... Running 2560ms or 51 ticks behind`), so
+  the `forceload` and the spawn reached the server in the **same server tick** and the fixture
+  chunk was not yet tickable — the cell's spawn refusal was correct, the fixture was wrong, and a
+  reused world had hidden it. Geometry is *not* marginal: the sweep (half-extents 1.2/1.6/1.5,
+  offset 0/1.6/−1.5 in front of the attacker's feet) overlaps the head box by ~1.4 blocks in x,
+  ~1.5 in y and ~1.4 in z, and the idle clip's ±0.25-block root bob moves the head only inside
+  that. Fixes: `create_world` now deletes the save first (a fresh world per run), and a `wait` now
+  counts **world** ticks as well as client ticks (`ClientScriptRunner`, `WAIT_SERVER_GRACE_TICKS`
+  bounds a stalled server instead of hanging). Reproduced rate after: head `0 → 83` in 3/3
+  consecutive `vineTckClient` runs of the VINE script, plus 1/1 Better Combat and 1/1 two-player.
 
 ## 4. Problems & blockers
 

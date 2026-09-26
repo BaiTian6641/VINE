@@ -116,15 +116,70 @@ tasks.register('runGameTestServer') {
 //   gradlew :drivers:driver-1.21.1-fabric:vineTckClient \
 //       -Pvine.tck.clientScript=<absolute path to a ClientScript JSON>
 //
-// The run dir's screenshots folder is cleared by its own Delete task, ordered before the
-// client starts: a stale PNG from an earlier run can then never be mistaken for this run's
-// output. A task (not a doFirst action) because this build stores the configuration cache,
-// and a task's inputs are resolved at configuration time. The task is deliberately not
-// wired into `check` — it opens a window and drives a real client.
-def clearTckScreenshots = tasks.register('clearVineTckClientScreenshots', Delete) {
+// The run dir's screenshots folder is cleared by its own task, ordered before the client
+// starts: a stale PNG from an earlier run can then never be mistaken for this run's output.
+// A task (not a doFirst action) because this build stores the configuration cache, and a
+// task's inputs are resolved at configuration time. The task is deliberately not wired into
+// `check` — it opens a window and drives a real client.
+//
+// The clear is scoped to the PNGs *this script* will write — the `screenshot` steps' names,
+// read from the script the harness names at configuration time — rather than the whole folder.
+// Both halves matter: the run's own output path is guaranteed fresh (the property the parent
+// directive asks for), and a battery that runs several scripts one after another keeps every
+// script's artifact (a whole-folder delete wiped the earlier scripts' PNGs the moment the next
+// script's run started — observed, and it made "screenshots in run/screenshots" true for
+// exactly one script per battery). With no script named there is nothing to overwrite, so the
+// task clears nothing.
+//
+// Deletion is best-effort, and deliberately so: this folder is a dev convenience, while the
+// run it precedes is an acceptance. A PNG another process legitimately holds open (a viewer,
+// a preview pane, a session that just read it) must never turn into a build failure that
+// hides the run's real result, which is exactly what Gradle's `Delete` did here (observed:
+// "Failed to delete some children ... a process has files open"). So the task deletes what it
+// can, names what it could not, and succeeds either way; the run's own screenshot step still
+// fails loudly if *its* file does not land.
+def tckScreenshotNames = {
+    String script = providers.gradleProperty('vine.tck.clientScript').getOrNull()
+    def file = (script == null || script.isBlank()) ? null : new File(script)
+    if (file?.isFile()) {
+        try {
+            return (new groovy.json.JsonSlurper().parse(file).steps
+                ?.findAll { it.type == 'screenshot' }?.collect { it.name } ?: []) as Set
+        } catch (Exception e) {
+            logger.warn('screenshots: cannot read {} to scope the clear: {}', script, e.message)
+        }
+    }
+    return [] as Set
+}()
+def clearTckScreenshots = tasks.register('clearVineTckClientScreenshots') {
     group = 'vine'
-    description = 'Clears this cell\'s run/screenshots before a scripted client run.'
-    delete layout.projectDirectory.dir('run/screenshots')
+    description = 'Clears this run\'s own run/screenshots output before a scripted client run (best effort).'
+    def screenshots = layout.projectDirectory.dir('run/screenshots').asFile
+    def names = tckScreenshotNames
+    inputs.files(fileTree(screenshots)).optional()
+    outputs.upToDateWhen { false }
+    doLast {
+        if (names.isEmpty()) {
+            logger.lifecycle('screenshots: no script named, nothing to clear in {}', screenshots)
+            return
+        }
+        def mine = names.collect { new File(screenshots, it + '.png') }.findAll { it.isFile() }
+        if (mine.isEmpty()) {
+            logger.lifecycle('screenshots: no earlier output for this script in {} ({}), nothing'
+                + ' to clear', screenshots, names)
+            return
+        }
+        def others = ((screenshots.isDirectory() ? screenshots.listFiles() : null)?.toList() ?: []) - mine
+        def kept = mine.findAll { !it.delete() }
+        if (kept.isEmpty()) {
+            logger.lifecycle('screenshots: cleared this script\'s {} earlier PNG(s) in {}, left {}'
+                + ' other script\'s file(s) alone', mine.size(), screenshots, others.size())
+        } else {
+            logger.warn('screenshots: could not delete {} held file(s) of this script\'s {} in {}: {}'
+                + ' — continuing, the run writes its own PNG over/next to them', kept.size(),
+                mine.size(), screenshots, kept.collect { it.name })
+        }
+    }
 }
 
 tasks.named('runTckClient') {

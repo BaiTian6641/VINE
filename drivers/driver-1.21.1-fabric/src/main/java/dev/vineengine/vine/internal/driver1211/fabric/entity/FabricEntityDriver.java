@@ -73,6 +73,8 @@ public final class FabricEntityDriver implements EntityDriver {
         if (world == null) {
             // No server yet, an id this cell's dimension registry does not know, or a
             // dimension it knows but has not loaded.
+            LOG.info("vine: spawn refused {} in {} at {}: that dimension is not loaded in this cell",
+                entityId, dimensionId, position.asString());
             return false;
         }
         EntityType<?> type = FabricContentMaterializer.entityTypeFor(entityId);
@@ -80,12 +82,16 @@ public final class FabricEntityDriver implements EntityDriver {
             // The engine validated the descriptor before asking, so this means the
             // cell's own materialization missed a registered entity — reported as
             // refused rather than fabricated.
+            LOG.info("vine: spawn refused {} in {}: this cell materialized no such entity type",
+                entityId, dimensionId);
             return false;
         }
         Entity created = type.create(world);
         // The engine owns per-instance identity (sub-08 Stage C): the cell only carries
         // it, so a brain can be keyed by actor rather than by descriptor.
         if (!(created instanceof VineEntity entity)) {
+            LOG.info("vine: spawn refused {} in {}: the native type created something other than a VINE actor",
+                entityId, dimensionId);
             return false;
         }
         entity.vineInstance(instance);
@@ -94,6 +100,10 @@ public final class FabricEntityDriver implements EntityDriver {
             // The add was refused (unloaded chunk, duplicate identity, a world that
             // takes no entities): nothing of this descriptor exists there afterwards,
             // which is exactly what the caller asked.
+            LOG.info("vine: spawn refused {} in {} at {}: the world add did not take (chunk {} {} loaded: {})",
+                entityId, dimensionId, position.asString(),
+                (int) Math.floor(position.x()) >> 4, (int) Math.floor(position.z()) >> 4,
+                world.isChunkLoaded((int) Math.floor(position.x()) >> 4, (int) Math.floor(position.z()) >> 4));
             return false;
         }
         LOG.info("vine: entity spawned {} {}", entityId, FabricContentMaterializer

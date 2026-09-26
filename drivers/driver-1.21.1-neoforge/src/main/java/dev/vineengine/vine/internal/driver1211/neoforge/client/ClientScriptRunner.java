@@ -12,6 +12,7 @@ import com.google.gson.JsonParser;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.JsonOps;
 
+import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
 import net.minecraft.client.gui.screens.Screen;
@@ -26,6 +27,9 @@ import net.minecraft.world.level.WorldDataConfiguration;
 import net.minecraft.world.level.levelgen.WorldDimensions;
 import net.minecraft.world.level.levelgen.WorldOptions;
 import net.minecraft.world.level.levelgen.presets.WorldPresets;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.EntityHitResult;
+import net.minecraft.world.phys.HitResult;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -91,8 +95,23 @@ public final class ClientScriptRunner {
     /** 5 s for a triggered cutscene to report itself playing. */
     private static final int CUTSCENE_START_TIMEOUT_TICKS = 100;
 
+    /**
+     * How long a {@code wait} keeps asking for world ticks after its own client ticks are up.
+     * A server that has not run the asked-for ticks within this window is stalled rather than
+     * merely behind, and a stalled server must leave a line in the log rather than hang the
+     * run — the same reason every other phase has a deadline.
+     */
+    private static final int WAIT_SERVER_GRACE_TICKS = 20 * 30;
+
+    /**
+     * Ticks between the swings of one {@code attack} step: each swing is its own attack input,
+     * spaced further apart than vanilla's own mis-swing lockout ({@code missTime}, 10 ticks)
+     * so the client's cooldown bookkeeping cannot silently swallow the next one.
+     */
+    private static final int SWING_SPACING_TICKS = 12;
+
     private enum Phase {
-        AWAIT_READY, RUN, WAIT, AWAIT_WORLD, AWAIT_CUTSCENE, AWAIT_SCREENSHOT, DONE
+        AWAIT_READY, RUN, WAIT, ATTACK, AWAIT_WORLD, AWAIT_CUTSCENE, AWAIT_SCREENSHOT, DONE
     }
 
     private final Path scriptFile;
@@ -119,6 +138,23 @@ public final class ClientScriptRunner {
     private long openScreenOpenedAt;
     private long openScreenCloseAt;
 
+    /** The {@code wait} step's outstanding world (integrated-server) ticks. */
+    private int remainingServerTicks;
+    /** The server tick this wait last saw — a wait counts ticks the world actually ran. */
+    private long lastServerTick = -1L;
+    /** When a wait stops insisting on world ticks: a stalled server must not hang the run. */
+    private long waitServerDeadline;
+    /** Where this wait started, so its log line can say how much the world actually ran. */
+    private long waitStartedAt;
+    private long waitServerStart;
+
+    /** The {@code attack} step's pending swings once the first has been issued, and when. */
+    private int swingsRemaining;
+    private long nextSwingAt;
+    /** Client tick at which the last swing's effect is read back, and the strength before it. */
+    private long swingProbeAt = -1L;
+    private float strengthBeforeSwing;
+
     public ClientScriptRunner(Path scriptFile) {
         this.scriptFile = Objects.requireNonNull(scriptFile, "scriptFile");
     }
@@ -144,6 +180,18 @@ public final class ClientScriptRunner {
             // screenshot a cinematic mid-play (a clock owned by the play_cutscene step would stop
             // the moment that step ended). Issued on the server thread: the runtime is server state.
             advanceCutsceneClock(minecraft);
+            // Read the previous swing's effect back: a landed swing resets the attack strength
+            // and starts the swing animation, so a strength that did not move means the client
+            // never turned the click into an attack.
+            if (clock == swingProbeAt) {
+                swingProbeAt = -1L;
+                if (minecraft.player != null) {
+                    LOGGER.info("vine-tck: swing aftermath at {} strength={} (was {}) swinging={} screen={}"
+                        + " usingItem={}", describeCrosshair(minecraft.hitResult),
+                        minecraft.player.getAttackStrengthScale(0.0F), strengthBeforeSwing,
+                        minecraft.player.swinging, minecraft.screen, minecraft.player.isUsingItem());
+                }
+            }
             switch (phase) {
                 case AWAIT_READY -> {
                     if (clientReady(minecraft)) {
@@ -153,10 +201,52 @@ public final class ClientScriptRunner {
                 }
                 case RUN -> runSteps(minecraft);
                 case WAIT -> {
-                    if (--remainingTicks <= 0) {
-                        phase = Phase.RUN;
-                        index++;
-                        runSteps(minecraft);
+                    // "Ticks" means ticks the world ran, not merely frames the client drew. The
+                    // client's loop and the integrated server's are separate, so a client that is
+                    // ahead of a lagging server (world generation, a chunk-load stall) can burn a
+                    // whole `wait` between two of the server's ticks — and then two steps that
+                    // were meant to be ticks apart, a `forceload` and the spawn that needs it,
+                    // reach the server in the *same* tick and the second finds the world exactly
+                    // as the first left it. A wait is therefore done when it has seen both its
+                    // own client ticks and that many server ticks; the client count stays the
+                    // floor, so rendering and animation timing are unchanged.
+                    if (remainingTicks > 0) {
+                        remainingTicks--;
+                    }
+                    if (remainingServerTicks > 0 && serverTicked(minecraft)) {
+                        remainingServerTicks--;
+                    }
+                    if (remainingTicks > 0) {
+                        return;
+                    }
+                    if (remainingServerTicks > 0 && clock < waitServerDeadline) {
+                        return;
+                    }
+                    if (remainingServerTicks > 0) {
+                        LOGGER.warn("vine-tck: wait: the integrated server ran {} fewer tick(s) than asked for"
+                            + " within {}s; continuing anyway", remainingServerTicks, WAIT_SERVER_GRACE_TICKS / 20);
+                    } else {
+                        LOGGER.info("vine-tck: wait done: {} server tick(s) ran, {} client tick(s) spent",
+                            serverTick(minecraft) - waitServerStart, clock - waitStartedAt);
+                    }
+                    phase = Phase.RUN;
+                    index++;
+                    runSteps(minecraft);
+                }
+                case ATTACK -> {
+                    // One input per swing, spaced by SWING_SPACING_TICKS: the click is consumed
+                    // by the client's own keybind tick, so each swing is a distinct attack and
+                    // there is no second step that could race the hit's landing.
+                    if (clock >= nextSwingAt) {
+                        if (swingsRemaining > 0) {
+                            swing(minecraft);
+                            swingsRemaining--;
+                            nextSwingAt = clock + SWING_SPACING_TICKS;
+                        } else {
+                            phase = Phase.RUN;
+                            index++;
+                            runSteps(minecraft);
+                        }
                     }
                 }
                 case AWAIT_WORLD -> {
@@ -261,6 +351,13 @@ public final class ClientScriptRunner {
                         continue;
                     }
                     remainingTicks = wait.ticks();
+                    // Only a wait that has a world to advance asks for world ticks: every script
+                    // wait follows `create_world`, but the runner must not invent a server.
+                    remainingServerTicks = minecraft.getSingleplayerServer() == null ? 0 : wait.ticks();
+                    waitStartedAt = clock;
+                    waitServerStart = serverTick(minecraft);
+                    lastServerTick = waitServerStart;
+                    waitServerDeadline = clock + wait.ticks() + WAIT_SERVER_GRACE_TICKS;
                     phase = Phase.WAIT;
                     return;
                 }
@@ -268,6 +365,17 @@ public final class ClientScriptRunner {
                     runCommand(minecraft, command.command());
                     index++;
                     continue;
+                }
+                case ClientScript.Step.SelectSlot slot -> {
+                    selectSlot(minecraft, slot);
+                    index++;
+                    continue;
+                }
+                case ClientScript.Step.Attack attack -> {
+                    beginAttack(minecraft, attack);
+                    // The step owns the world from here: the ATTACK phase issues the remaining
+                    // swings on their tick boundaries and completes the step after the last.
+                    return;
                 }
                 case ClientScript.Step.PlayCutscene cutscene -> {
                     beginCutscene(minecraft, cutscene);
@@ -316,16 +424,59 @@ public final class ClientScriptRunner {
             && minecraft.hasSingleplayerServer();
     }
 
+    /** The integrated server's tick count, or -1 while there is no server to count. */
+    private static long serverTick(Minecraft minecraft) {
+        var server = minecraft.getSingleplayerServer();
+        return server == null ? -1L : server.getTickCount();
+    }
+
+    /** Whether the integrated server advanced since this wait last looked. */
+    private boolean serverTicked(Minecraft minecraft) {
+        long now = serverTick(minecraft);
+        if (now < 0L || now == lastServerTick) {
+            return false;
+        }
+        lastServerTick = now;
+        return true;
+    }
+
     private void createWorld(Minecraft minecraft, ClientScript.Step.CreateWorld step) {
         // Cheats on: the script's commands are the point, and an integrated server without
         // them refuses every one of them. Creative + peaceful keeps a scripted run from
         // being ended by a mob while a step is waiting.
         LevelSettings settings = new LevelSettings(step.worldName(), GameType.CREATIVE, false, Difficulty.PEACEFUL,
             true, new GameRules(), WorldDataConfiguration.DEFAULT);
+        // A *fresh* world, not the last run's. `createFreshLevel` opens an existing save of the
+        // same name instead of replacing it, so a second run would inherit the first run's
+        // inventory, entities and forceload state — a real leak (one run swung the previous
+        // run's weapon because the hotbar it selected was still the old one). Deleting the save
+        // first is what makes the script's world name mean "a new world".
+        Path save = minecraft.gameDirectory.toPath().resolve("saves").resolve(step.worldName());
+        try {
+            if (Files.exists(save)) {
+                deleteRecursively(save);
+                LOGGER.info("vine-tck: deleted the previous world at {}", save);
+            }
+        } catch (IOException e) {
+            throw new StepFailure("create_world(" + step.worldName() + ")",
+                "cannot delete the previous save at " + save + ": " + e.getMessage());
+        }
         WorldOpenFlows flows = minecraft.createWorldOpenFlows();
         flows.createFreshLevel(step.worldName(), settings, WorldOptions.defaultWithRandomSeed(),
             registry -> dimensions(registry, step.generateTerrain()), null);
         LOGGER.info("vine-tck: world '{}' requested (cheats on, terrain={})", step.worldName(), step.generateTerrain());
+    }
+
+    /** Removes a save tree, deepest entry first — the client holds no world open at create time. */
+    private static void deleteRecursively(Path path) throws IOException {
+        if (Files.isDirectory(path)) {
+            try (java.util.stream.Stream<Path> children = Files.list(path)) {
+                for (Path child : children.toList()) {
+                    deleteRecursively(child);
+                }
+            }
+        }
+        Files.deleteIfExists(path);
     }
 
     /** The named world preset's dimensions — normal terrain, or flat when the script asks. */
@@ -344,6 +495,83 @@ public final class ClientScriptRunner {
         String command = text.startsWith("/") ? text.substring(1) : text;
         LOGGER.info("vine-tck: command /{}", command);
         minecraft.player.connection.sendCommand(command);
+    }
+
+    /**
+     * Puts {@code step}'s hotbar slot in the player's hand — the same assignment the hotbar
+     * keys make, so the carried-item packet travels the client's own game-mode tick and the
+     * server's hand holds what this client does.
+     *
+     * <p><b>Why a step and not a command.</b> {@code /give} fills the first free slot rather
+     * than the hand, and a scripted client can only swing what it holds; selecting the slot is
+     * the smallest input that makes "swing this weapon" expressible.
+     */
+    private static void selectSlot(Minecraft minecraft, ClientScript.Step.SelectSlot step) {
+        if (minecraft.player == null) {
+            throw new StepFailure(selectSlotStep(step), "there is no client player to hold a slot");
+        }
+        minecraft.player.getInventory().selected = step.slot();
+        LOGGER.info("vine-tck: select_slot {}: holding {}", step.slot(),
+            minecraft.player.getMainHandItem().getItem());
+    }
+
+    /**
+     * Begins {@code step}: issues its first swing now and leaves the rest to the {@link
+     * Phase#ATTACK} phase, which issues one input per swing on its own tick boundary and then
+     * advances the run. The step is done only after its last swing has had its spacing to be
+     * consumed and sent, so a following step cannot race the hit.
+     */
+    private void beginAttack(Minecraft minecraft, ClientScript.Step.Attack step) {
+        swingsRemaining = step.swings();
+        swing(minecraft);
+        swingsRemaining--;
+        nextSwingAt = clock + SWING_SPACING_TICKS;
+        phase = Phase.ATTACK;
+        LOGGER.info("vine-tck: attack: {} swing(s), {} client tick(s) apart", step.swings(), SWING_SPACING_TICKS);
+    }
+
+    /**
+     * Issues one attack input — {@link KeyMapping#click} on the attack binding, which is what a
+     * left-click does: the client's own keybind tick consumes it and runs {@code startAttack},
+     * so the swing travels the vanilla input path (and, when a partner is installed, whatever
+     * hook the partner puts on that path) instead of a second attack mechanism this cell
+     * invented. What a swing <em>hits</em> stays the server's own answer.
+     */
+    private void swing(Minecraft minecraft) {
+        if (minecraft.player == null) {
+            throw new StepFailure(stepName(index), "there is no client player to swing");
+        }
+        // What this swing is aimed at, read from the client's own pick: a scripted swing that
+        // finds nothing is a miss, and "it swung at a miss" is the difference between a
+        // tuning problem and a bug. The client state is logged with it because a swing that
+        // the client never turns into an attack input looks exactly like a miss in the wound.
+        strengthBeforeSwing = minecraft.player.getAttackStrengthScale(0.0F);
+        LOGGER.info("vine-tck: swing at {} holding {} screen={} usingItem={} strength={}",
+            describeCrosshair(minecraft.hitResult), minecraft.player.getMainHandItem().getItem(),
+            minecraft.screen, minecraft.player.isUsingItem(), strengthBeforeSwing);
+        KeyMapping.click(minecraft.options.keyAttack.getDefaultKey());
+        swingProbeAt = clock + 1;
+    }
+
+    /** What the client's crosshair pick names, for the swing log line. */
+    private static String describeCrosshair(HitResult hit) {
+        if (hit == null) {
+            return "nothing";
+        }
+        return switch (hit.getType()) {
+            case ENTITY -> {
+                net.minecraft.world.entity.Entity picked = ((EntityHitResult) hit).getEntity();
+                yield "entity " + picked.getType() + "#" + picked.getUUID() + " at " + picked.position()
+                    + " [" + picked.getClass().getSimpleName() + "]";
+            }
+            case BLOCK -> "block " + ((BlockHitResult) hit).getBlockPos();
+            case MISS -> "miss";
+        };
+    }
+
+    /** The select_slot step's name in a failure line: which slot. */
+    private static String selectSlotStep(ClientScript.Step.SelectSlot step) {
+        return "select_slot(" + step.slot() + ")";
     }
 
     /**

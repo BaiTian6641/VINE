@@ -22,8 +22,11 @@ import net.minecraft.client.gui.screen.world.CreateWorldScreen;
 import net.minecraft.client.gui.screen.world.LevelLoadingScreen;
 import net.minecraft.client.gui.screen.world.WorldCreator;
 import net.minecraft.client.network.ClientPlayNetworkHandler;
+import net.minecraft.client.network.ClientPlayerEntity;
+import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.ScreenshotRecorder;
 import net.minecraft.client.world.GeneratorOptionsHolder;
+import net.minecraft.network.packet.c2s.play.UpdateSelectedSlotC2SPacket;
 import net.minecraft.registry.CombinedDynamicRegistries;
 import net.minecraft.registry.ServerDynamicRegistryType;
 import net.minecraft.registry.entry.RegistryEntry;
@@ -32,6 +35,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.util.hit.EntityHitResult;
 import net.minecraft.util.path.SymlinkValidationException;
 import net.minecraft.world.level.LevelInfo;
 import net.minecraft.world.level.LevelProperties;
@@ -91,6 +95,13 @@ import dev.vineengine.vine.ui.ScreenDescriptor;
  *       that a parse/permission refusal surfaces as a failed step instead of a line in the
  *       player's chat. With no integrated server (a remote server) it falls back to the plain
  *       chat path, where the result is the remote server's to report.</li>
+ *   <li>{@code select_slot} and {@code attack} are the script's own weapon swings (sub-10's
+ *       client proof). {@code select_slot} states which hotbar slot the hand holds — locally
+ *       <em>and</em> on the server, because {@code /give} fills the first free slot and the
+ *       engine resolves a weapon's profile from the server's main hand. {@code attack} presses
+ *       the client's own attack key, because a swing issued any other way would bypass a
+ *       combat partner that intercepts the client's attack input; both steps' own notes say so
+ *       in full.</li>
  * </ul>
  * A cutscene's visual application is {@code VineCutsceneClient}'s job (sub-23's client half,
  * armed from the client entrypoint): this class proves the step runs and the client receives,
@@ -118,6 +129,21 @@ public final class ClientScriptRunner {
     private static final int CUTSCENE_START_TIMEOUT_TICKS = 100;
     /** 60 s for a cutscene to end — generous next to the exemplar's 60-tick length. */
     private static final int CUTSCENE_END_TIMEOUT_TICKS = 1_200;
+    /**
+     * Ticks between two swings of one {@code attack} step. The game's input loop turns one key
+     * press into one swing on the following tick, and vanilla's own block-attack cooldown is
+     * 10 ticks; a shorter gap would let one press's swing and the next press's swing share a
+     * tick, i.e. stop being two attacks.
+     */
+    private static final int SWING_GAP_TICKS = 10;
+    /**
+     * 5 s for {@code MinecraftClient.attackCooldown} to reach zero before a swing. The field is
+     * seeded with 10000 for every tick a screen is open, so a script that attacks while a screen
+     * is still up must be told (see {@link #pollAttack}) instead of pretending it swung.
+     */
+    private static final int ATTACK_COOLDOWN_WAIT_TICKS = 100;
+    /** 8 blocks: how far a swing's own log line looks for the bodies this client holds. */
+    private static final double NEARBY_REPORT_RADIUS = 8.0D;
 
     private final ClientScript script;
 
@@ -147,6 +173,12 @@ public final class ClientScriptRunner {
     private volatile Throwable cutsceneFailure;
     private boolean cutsceneStarted;
     private int cutsceneTicks;
+
+    /** The swings an {@code attack} step still owes, and the gap before the next one. */
+    private int swingsLeft;
+    private int swingGapTicks;
+    /** Ticks an {@code attack} step has waited for the client's own attack cooldown. */
+    private int attackWaitTicks;
 
     private ClientScriptRunner(ClientScript script) {
         this.script = script;
@@ -302,6 +334,14 @@ public final class ClientScriptRunner {
             beginCommand(client, command);
             return false;
         }
+        if (step instanceof ClientScript.Step.SelectSlot slot) {
+            beginSelectSlot(client, slot);
+            return true;
+        }
+        if (step instanceof ClientScript.Step.Attack attack) {
+            beginAttack(client, attack);
+            return false;
+        }
         if (step instanceof ClientScript.Step.CreateWorld world) {
             beginCreateWorld(client, world);
             return false;
@@ -343,6 +383,9 @@ public final class ClientScriptRunner {
         }
         if (step instanceof ClientScript.Step.Command) {
             return pollCommand(client);
+        }
+        if (step instanceof ClientScript.Step.Attack attack) {
+            return pollAttack(client, attack);
         }
         if (step instanceof ClientScript.Step.CreateWorld) {
             return pollCreateWorld(client);
@@ -431,6 +474,181 @@ public final class ClientScriptRunner {
     }
 
     // ---------------------------------------------------------------------------------------
+    // select_slot, attack — the script's own weapon swings
+    // ---------------------------------------------------------------------------------------
+
+    /**
+     * Puts {@code step}'s hotbar slot in the player's hand — the step a script needs before it
+     * can swing a weapon it just spawned, because {@code /give} fills the first free inventory
+     * slot rather than the hand.
+     *
+     * <p><b>Two halves, because a hand has two.</b> The local
+     * {@code PlayerInventory.selectedSlot} is what every client-side decision reads — the stack
+     * the vanilla attack path swings and the one a combat partner looks up its weapon attributes
+     * for — and the {@code UpdateSelectedSlotC2SPacket} is what makes the <em>server's</em>
+     * player hold the same stack, which is the one the engine resolves a combat profile from
+     * ({@code FabricCombatHooks.weapon}). The packet is sent here rather than left to vanilla's
+     * own sync-on-attack so the server's hand is already right when the swing leaves this
+     * client; vanilla's cache-driven sync may send the same packet again, which is harmless.
+     *
+     * <p>Nothing is guessed about what the slot holds: a script that names an empty slot gets a
+     * swing with an empty hand, and the step's own log line names the stack it selected.
+     */
+    private void beginSelectSlot(MinecraftClient client, ClientScript.Step.SelectSlot step) {
+        ClientPlayerEntity player = client.player;
+        if (player == null) {
+            throw new ScriptFailure("the client has no player whose slot could be selected");
+        }
+        ClientPlayNetworkHandler handler = client.getNetworkHandler();
+        if (handler == null) {
+            throw new ScriptFailure("the client is not connected to a server, so a selected slot has nowhere"
+                + " to go — this step cannot be a local-only change");
+        }
+        player.getInventory().selectedSlot = step.slot();
+        handler.sendPacket(new UpdateSelectedSlotC2SPacket(step.slot()));
+        LOGGER.info("[VINE] select_slot {}: the player's hand is now '{}'", step.slot(),
+            player.getMainHandStack().getItem());
+    }
+
+    /**
+     * Arms an {@code attack} step: {@code step.swings()} swings at whatever the player is
+     * looking at. The swings themselves are issued from {@link #pollAttack}, one per
+     * {@link #SWING_GAP_TICKS} ticks.
+     */
+    private void beginAttack(MinecraftClient client, ClientScript.Step.Attack step) {
+        if (client.player == null) {
+            throw new ScriptFailure("the client has no player to swing");
+        }
+        swingsLeft = step.swings();
+        swingGapTicks = 0;
+        attackWaitTicks = 0;
+    }
+
+    /**
+     * One swing per {@link #SWING_GAP_TICKS} ticks, at whatever the player is looking at.
+     *
+     * <p><b>A swing is the client's own attack input, and it has to be.</b> The swing is issued
+     * by pressing the attack key exactly as a click does ({@link KeyBinding#onKeyPressed}), and
+     * the game's own input loop ({@code MinecraftClient.handleInputEvents}) turns that press into
+     * one {@code MinecraftClient.doAttack} on the following tick. An attack issued any other way
+     * — calling {@code ClientPlayerInteractionManager.attackEntity} directly, say — would
+     * silently bypass a combat partner that intercepts the client's attack input, and a partner
+     * the script claims to prove would then never have been involved. What a swing
+     * <em>hits</em> stays the server's decision: this step only says the player swung.
+     *
+     * <p><b>The client's own bookkeeping, named rather than tripped over.</b>
+     * {@code MinecraftClient.doAttack} returns without swinging while
+     * {@code MinecraftClient.attackCooldown > 0}, and the client seeds that field with 10000 for
+     * every tick a screen is open — a script that attacked with a screen still up would swing
+     * into nothing, and a run that only checked the wound would read that as "the weapon is
+     * broken". So the step waits for the field to reach zero and, if it does not within
+     * {@link #ATTACK_COOLDOWN_WAIT_TICKS} ticks, fails loudly naming the value and the screen
+     * that is holding it up. The gap between presses is the second half: the input loop drains
+     * every pending press in one tick, so presses issued together would be one attack, not
+     * several.
+     */
+    private boolean pollAttack(MinecraftClient client, ClientScript.Step.Attack step) {
+        ClientPlayerEntity player = client.player;
+        if (player == null) {
+            throw new ScriptFailure("the client's player is gone mid-swing");
+        }
+        if (swingGapTicks > 0) {
+            swingGapTicks--;
+            return false;
+        }
+        if (swingsLeft == 0) {
+            return true;
+        }
+        if (client.attackCooldown > 0) {
+            if (attackWaitTicks++ >= ATTACK_COOLDOWN_WAIT_TICKS) {
+                throw new ScriptFailure("the client's own attack cooldown (" + client.attackCooldown
+                    + ") never reached zero in " + ATTACK_COOLDOWN_WAIT_TICKS + " ticks, so"
+                    + " MinecraftClient.doAttack would swallow the swing (screen: "
+                    + screenName(client) + ")");
+            }
+            return false;
+        }
+        KeyBinding.onKeyPressed(client.options.attackKey.getDefaultKey());
+        swingsLeft--;
+        swingGapTicks = SWING_GAP_TICKS;
+        LOGGER.info("[VINE] attack {}: swing {} of {} at {} (hand: '{}')", step.swings(),
+            step.swings() - swingsLeft, step.swings(), lookTarget(client), player.getMainHandStack().getItem());
+        return false;
+    }
+
+    /**
+     * What the player's crosshair is on — the swing's target, as the log line can name it.
+     *
+     * <p>When the crosshair is on nothing, the line also names the nearest body the
+     * <em>client</em> knows about. A swing that hits nothing is either the wrong aim or an actor
+     * this client was never sent, and the wound alone cannot tell the two apart; the distance to
+     * the client's nearest entity can.
+     */
+    private static String lookTarget(MinecraftClient client) {
+        if (client.crosshairTarget instanceof EntityHitResult hit) {
+            return "entity '" + hit.getEntity().getName().getString() + "'";
+        }
+        String what = (client.crosshairTarget == null ? "no crosshair target"
+            : client.crosshairTarget.getType().name().toLowerCase(java.util.Locale.ROOT))
+            + " from " + describeClientPlayer(client) + ", client holds " + nearbyEntities(client);
+        return what;
+    }
+
+    /** The client's own player: where it is and where it is looking — the swing's origin. */
+    private static String describeClientPlayer(MinecraftClient client) {
+        ClientPlayerEntity player = client.player;
+        if (player == null) {
+            return "no local player";
+        }
+        return String.format(java.util.Locale.ROOT, "%.2f,%.2f,%.2f yaw %.1f pitch %.1f",
+            player.getX(), player.getY(), player.getZ(), player.getYaw(), player.getPitch());
+    }
+
+    /**
+     * Every entity within {@link #NEARBY_REPORT_RADIUS} blocks that this client holds, nearest
+     * first, plus every engine entity this client holds anywhere — the list that decides whether
+     * a miss is the aim's fault or the client's.
+     */
+    private static String nearbyEntities(MinecraftClient client) {
+        ClientPlayerEntity player = client.player;
+        java.util.List<net.minecraft.entity.Entity> nearby = new java.util.ArrayList<>();
+        java.util.List<net.minecraft.entity.Entity> engine = new java.util.ArrayList<>();
+        int total = 0;
+        for (net.minecraft.entity.Entity entity : client.world.getEntities()) {
+            total++;
+            if (entity != player && entity.squaredDistanceTo(player) <= NEARBY_REPORT_RADIUS * NEARBY_REPORT_RADIUS) {
+                nearby.add(entity);
+            }
+            if (net.minecraft.registry.Registries.ENTITY_TYPE.getId(entity.getType()).getNamespace().equals("vine")
+                || net.minecraft.registry.Registries.ENTITY_TYPE.getId(entity.getType()).getNamespace()
+                    .equals("vine_test")) {
+                engine.add(entity);
+            }
+        }
+        nearby.sort(java.util.Comparator.comparingDouble(entity -> entity.squaredDistanceTo(player)));
+        engine.sort(java.util.Comparator.comparingDouble(entity -> entity.squaredDistanceTo(player)));
+        return total + " entities, " + named(nearby, " within " + NEARBY_REPORT_RADIUS + " blocks")
+            + ", " + named(engine, " engine entities");
+    }
+
+    /** {@code count} of {@code entities} named with their ids and positions, nearest first. */
+    private static String named(java.util.List<net.minecraft.entity.Entity> entities, String what) {
+        if (entities.isEmpty()) {
+            return "0" + what;
+        }
+        StringBuilder out = new StringBuilder(entities.size() + what + ":");
+        for (int i = 0; i < entities.size() && i < 4; i++) {
+            net.minecraft.entity.Entity entity = entities.get(i);
+            out.append(i == 0 ? " " : ", ").append(net.minecraft.registry.Registries.ENTITY_TYPE.getId(
+                entity.getType())).append(" at ")
+                .append(String.format(java.util.Locale.ROOT, "%.2f,%.2f,%.2f",
+                    entity.getX(), entity.getY(), entity.getZ()));
+        }
+        return entities.size() > 4 ? out.append(", +").append(entities.size() - 4).append(" more").toString()
+            : out.toString();
+    }
+
+    // ---------------------------------------------------------------------------------------
     // create_world
     // ---------------------------------------------------------------------------------------
 
@@ -456,8 +674,20 @@ public final class ClientScriptRunner {
         if (!creator.areCheatsEnabled()) {
             throw new ScriptFailure("could not enable cheats on the new world");
         }
-        String folder = creator.getWorldDirectoryName();
+        // The script's world name *is* the save folder, and the folder is deleted before it is
+        // created — that pair is what makes "create_world" mean "a new world".
+        //
+        // Not {@code creator.getWorldDirectoryName()}: that answers the first *free* name, so a
+        // second run silently becomes "vine-tck (2)", a third "(3)" … — the world is fresh by
+        // accident of the folder being new, every earlier world stays on disk, and nothing here
+        // would notice if a run ever resolved to a folder that already existed. The session is
+        // opened for the name the script asked for, the same name the level carries, and the
+        // delete below is the guarantee rather than a side effect. (The other cell's
+        // create-world path — {@code WorldOpenFlows.createFreshLevel} — *opens* an existing save
+        // of that name, which is why the delete is the step both cells must take.)
+        String folder = step.worldName().trim();
         Path saveDirectory = client.getLevelStorage().getSavesDirectory().resolve(folder);
+        deleteSave(saveDirectory);
         GeneratorOptionsHolder holder = creator.getGeneratorOptionsHolder();
         LevelInfo levelInfo = new LevelInfo(creator.getWorldName().trim(), creator.getGameMode().defaultGameMode,
             creator.isHardcore(), creator.getDifficulty(), creator.areCheatsEnabled(), creator.getGameRules(),
@@ -467,6 +697,42 @@ public final class ClientScriptRunner {
             step.worldName(), saveDirectory, levelInfo.areCommandsAllowed(), levelInfo.getGameMode(),
             step.generateTerrain() ? "generated" : "flat");
         startWorld(client, folder, levelInfo, holder);
+    }
+
+    /**
+     * Removes {@code save}'s tree, deepest entry first, so the world created next starts with
+     * nothing of the previous run — no inventory, no entities, no forceload state, no stale
+     * {@code session.lock}. A save that is not there is the common case for the first run of a
+     * fresh checkout, and deleting nothing is exactly right then.
+     *
+     * <p><b>Why a refusal here is fatal to the step.</b> A save this cell cannot delete is a
+     * save the next world would inherit state from, which is the one thing a scripted
+     * acceptance may not silently accept — so the failure is named, with the path and the
+     * reason, rather than logged and stepped over.
+     */
+    private static void deleteSave(Path save) {
+        if (!Files.exists(save)) {
+            return;
+        }
+        try {
+            deleteRecursively(save);
+        } catch (IOException e) {
+            throw new ScriptFailure("cannot delete the previous save at " + save + " — create_world"
+                + " would inherit its inventory, entities and forceload state: " + e);
+        }
+        LOGGER.info("[VINE] create_world: deleted the previous save at {}", save);
+    }
+
+    /** Removes one path, recursing into a directory — the client has no world open here. */
+    private static void deleteRecursively(Path path) throws IOException {
+        if (Files.isDirectory(path)) {
+            try (java.util.stream.Stream<Path> children = Files.list(path)) {
+                for (Path child : children.toList()) {
+                    deleteRecursively(child);
+                }
+            }
+        }
+        Files.deleteIfExists(path);
     }
 
     /**
@@ -749,6 +1015,12 @@ public final class ClientScriptRunner {
         }
         if (step instanceof ClientScript.Step.Command command) {
             return "command \"" + command.command() + "\"";
+        }
+        if (step instanceof ClientScript.Step.SelectSlot slot) {
+            return "select_slot " + slot.slot();
+        }
+        if (step instanceof ClientScript.Step.Attack attack) {
+            return "attack " + attack.swings();
         }
         if (step instanceof ClientScript.Step.CreateWorld world) {
             return "create_world \"" + world.worldName() + "\"";

@@ -1,0 +1,67 @@
+{
+  "name": "1.21.1-fabric-two-players",
+  "steps": [
+    {
+      "type": "create_world"
+    },
+    {
+      "type": "wait",
+      "ticks": 40
+    },
+    {
+      "type": "command",
+      "command": "execute if entity @s[nbt={Inventory:[{}]}] run clear @s"
+    },
+    {
+      "type": "command",
+      "command": "execute if entity @e[type=vine_test:testbeast] run kill @e[type=vine_test:testbeast]"
+    },
+    {
+      "type": "command",
+      "command": "forceload add -16 -16 16 16"
+    },
+    {
+      "type": "command",
+      "command": "fill 3 299 -4 6 299 8 stone"
+    },
+    {
+      "type": "wait",
+      "ticks": 20
+    },
+    {
+      "type": "command",
+      "command": "tp @s 4.5 301 -1.5 0 0"
+    },
+    {
+      "type": "wait",
+      "ticks": 20
+    },
+    {
+      "type": "command",
+      "command": "vine_test tck_two_players 4 300 0"
+    },
+    {
+      "type": "wait",
+      "ticks": 5
+    },
+    {
+      "type": "command",
+      "command": "vine_test tck_two_players_fight"
+    },
+    {
+      "type": "wait",
+      "ticks": 20
+    },
+    {
+      "type": "command",
+      "command": "vine_test tck_parts_status"
+    },
+    {
+      "type": "screenshot",
+      "name": "1.21.1-fabric-two-players"
+    },
+    {
+      "type": "quit"
+    }
+  ]
+}

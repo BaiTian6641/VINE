@@ -54,8 +54,12 @@ public final class TwoPlayerFight {
     /** How far outside its own reach the forged strike is launched from. */
     private static final double OUT_OF_REACH = 30.0D;
 
-    /** Strikes at the tail: the descriptor's break threshold is 120 and a strike lands 40 there. */
-    private static final int TAIL_STRIKES_TO_BREAK = 4;
+    /**
+     * Strikes at the tail. Two cross the descriptor's 120 break threshold (a strike lands the
+     * weapon's 40 base × 1.6 motion = 64 there); the last two are what a broken part is worth
+     * (the descriptor's broken factor), which is the number a one-strike check cannot show.
+     */
+    private static final int TAIL_STRIKES = 4;
 
     /** The beast this scenario is fighting, remembered between the spawn and the fight. */
     private static VineEntityRef beast;
@@ -101,7 +105,7 @@ public final class TwoPlayerFight {
         report("alpha-head", strike(ALPHA, beast, alphaAt, 180.0F));
 
         // Beta from the other side, facing -Z (yaw 0), at the tail — until it breaks.
-        for (int i = 1; i <= TAIL_STRIKES_TO_BREAK; i++) {
+        for (int i = 1; i <= TAIL_STRIKES; i++) {
             report("beta-tail-" + i, strike(BETA, beast, betaAt, 0.0F));
         }
 
