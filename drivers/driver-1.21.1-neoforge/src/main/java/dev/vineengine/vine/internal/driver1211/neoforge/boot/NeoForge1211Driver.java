@@ -1,9 +1,14 @@
 package dev.vineengine.vine.internal.driver1211.neoforge.boot;
 
 
+import java.util.LinkedHashSet;
+import java.util.Set;
+
 import net.minecraft.SharedConstants;
+import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
+import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
@@ -38,8 +43,10 @@ import dev.vineengine.vine.internal.driver1211.neoforge.net.NeoForgePartTranspor
 import dev.vineengine.vine.internal.driver1211.neoforge.registry.NeoForgeBehaviorWiring;
 import dev.vineengine.vine.internal.driver1211.neoforge.registry.NeoForgeDesignMaterializer;
 import dev.vineengine.vine.internal.driver1211.neoforge.registry.NeoForgeStructuralMaterializer;
+import dev.vineengine.vine.internal.spi.StructuralRegistryView;
 import dev.vineengine.vine.internal.spi.VineDriver;
 import dev.vineengine.vine.internal.world.WorldViewBinding;
+import dev.vineengine.vine.ui.ClientFeature;
 
 /**
  * The 1.21.1 NeoForge {@link VineDriver} (ServiceLoader-bound, one per cell).
@@ -81,9 +88,29 @@ public final class NeoForge1211Driver implements VineDriver {
         // through Yarn names) — §5.12: never version strings.
         int dataVersion = SharedConstants.getCurrentVersion().getDataVersion().getVersion();
         CellWindow.check(DRIVER_ID, dataVersion);
-        LOG.info("[VINE] driver {} bound to cell: dataVersion={} probes={}",
-            DRIVER_ID, dataVersion, CellProbes.probeMatrix());
-        return new CellInfo(dataVersion, LoaderFamily.NEOFORGE, CellProbes.supportedFeatures());
+        Set<String> features = reportedFeatures(CellProbes.supportedFeatures());
+        LOG.info("[VINE] driver {} bound to cell: dataVersion={} probes={} features={}",
+            DRIVER_ID, dataVersion, CellProbes.probeMatrix(), features);
+        return new CellInfo(dataVersion, LoaderFamily.NEOFORGE, features);
+    }
+
+    /**
+     * The feature ids this cell reports: the loader-neutral 1.21.1 probes plus the client 2D
+     * surfaces this driver's client half provides (sub-16 Stage B) — and only where that half
+     * exists. Screens and HUD layers are materialized by the {@code dist = Dist.CLIENT}
+     * entrypoint, so a dedicated server answers false for them exactly as it never loads that
+     * code: a capability query that outlives the distribution it describes is worse than no query
+     * (§5.12, Minimal Footprint). The client probe constants are sub-16's own
+     * ({@code ClientFeature.SCREENS}, {@code HUD}), so the ids cannot drift from what a consumer
+     * asks.
+     */
+    private static Set<String> reportedFeatures(Set<String> probes) {
+        Set<String> features = new LinkedHashSet<>(probes);
+        if (FMLEnvironment.dist == Dist.CLIENT) {
+            features.add(ClientFeature.SCREENS.id());
+            features.add(ClientFeature.HUD.id());
+        }
+        return features;
     }
 
     private static volatile net.minecraft.server.MinecraftServer currentServer;
@@ -104,6 +131,26 @@ public final class NeoForge1211Driver implements VineDriver {
     /** The engine handle from {@link #bootstrap}, or {@code null} before boot. */
     public static DriverContext driverContext() {
         return driverContext;
+    }
+
+    /**
+     * The structural descriptors this cell's driver was handed — every registered block, item,
+     * entity, screen and HUD layer, in the store's sorted order.
+     *
+     * <p>Read by the client 2D half ({@code VineHudClient}): the HUD hook draws the layers that
+     * were actually registered, including the ones JSON authoring declared, so it asks this
+     * snapshot rather than reading the data files a second time and hoping the two agree.
+     *
+     * @throws IllegalStateException before {@code bootstrap} has run — the handle is the one
+     *     the engine gave this driver, so it exists exactly when the driver does
+     */
+    public static StructuralRegistryView structuralView() {
+        DriverContext ctx = driverContext;
+        if (ctx == null) {
+            throw new IllegalStateException(
+                "NeoForge1211Driver.bootstrap has not run — boot the driver (DriverBoot.boot) first");
+        }
+        return ctx.structuralRegistries();
     }
 
     /**

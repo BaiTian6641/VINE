@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import dev.vineengine.vine.internal.driver1211.fabric.client.ClientScriptRunner;
 import dev.vineengine.vine.internal.driver1211.fabric.client.VineCutsceneClient;
 import dev.vineengine.vine.internal.driver1211.fabric.client.VineEntityRenderers;
+import dev.vineengine.vine.internal.driver1211.fabric.client.VineHudClient;
 import dev.vineengine.vine.internal.driver1211.fabric.net.FabricNetDriver;
 
 /**
@@ -36,6 +37,11 @@ public final class VineFabricClient implements ClientModInitializer {
         // Client renderers for the engine's own entity types (sub-08 Stage A's client half):
         // without them the first engine entity in view kills the render thread.
         VineEntityRenderers.register();
+        // HUD layers (sub-16's client half): one loader hook that draws every registered
+        // visible layer at the anchor its descriptor names. Installed here and not earlier
+        // because a HUD is a client surface, and its layer set is read from the engine's
+        // structural view, which the "main" entrypoint has already materialized.
+        VineHudClient.install();
         // Cutscene application (sub-23's client half): the receiver for the frames this server
         // addresses to this player, and the tick that applies them. Armed before any script step
         // can produce one — the scripted run below triggers cutscenes the moment it starts.

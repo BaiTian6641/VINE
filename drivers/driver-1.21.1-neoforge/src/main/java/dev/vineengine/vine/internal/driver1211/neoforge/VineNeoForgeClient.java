@@ -17,6 +17,7 @@ import org.slf4j.LoggerFactory;
 import dev.vineengine.vine.internal.driver1211.neoforge.client.ClientScriptRunner;
 import dev.vineengine.vine.internal.driver1211.neoforge.client.VineCutsceneClient;
 import dev.vineengine.vine.internal.driver1211.neoforge.client.VineEntityRenderer;
+import dev.vineengine.vine.internal.driver1211.neoforge.client.VineHudClient;
 import dev.vineengine.vine.internal.driver1211.neoforge.net.NeoForgeNetDriver;
 import dev.vineengine.vine.internal.driver1211.neoforge.net.VineNeoForgePayload;
 import dev.vineengine.vine.internal.driver1211.neoforge.registry.NeoForgeContentMaterializer;
@@ -55,6 +56,10 @@ public final class VineNeoForgeClient {
         // server addresses to this player. Armed before any script step can produce one — the
         // scripted run below triggers cutscenes the moment it starts.
         VineCutsceneClient.install();
+        // HUD layers (sub-16 Stage B): the render hook that draws every defaultVisible
+        // vine:hud_layer at its anchor, in zOrder. Armed from the client entrypoint like the
+        // cutscene half, so a dedicated server never loads the class.
+        VineHudClient.install();
         armClientScript();
     }
 

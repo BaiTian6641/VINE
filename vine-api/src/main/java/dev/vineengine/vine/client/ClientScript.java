@@ -148,7 +148,13 @@ public record ClientScript(String name, List<Step> steps) {
             }
         }
 
-        /** Opens a screen descriptor, optionally waiting for it to close again. */
+        /**
+         * Opens a screen descriptor for the client's player: the step completes once the screen
+         * is up, and the run closes it again {@code waitTicks} client ticks after it opened — the
+         * wait is how long the screen stays up for the steps that follow (a screenshot), not a
+         * sleep inside this step. A cell that cannot materialize the descriptor fails the run
+         * loudly; it never pretends the screen opened.
+         */
         record OpenScreen(VineId screen, int waitTicks) implements Step {
 
             /** Single source of truth for every representation of this data (sub-02 §2). */

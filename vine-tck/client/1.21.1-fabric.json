@@ -42,6 +42,15 @@
       "name": "1.21.1-fabric-cutscene"
     },
     {
+      "type": "open_screen",
+      "screen": "vine_test:hunt_board",
+      "waitTicks": 20
+    },
+    {
+      "type": "screenshot",
+      "name": "1.21.1-fabric-screen"
+    },
+    {
       "type": "quit"
     }
   ]

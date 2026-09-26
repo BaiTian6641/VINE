@@ -1,10 +1,15 @@
 package dev.vineengine.vine.internal.driver1211.fabric.boot;
 
 
+import java.util.LinkedHashSet;
+import java.util.Set;
+
+import net.fabricmc.api.EnvType;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.SharedConstants;
 
 import org.slf4j.Logger;
@@ -38,6 +43,7 @@ import dev.vineengine.vine.internal.driver1211.fabric.registry.FabricStructuralM
 import dev.vineengine.vine.internal.spi.StructuralRegistryView;
 import dev.vineengine.vine.internal.spi.VineDriver;
 import dev.vineengine.vine.internal.world.WorldViewBinding;
+import dev.vineengine.vine.ui.ClientFeature;
 
 /**
  * The 1.21.1 Fabric {@link VineDriver} (ServiceLoader-bound, one per cell).
@@ -77,9 +83,29 @@ public final class Fabric1211Driver implements VineDriver {
         // through Mojmap names) — §5.12: never version strings.
         int dataVersion = SharedConstants.getGameVersion().getSaveVersion().getId();
         CellWindow.check(DRIVER_ID, dataVersion);
-        LOG.info("[VINE] driver {} bound to cell: dataVersion={} probes={}",
-            DRIVER_ID, dataVersion, CellProbes.probeMatrix());
-        return new CellInfo(dataVersion, LoaderFamily.FABRIC, CellProbes.supportedFeatures());
+        Set<String> features = reportedFeatures(CellProbes.supportedFeatures());
+        LOG.info("[VINE] driver {} bound to cell: dataVersion={} probes={} features={}",
+            DRIVER_ID, dataVersion, CellProbes.probeMatrix(), features);
+        return new CellInfo(dataVersion, LoaderFamily.FABRIC, features);
+    }
+
+    /**
+     * The feature ids this cell reports: the loader-neutral 1.21.1 probes plus the client 2D
+     * surfaces this driver's client half provides (sub-16 Stage B) — and only where that half
+     * exists. Screens and HUD layers are materialized by this mod's {@code "client"} entrypoint,
+     * so a dedicated server answers false for them exactly as it never loads that code: a
+     * capability query that outlives the distribution it describes is worse than no query
+     * (§5.12, Minimal Footprint). The client probe constants are sub-16's own
+     * ({@code ClientFeature.SCREENS}, {@code HUD}), so the ids cannot drift from what a consumer
+     * asks.
+     */
+    private static Set<String> reportedFeatures(Set<String> probes) {
+        Set<String> features = new LinkedHashSet<>(probes);
+        if (FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT) {
+            features.add(ClientFeature.SCREENS.id());
+            features.add(ClientFeature.HUD.id());
+        }
+        return features;
     }
 
     private static volatile net.minecraft.server.MinecraftServer currentServer;

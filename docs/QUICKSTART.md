@@ -129,10 +129,11 @@ cmd /c "gradlew.bat :drivers:driver-1.21.1-neoforge:vineTckClient -Pvine.tck.cli
 ```
 
 With the property absent the client behaves exactly as a normal dev client (no auto-quit). A
-step that cannot be performed stops the run with one line naming it and a non-zero exit —
-`open_screen` is refused today, because the native screen materialization is the next piece of
-sub-16. Screenshots land in the cell's `run/screenshots/`; committed copies live in
-`vine-tck/fixtures/client/`.
+step that cannot be performed stops the run with one line naming it and a non-zero exit — a cell
+with no materialization for the descriptor it names refuses `open_screen` rather than skipping
+it. `open_screen` completes once the screen is up and closes it `waitTicks` client ticks later,
+so the step after it (a screenshot) sees the screen. Screenshots land in the cell's
+`run/screenshots/`; committed copies live in `vine-tck/fixtures/client/`.
 
 Two facts the cells had to learn, worth knowing before you write a script: a materialized
 engine entity type with **no** client renderer crashes the client the moment it is in view

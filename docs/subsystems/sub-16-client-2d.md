@@ -126,10 +126,15 @@ cell-neutral, render path probe-guarded.)*
   the screen size in logical pixels, which is how a menu is correct at scale 2 and off the
   screen at scale 3. Everything is logical pixels now; a cell reports its screen size the way
   vanilla does.
-- **Remaining:** the per-cell materialization (native screens, HUD drawing, keybinds) and the
-  screenshot pass. A scripted client run exists on both cells (`vineTckClient`, see
-  `docs/QUICKSTART.md`), and its `open_screen` step is *refused loudly* today — deliberately:
-  the runner may not pretend a screen opened when no cell can materialize one yet.
+- **Remaining:** keybinds (Stage D), themes and nine-slice chrome (Stage E), the menu-sync half
+  (Stage F), and the HUD layer *content* model — a layer is drawn as its id today. A scripted
+  client run exists on both cells (`vineTckClient`, see `docs/QUICKSTART.md`): both 1.21.1 cells
+  materialize a screen descriptor as a native screen laid out by `UiLayout`, draw every
+  default-visible `HudLayer` from one loader render hook in `zOrder`, and answer
+  `ClientFeature.SCREENS`/`HUD` on the client dist. A cell with no materialization for the id it
+  names still refuses `open_screen` loudly rather than pretending it opened — and the step's own
+  javadoc carries its semantics (it completes as soon as the screen is up; the screen then stays
+  up `waitTicks` before the runner closes it).
 
 ## 4. Problems & blockers
 

@@ -14,6 +14,7 @@ import com.mojang.serialization.JsonOps;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.worldselection.WorldOpenFlows;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
@@ -30,7 +31,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import dev.vineengine.vine.client.ClientScript;
+import dev.vineengine.vine.content.VineContent;
 import dev.vineengine.vine.cutscene.VineCutscenes;
+import dev.vineengine.vine.internal.ui.UiLayout;
+import dev.vineengine.vine.registry.Holder;
+import dev.vineengine.vine.registry.VineRegistries;
+import dev.vineengine.vine.ui.ScreenDescriptor;
 
 /**
  * The 1.21.1 NeoForge client half of the scripted run (sub-21 Stage F): drives a real dev
@@ -59,6 +65,12 @@ import dev.vineengine.vine.cutscene.VineCutscenes;
  * is {@code VineCutsceneClient}'s job (armed from the client entrypoint): this class proves the
  * step runs and the client receives, the receiver proves the camera, title and sound were
  * applied.
+ *
+ * <p><b>{@code open_screen} (sub-16's client half).</b> The descriptor's native screen is
+ * materialized by {@link VineScreensClient} on this client and closed again {@code waitTicks}
+ * after it opened — the hold the following steps can look at, not a sleep in this one.
+ * {@link #beginOpenScreen} states it in full, because a step's semantics have to be readable
+ * from the step.
  */
 public final class ClientScriptRunner {
 
@@ -101,6 +113,11 @@ public final class ClientScriptRunner {
     private boolean cutsceneStarted;
     /** Client ticks spent inside the current play_cutscene step. */
     private int cutsceneTicks;
+
+    /** The screen an {@code open_screen} step put up, and when the run closes it again. */
+    private Screen openScreen;
+    private long openScreenOpenedAt;
+    private long openScreenCloseAt;
 
     public ClientScriptRunner(Path scriptFile) {
         this.scriptFile = Objects.requireNonNull(scriptFile, "scriptFile");
@@ -211,6 +228,11 @@ public final class ClientScriptRunner {
                 case DONE -> {
                 }
             }
+            // The other half of open_screen's semantics: a screen this run put up is closed
+            // again once its hold is up, whatever step the run has moved on to (see
+            // closeScreenIfDue). Checked after the step machine so a screen opened this tick is
+            // measured from this tick.
+            closeScreenIfDue(minecraft);
         } catch (StepFailure failure) {
             fail(failure);
         } catch (RuntimeException unexpected) {
@@ -257,9 +279,20 @@ public final class ClientScriptRunner {
                     deadline = clock + CUTSCENE_TIMEOUT_TICKS;
                     return;
                 }
-                case ClientScript.Step.OpenScreen screen -> throw new StepFailure(
-                    "open_screen(" + screen.screen() + ")",
-                    "this cell has no screen materialization yet — opening a Vine screen is sub-16 work");
+                case ClientScript.Step.OpenScreen screen -> {
+                    beginOpenScreen(minecraft, screen);
+                    // The step is done — the screen is up — but the run must not begin the next
+                    // step inside this same tick's frame. Vanilla ticks and *then* renders, so
+                    // the framebuffer a screenshot reads during a tick holds the previous
+                    // frame: a following screenshot grabbed later in this tick would show the
+                    // world before the screen was drawn, and the run could never show the screen
+                    // it exists to prove. Yielding here lets that frame render first, which is
+                    // what "the next step's screenshot sees the screen" means (sub-16's client
+                    // half; the Fabric cell's one-step-per-tick runner has the same boundary by
+                    // construction).
+                    index++;
+                    return;
+                }
                 case ClientScript.Step.Screenshot screenshot -> {
                     requestScreenshot(minecraft, screenshot.name());
                     phase = Phase.AWAIT_SCREENSHOT;
@@ -365,6 +398,75 @@ public final class ClientScriptRunner {
         if (server != null) {
             server.execute(VineCutscenes::tick);
         }
+    }
+
+    /**
+     * Opens {@code step}'s screen descriptor for this client's player (sub-16's client half).
+     *
+     * <p><b>The step's semantics, in full.</b> An {@code open_screen} step completes as soon as
+     * the screen is up, and the runner then closes it again {@code waitTicks} client ticks after
+     * it opened. The wait is therefore how long the screen stays up <em>for the steps that
+     * follow</em> — not a sleep inside this step. That is what makes the step usable for its own
+     * purpose: vanilla ticks and then renders within one frame, so a screen closed at the end of
+     * a blocking wait would already be absent from the frame a following {@code screenshot}
+     * reads, and a run could never show the screen it exists to prove. The close still lands: it
+     * is a runner-side deadline, executed by {@link #closeScreenIfDue} on the client tick
+     * {@code waitTicks} after this one. For the same frame reason the run resumes the step
+     * machine on the <em>next</em> tick (see the step loop): the frame that first shows this
+     * screen is rendered after this tick ends, and only then does a screenshot read it.
+     *
+     * <p><b>Everything here is client-side.</b> A descriptor is content; this client is told to
+     * draw it. Nothing about opening a screen is sent to any server.
+     *
+     * <p><b>Failures are the step's.</b> An unregistered id, and a descriptor this cell cannot
+     * materialize, both stop the run with one line naming the step and the reason — never a
+     * quietly skipped step.
+     */
+    private void beginOpenScreen(Minecraft minecraft, ClientScript.Step.OpenScreen step) {
+        ScreenDescriptor descriptor = VineRegistries.get(VineContent.SCREEN_TYPE, step.screen())
+            .map(Holder::value)
+            .orElseThrow(() -> new StepFailure(screenStep(step), "cannot open screen " + step.screen()
+                + ": no screen descriptor is registered under that id in this cell"));
+        Screen screen;
+        try {
+            screen = VineScreensClient.materialize(descriptor);
+        } catch (RuntimeException e) {
+            throw new StepFailure(screenStep(step), "cannot open screen " + step.screen()
+                + ": materializing its descriptor failed: " + (e.getMessage() == null ? e.toString() : e.getMessage()));
+        }
+        openScreen = screen;
+        openScreenOpenedAt = clock;
+        openScreenCloseAt = clock + step.waitTicks();
+        minecraft.setScreen(screen);
+        LOGGER.info("vine-tck: open_screen {}: {} widget(s), pausesGame={}, closing in {} client tick(s)",
+            step.screen(), UiLayout.widgetIds(descriptor).size(), descriptor.pausesGame(), step.waitTicks());
+    }
+
+    /**
+     * Closes the screen this run opened once its hold is up — the other half of
+     * {@link #beginOpenScreen}'s semantics.
+     *
+     * <p>A screen that is no longer the current one (a later step opened another, or the run is
+     * quitting) is left alone: the close belongs to this run's own screen, and a step that
+     * outlives it is not an error.
+     */
+    private void closeScreenIfDue(Minecraft minecraft) {
+        Screen held = openScreen;
+        if (held == null || clock < openScreenCloseAt) {
+            return;
+        }
+        openScreen = null;
+        if (minecraft.screen != held) {
+            LOGGER.info("vine-tck: the screen this run opened is no longer current — nothing to close");
+            return;
+        }
+        minecraft.setScreen(null);
+        LOGGER.info("vine-tck: screen closed {} client tick(s) after it opened", clock - openScreenOpenedAt);
+    }
+
+    /** The open_screen step's name in a failure line: which screen, and its hold. */
+    private static String screenStep(ClientScript.Step.OpenScreen step) {
+        return "open_screen(" + step.screen() + ", waitTicks=" + step.waitTicks() + ")";
     }
 
     private void requestScreenshot(Minecraft minecraft, String name) {
