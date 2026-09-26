@@ -16,3 +16,15 @@ dependencies {
 
 // Per-cell jars compile the same sources; the gate covers their classpaths and
 // duplication from their own projects (each cell applies purity-gate.gradle).
+
+// The engine cooks a partner mod's weapon preset; the pack that owns the item ships it.
+// A real pack runs its own datagen (the cells' `datagenContent` is the wiring to copy) —
+// this testmod is the exemplar consumer, so it ships the file both cells' datagen emit,
+// byte-identical (sha256 c55cb4e5…), rather than a hand-written copy that could drift.
+// Without this the preset exists only under build/datagen and no running game ever sees it.
+processResources {
+    from(rootProject.file('vine-tck/fixtures/datagen/1.21.1-fabric/data/vine_test/weapon_attributes')) {
+        include 'partner_blade.json'
+        into 'data/vine_test/weapon_attributes'
+    }
+}

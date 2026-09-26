@@ -98,6 +98,29 @@ public final class EchoCommand {
                     dev.vineengine.vine.testmod.parts.PartsExemplar.hit();
                     return 1;
                 }))
+            .then(VineCommand.literal("tck_two_players")
+                .then(VineCommand.argument("x", VineArgumentTypes.INT)
+                    .then(VineCommand.argument("y", VineArgumentTypes.INT)
+                        .then(VineCommand.argument("z", VineArgumentTypes.INT)
+                            .executes(ctx -> {
+                                boolean spawned = dev.vineengine.vine.testmod.combat.TwoPlayerFight.spawn(
+                                    dev.vineengine.vine.world.Vec3.of(
+                                        ctx.argument("x", Integer.class) + 0.5D,
+                                        ctx.argument("y", Integer.class),
+                                        ctx.argument("z", Integer.class) + 0.5D));
+                                ctx.feedback("tck: two-player spawn started=" + spawned);
+                                return 1;
+                            })))))
+            .then(VineCommand.literal("tck_two_players_fight")
+                .executes(ctx -> {
+                    dev.vineengine.vine.testmod.combat.TwoPlayerFight.fight();
+                    return 1;
+                }))
+            .then(VineCommand.literal("tck_parts_host")
+                .executes(ctx -> {
+                    dev.vineengine.vine.testmod.parts.PartsExemplar.host();
+                    return 1;
+                }))
             .then(VineCommand.literal("tck_parts_status")
                 .executes(ctx -> {
                     dev.vineengine.vine.testmod.parts.PartsExemplar.status();

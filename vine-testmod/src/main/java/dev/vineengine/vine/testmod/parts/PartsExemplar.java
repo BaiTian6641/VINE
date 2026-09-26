@@ -37,8 +37,8 @@ public final class PartsExemplar {
     /** The authoring asset the testmod ships. */
     private static final String ASSET_RESOURCE = "assets/vine_test/vine/animation/wyvern_stub.json";
 
-    /** The looping clip the parts ride here. */
-    private static final String IDLE_CLIP = "animation.vine_test.wyvern_stub.idle";
+    /** The looping clip the parts ride here. Public: the two-player fight hosts parts too. */
+    public static final String IDLE_CLIP = "animation.vine_test.wyvern_stub.idle";
 
     /** Damage type, spelled the way a consumer spells it. */
     private static final VineId PLAYER_ATTACK = VineId.parse("minecraft:player_attack");
@@ -142,6 +142,25 @@ public final class PartsExemplar {
     }
 
     /**
+     * Hosts the last spawned beast's parts over the idle clip and prints nothing else.
+     *
+     * <p>Hosting is what makes an actor's parts reachable to combat at all: the pipeline
+     * refuses a strike against an unhosted actor. The fixture hit script hosts as a side
+     * effect of running, which leaves a pre-wounded beast — this is the step a scenario
+     * wants when the swing itself is the thing under test.
+     */
+    public static void host() {
+        VineEntityRef ref = last;
+        if (ref == null) {
+            System.out.println("tck: parts host none");
+            return;
+        }
+        VineParts.attach(ref, asset(), IDLE_CLIP);
+        System.out.println("tck: parts hosted=" + VineParts.isHosted(ref)
+            + " parts=" + names(VineParts.parts(ref)));
+    }
+
+    /**
      * Prints the exemplar beast's part state — what a scripted client's swing actually did,
      * read from the engine rather than inferred from the swing that caused it.
      */
@@ -150,13 +169,24 @@ public final class PartsExemplar {
             System.out.println("tck: parts status none");
             return;
         }
+        System.out.println(statusLine());
+    }
+
+    /**
+     * One line of part state, readable whether or not the beast is hosted: a scenario that
+     * asks about an unhosted beast has made a fixture mistake, and a fixture mistake must
+     * read as a line, not as a stack trace.
+     */
+    private static String statusLine() {
+        if (!VineParts.isHosted(last)) {
+            return "tck: parts status hosted=false";
+        }
         StringBuilder out = new StringBuilder("tck: parts status");
         for (PartState part : VineParts.parts(last)) {
             out.append(' ').append(part.name()).append('=').append(part.wound())
                 .append(part.broken() ? "(broken)" : "");
         }
-        out.append(" flinched=").append(VineParts.consumeFlinch(last));
-        System.out.println(out);
+        return out.append(" flinched=").append(VineParts.consumeFlinch(last)).toString();
     }
 
     /** Prints one hit's outcome — the engine's numbers, never a re-computation. */
