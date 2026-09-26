@@ -271,9 +271,11 @@ Each bootstrap assumes the agent has read this file, plan §5.8–§5.10, and
   20 and 60 ticks after the summon; midnight plus `Fire:-20s` to rule out daylight burning (which
   *was* real on both cells before that fix: a burning zombie read 16.0f before any punch).
   Ruled out: chunk loading (the platform `fill` returns the expected 52 blocks and the teleported
-  player stands on it), selectors in general (`@p`/`@a`/players match), and the engine's hooks
-  (the engine cannot address unregistered content at all — `VineCombat.strike` takes a
-  `VineEntityRef` target, so an unregistered mob is unreachable by construction).
+  player stands on it), selectors in general (`@p`/`@a`/players match), hostile-mob removal by
+  difficulty (asking `/difficulty normal` returns 0, which vanilla does only when the difficulty is
+  *already* normal — so this world is not Peaceful), and the engine's hooks (the engine cannot
+  address unregistered content at all — `VineCombat.strike` takes a `VineEntityRef` target, so an
+  unregistered mob is unreachable by construction).
 
   Consequence: the Fabric cell has the runtime half of this check (vanilla punch, 20.0f → 19.06f,
   deterministic across runs, at `vine-tck/client/1.21.1-fabric-vanilla-bystander.json`); this cell's
