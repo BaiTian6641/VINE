@@ -152,3 +152,24 @@ cmd /c "gradlew.bat :vine-tck:verifyDatagen"
 ```
 
 Scenario runners write into shared run directories: run one Gradle-driven server at a time.
+
+Client acceptance scripts live in `vine-tck/client/`, one per cell and concern: a baseline world
+(cutscene, HUD layer, screen with buttons), a swing with a VINE-owned weapon, a swing with a
+Better Combat-owned weapon, and a two-player fight where one player's far strike must miss. They
+are driven with `-Pvine.tck.clientScript=<absolute path>`; each prints the engine's own lines
+(`tck: parts status head=…`, `tck: two-player …`) and writes a screenshot, so a run is read from
+the engine's numbers rather than from the input that caused them.
+
+The two Better Combat scripts need the partner staged in that cell's `run/mods/` (dev-client only,
+never a compile dependency): Better Combat 2.4.0+1.21.1, Cloth Config 15.0.140 and Player Animator
+2.0.4+1.21.1, per loader, from Modrinth. Delete them again for the VINE-owned scripts: with Better
+Combat installed it takes over any weapon's swing, so a VINE-owned acceptance run must not have it.
+
+## Who ships a cooked partner preset
+
+The engine cooks the partner's file (`data/<ns>/weapon_attributes/<item>.json`) because the
+translation is data; **shipping it is the pack's job**, through that pack's own data pack (both
+cells' `datagenContent` show the wiring, and `:vine-tck:verifyDatagen` proves the bytes match the
+goldens). The testmod ships the same bytes in its jar, but a dev-run *library* is not a mod, so its
+`data/` never mounts as a data pack: with no bridge present, Better Combat reports no `vine_test`
+entry and falls back to its own rules. Measured on both cells, 2026-09-26 — see sub-10.
