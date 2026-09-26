@@ -129,9 +129,38 @@ public interface CombatState {    // engine-owned, server-authoritative
   the loader's own damage path under the reentrancy guard, leave every unregistered weapon and
   target alone, tick `CombatState` once per server tick, and cook the partner preset in
   `datagenContent`.
-- **Remaining:** the live proof of "exactly one hit with Better Combat installed" needs a
-  client-side pass (the partner is a runtime mod, not a dependency), which is Theme B's
-  client-runner work.
+- **Landed with a live client (NeoForge 1.21.1, 2026-09-26; Fabric pending the blocker below):**
+  a scripted client world → forceload → beast spawned and hosted → `/tp` the player two blocks
+  south of it, facing it → `/give` + `select_slot` → one `attack`, then the engine's own
+  `tck_parts_status` line:
+  - **VINE-owned weapon** (`vine_test:ember_blade`, Better Combat absent): head wound `0 → 83`
+    (40 base × 1.6 motion × 1.3 head hit-zone = 83.2, rounded half-up), tail untouched —
+    exactly one strike, through the engine's own chain rather than the client's claim.
+  - **Better Combat-owned weapon** (`vine_test:partner_blade`, Better Combat + its deps installed
+    in the dev client): the same `+83` on the head, never 166. Better Combat's own weapon-registry
+    log names the item as `{"attributes":{"attack_range":4.5}}` — the engine-cooked claymore
+    preset — where its fallback (`bettercombat:sword`) would have written `0.0`. The engine
+    installed no sweep for the item and consumed the partner's swing exactly once.
+  - **Yaw convention (normative for cell authors):** `VineCombat.strike` takes yaw in the pose
+    evaluator's convention — yaw 0 puts the actor's forward (model −Z) at world −Z — while a
+    Minecraft player's yaw 0 faces world +Z, so a cell passes `player.getYaw() + 180`.
+    Negative control: with the conversion removed, the identical swing at the identical aim
+    lands **no** wound.
+  - **Who ships the cooked preset:** cooking is engine-side and cell-independent (both cells'
+    datagen emit byte-identical bytes, sha256 `c55cb4e5…`), but a preset written only to
+    `build/datagen` reaches no running game. The pack that owns the item ships it — a real pack
+    through its own datagen, the testmod by shipping that same file in its jar — and the run above
+    is evidence of the shipped path, not of a bridge jar built for the test.
+  - **A stance is not a claim:** the same attacker, weapon and aim from thirty blocks away reports
+    `MISSED` and moves no wound (`TwoPlayerFight`), and the two players' strikes sum exactly on
+    the shared state rather than doubling.
+- **Blocked on a cell bug (Fabric):** the scripted Fabric client holds zero engine entities while
+  the server reports the beast spawned and hosted — the client never receives the entity, so no
+  swing can be aimed at it. Root-caused to the cell's spawn/tracking path; fix in progress.
+- **Open question — hit flakiness:** roughly one run in three lands nothing while the client
+  provably swings at the right entity; the suspect is the sweep's top edge against the idle clip's
+  head box (the intersection is only ~0.4–1.1 blocks deep). Whether that is a fixture-geometry
+  problem or an engine sweep problem is being decided from evidence.
 
 ## 4. Problems & blockers
 
@@ -159,7 +188,7 @@ public interface CombatState {    // engine-owned, server-authoritative
 
 - **Latency policy (locked v1):** strict server-authoritative; **no lag compensation, no rewind**. Client may animate wind-up immediately; damage lands on server confirm. Revisit only with a documented exemplar-consumer need; decision owner: this file.
 - **Vanilla cooldown interplay:** suppressed per opted-in item; engine cooldown is `ActionDescriptor.cooldownTicks`. Foreign mods read vanilla cooldown as 1.0 — documented, accepted for opted-in items.
-- **Cheat resistance:** server recomputes sweeps (never trusts client hit claims); per-actor rate limit; requests outside cooldown/active windows rejected; sweep sanity = attacker→target within OBB + 0.5-block epsilon.
+- **Cheat resistance:** server recomputes sweeps (never trusts client hit claims); per-actor rate limit; requests outside cooldown/active windows rejected; sweep sanity = attacker→target within OBB + 0.5-block epsilon. **Proven live:** an out-of-reach strike from the same attacker, weapon and aim reports `MISSED` and moves no wound (sub-10 Stage D).
 - **Reentrancy:** pipeline-dealt damage re-entering loader hooks — engine reentrancy flag checked at every driver entry point; TCK asserts exactly one pipeline pass per hit.
 
 ## 5. Verification

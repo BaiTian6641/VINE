@@ -70,21 +70,22 @@ read, follow, track, and build subsystems **independently and in parallel**.
 | 05 | Networking | M0→M1 | 01, 02, 03 | done | `:vine-tck:runScenarios1211{Fabric,Neoforge}` | [sub-05](subsystems/sub-05-networking.md) |
 | 06 | Commands | M0 minimal→M1 full | 01, 02, 03 | in-progress — A–D landed, E open | `:vine-tck:runScenarios1211{Fabric,Neoforge}` | [sub-06](subsystems/sub-06-commands.md) |
 | 07 | Blocks & items | M0 minimal→M3 full | 02, 03 | in-progress — A–C landed (C except BE-to-client sync), D–E open | `:vine-tck:runScenarios1211{Fabric,Neoforge}`; `:vine-tck:verifyDatagen` | [sub-07](subsystems/sub-07-blocks-items.md) |
-| 08 | Entities & VineBrain | M2 | 02, 03, 05 | in-progress — A–C landed, D–F open | `:vine-tck:runScenarios1211{Fabric,Neoforge}` | [sub-08](subsystems/sub-08-entities.md) |
+| 08 | Entities & VineBrain | M2 | 02, 03, 05 | in-progress — A–D landed (D = multipart parts, hosted on both cells), E–F open | `:vine-tck:runScenarios1211{Fabric,Neoforge}` | [sub-08](subsystems/sub-08-entities.md) |
 | 09 | Animation runtime | M2 data → M5 render | 08 | in-progress — A partial (single-document parser), B landed, C–F open | `:vine-tck:evaluatorFixtures`; `:vine-tck:runScenarios1211{Fabric,Neoforge}` | [sub-09](subsystems/sub-09-animation.md) |
-| 10 | Combat & input | M2 | 05, 08, 09 | planning — no stage landed | — | [sub-10](subsystems/sub-10-combat-input.md) |
+| 10 | Combat & input | M2 | 05, 08, 09 | in-progress — A–D landed (live swing proof on 1.21.1-NeoForge: one strike on both ownership paths; a Fabric cell spawn/tracking blocker is being fixed), E (26.x) open | `:drivers:driver-1.21.1-{fabric,neoforge}:vineTckClient` | [sub-10](subsystems/sub-10-combat-input.md) |
 | 11 | Recipes & crafting | M3 | 02, 07 | planning — no stage landed | — | [sub-11](subsystems/sub-11-recipes.md) |
 | 12 | Audio | M3 | 02, 05, 10 | planning — no stage landed | — | [sub-12](subsystems/sub-12-audio.md) |
 | 13 | World & population | M3 | 02, 03, 05 (08 soft) | planning — no stage landed | — | [sub-13](subsystems/sub-13-world.md) |
 | 14 | Sessions & parties | M1 basics → M3 full | 03, 05 | in-progress — A and B landed, C–E open | `:vine-tck:runScenarios1211{Fabric,Neoforge}` | [sub-14](subsystems/sub-14-sessions.md) |
-| 15 | Quests & activities | M3 | 02, 14 (16 soft) | planning — no stage landed | — | [sub-15](subsystems/sub-15-quests.md) |
-| 16 | Client 2D (GUI/HUD) | M2→M3 | 01, 05 | planning — no stage landed | — | [sub-16](subsystems/sub-16-client-2d.md) |
+| 15 | Quests & activities | M3 | 02, 14 (16 soft) | in-progress — A landed (model, service, progression), B–F open | `:vine-tck:runScenarios1211{Fabric,Neoforge}` | [sub-15](subsystems/sub-15-quests.md) |
+| 16 | Client 2D (GUI/HUD) | M2→M3 | 01, 05 | in-progress — A landed (descriptors, layout solver, and both cells materializing screens + HUD layers, driven by a scripted client), B–F open | `:drivers:driver-1.21.1-{fabric,neoforge}:vineTckClient` | [sub-16](subsystems/sub-16-client-2d.md) |
 | 17 | Client 3D (models/FX/camera) | M5 | 09, 16 | planning — no stage landed | — | [sub-17](subsystems/sub-17-client-3d.md) |
 | 18 | Driver 1.21.1 (NF + Fabric) | M0 | 00, 01 | in-progress — A–C landed (Mixin wave in), D–E open | `:drivers:driver-1.21.1-fabric:runGametest`; `:drivers:driver-1.21.1-neoforge:runGameTestServer` | [sub-18](subsystems/sub-18-driver-1211.md) |
 | 19 | Driver 26.x (NF + Fabric) | M4 | 18 | planning — no stage landed | — | [sub-19](subsystems/sub-19-driver-26x.md) |
 | 20 | Ecosystem bridges | Continuous | 02, 04, 11 | planning — no stage landed | — | [sub-20](subsystems/sub-20-ecosystem.md) |
 | 21 | TCK harness | M0, continuous | 00 | in-progress — A, B and D landed, C and E open | `:vine-tck:runScenarios1211{Fabric,Neoforge}`; `:vine-tck:crossCellRoundTrip`; `:drivers:driver-1.21.1-neoforge:runGameTestServer` | [sub-21](subsystems/sub-21-tck.md) |
-| 22 | Testmod | M0, continuous | 00, 02 | in-progress — A landed; B landed for the M1 scope, its fixture follow-up open; C–F open | `:vine-testmod:purityGate` (`:vine-testmod:versions:1.21.1-{fabric,neoforge}:purityGate`); `:vine-tck:runScenarios1211{Fabric,Neoforge}` | [sub-22](subsystems/sub-22-testmod.md) |
+| 22 | Testmod | M0, continuous | 00, 02 | in-progress — A, B (M1 scope) and C landed (entity/animation exemplars); D–F open | `:vine-testmod:purityGate` (`:vine-testmod:versions:1.21.1-{fabric,neoforge}:purityGate`); `:vine-tck:runScenarios1211{Fabric,Neoforge}` | [sub-22](subsystems/sub-22-testmod.md) |
+| 23 | Cutscenes | M3 (client application: M2 surface) | 01, 05, 09, 14 | in-progress — A and B landed (descriptor, deterministic evaluator, playback runtime and delivery); C landed on both cells (camera, actor animation, audio, title, screenshot artifact); D–F open | `:vine-tck:runScenarios1211{Fabric,Neoforge}`; `:drivers:driver-1.21.1-{fabric,neoforge}:vineTckClient` | [sub-23](subsystems/sub-23-cutscenes.md) |
 
 **Status** is the stage state from the subsystem file's own header (`done` only
 when every stage box is ticked). **Verified by** names the commands whose
