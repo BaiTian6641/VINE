@@ -184,9 +184,11 @@ public interface CombatState {    // engine-owned, server-authoritative
   the zombie's own 2 armour points (`2 - 1/2 = 1.5`, `/25` = 6% reduction) — and it is what proves
   no hook touched the mob: had this cell's attack or damage hook intercepted an unregistered
   target, the strike would have gone to the pipeline, which cannot address it (its target is a
-  `VineEntityRef`), so the health would have moved by the engine's number or not at all. The check
-  is single-cell for now: on the NeoForge cell a summoned vanilla mob is not selectable afterwards,
-  which is recorded as an open cell-level finding in sub-18.
+  `VineEntityRef`), so the health would have moved by the engine's number or not at all. Both cells
+  now run it green: the NeoForge cell's script failed on the same assertions until its scripted
+  world stopped being created on `Difficulty.PEACEFUL` (Peaceful deletes hostile mobs the instant
+  they exist — a summon returns 1 and nothing is selectable afterwards). The path from that
+  symptom to the fix, and the four causes it ruled out on the way, are recorded in sub-18.
 - **A stance is not a claim:** the same attacker, weapon and aim from thirty blocks away reports
     `MISSED` and moves no wound (`TwoPlayerFight`), and the two players' strikes sum exactly on
     the shared state rather than doubling. **Fabric, measured 2026-09-26** (`1.21.1-fabric-two-players`,

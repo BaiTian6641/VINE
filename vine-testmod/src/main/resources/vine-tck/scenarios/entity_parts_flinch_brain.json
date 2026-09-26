@@ -1,0 +1,74 @@
+{
+  "id": "vine_test:entity_parts_flinch_brain",
+  "tags": [
+    "ENTITY",
+    "PARTS",
+    "BRAIN"
+  ],
+  "steps": [
+    {
+      "type": "RunCommand",
+      "command": "forceload add 0 0 16 16"
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_parts_spawn 4 300 0"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "command",
+      "expect": [
+        "tck: parts spawn started=true"
+      ]
+    },
+    {
+      "type": "AdvanceTicks",
+      "ticks": 2
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_parts_host"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "log",
+      "expect": [
+        "tck: parts hosted=true parts=[head,tail]"
+      ]
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_parts_flinch_brain"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "log",
+      "expect": [
+        "tck: parts flinch brain attached=true",
+        "tck: parts flinch-hit-2 raw=40.0 applied=52.0 wound=104.0 broken=false flinched=true"
+      ]
+    },
+    {
+      "type": "AdvanceTicks",
+      "ticks": 5
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "log",
+      "expect": [
+        "tck: beast interrupted by flinch"
+      ]
+    },
+    {
+      "type": "RunCommand",
+      "command": "vine_test tck_parts_status"
+    },
+    {
+      "type": "AssertTrace",
+      "trace": "log",
+      "expect": [
+        "flinched=false"
+      ]
+    }
+  ]
+}

@@ -12,6 +12,10 @@
     },
     {
       "type": "RunCommand",
+      "command": "execute if entity @e[type=vine_test:testbeast] run kill @e[type=vine_test:testbeast]"
+    },
+    {
+      "type": "RunCommand",
       "command": "fill 3 299 -4 6 299 8 stone"
     },
     {

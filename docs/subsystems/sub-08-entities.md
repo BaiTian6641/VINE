@@ -281,7 +281,9 @@ multipart fixture.
   delta-compressed part-state sync with a deadband and byte counters, and the flinch signal a
   behaviour reads to interrupt itself (`Primitives.consumeFlinch`).
 - **Evidence:** `entity_parts` (wound, multiplier, flinch-once, break, geometry following the
-  pose across ticks) plus the headless `parts.delta.txt` golden (the hit script, the delta
+  pose across ticks) and `entity_parts_flinch_brain` (the crossing of the flinch threshold, then a
+  real brain node reading `Primitives.consumeFlinch` on the next tick and interrupting itself —
+  `tck: beast interrupted by flinch`, with the latch spent afterwards) plus the headless `parts.delta.txt` golden (the hit script, the delta
   bytes, the receiver's round trip, and the ≤2.5 KB/s budget arithmetic at 12 parts: 79 bytes
   worst case, 1580 B/s at 20 tps).
 - **Fixed while building it:** `AbstractVoxelStorage.open` returned a *fresh* tree per call and

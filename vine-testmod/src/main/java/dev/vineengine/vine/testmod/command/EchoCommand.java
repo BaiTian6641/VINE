@@ -121,6 +121,11 @@ public final class EchoCommand {
                     dev.vineengine.vine.testmod.parts.PartsExemplar.host();
                     return 1;
                 }))
+            .then(VineCommand.literal("tck_parts_flinch_brain")
+                .executes(ctx -> {
+                    dev.vineengine.vine.testmod.parts.PartsExemplar.flinchInterrupt();
+                    return 1;
+                }))
             .then(VineCommand.literal("tck_parts_status")
                 .executes(ctx -> {
                     dev.vineengine.vine.testmod.parts.PartsExemplar.status();

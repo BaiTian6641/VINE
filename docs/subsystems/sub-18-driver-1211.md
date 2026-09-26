@@ -277,10 +277,14 @@ Each bootstrap assumes the agent has read this file, plan §5.8–§5.10, and
   address unregistered content at all — `VineCombat.strike` takes a `VineEntityRef` target, so an
   unregistered mob is unreachable by construction).
 
-  Consequence: the Fabric cell has the runtime half of this check (vanilla punch, 20.0f → 19.06f,
-  deterministic across runs, at `vine-tck/client/1.21.1-fabric-vanilla-bystander.json`); this cell's
-  script of the same shape fails loudly at the first selector assertion. Not a gate on either cell
-  until this is understood.
+  **Resolved the same day: this cell's scripted world was created on `Difficulty.PEACEFUL`.** The
+  cell's `ClientScriptRunner.createWorld` hard-coded it; on Peaceful the server deletes hostile mobs
+  as fast as they appear, which is exactly "the summon returns 1 and the zombie is not selectable",
+  while a cow, an armour stand and players all persist. Two probes settled it: a per-class summon
+  (`@e[cow]` and `@e[armor_stand]` matched, `@e[zombie]` did not) and a bare `/difficulty`, which
+  answered `The difficulty is Peaceful`. `createWorld` now creates `Difficulty.NORMAL` — a scripted
+  world is a fixture, and Peaceful silently changes what vanilla content does — and the check passes
+  on both cells (health `20.0f` → `19.06f`, the vanilla number less the zombie's own armour).
 
 
 - **Two loaders, one repo, shared `vine-core`:** loom remap vs MDG straight

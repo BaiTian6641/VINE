@@ -161,6 +161,36 @@ public final class PartsExemplar {
     }
 
     /**
+     * Attaches a real brain node to the hosted beast, then wounds the head past its flinch
+     * threshold and leaves the rest to the tick loop.
+     *
+     * <p>This is where sub-08's parts and its brain meet on one actor: the node reads
+     * {@code Primitives.consumeFlinch}, so the next tick after the threshold is crossed the node
+     * interrupts itself and says so. The scenario asserts both halves — the latch was set by the
+     * part, and a node consumed it and stopped.
+     */
+    public static void flinchInterrupt() {
+        VineEntityRef ref = last;
+        if (ref == null) {
+            System.out.println("tck: parts flinch none");
+            return;
+        }
+        if (!VineParts.isHosted(ref)) {
+            System.out.println("tck: parts flinch hosted=false");
+            return;
+        }
+        // A target it will never reach, so the node is still running when the flinch arrives.
+        dev.vineengine.vine.testmod.brain.EntityBrainExemplar.attachBrain(ref,
+            Vec3.of(lastStart.x() + 200.0D, lastStart.y(), lastStart.z()));
+        System.out.println("tck: parts flinch brain attached=true");
+
+        // Head, twice: the first lands for the declared player_attack multiplier
+        // (40 x 1.25 = 50), the second crosses the part's cumulative flinch threshold (60).
+        report("flinch-hit-1", VineParts.applyHit(ref, "head", 40.0D, PLAYER_ATTACK));
+        report("flinch-hit-2", VineParts.applyHit(ref, "head", 40.0D, PLAYER_ATTACK));
+    }
+
+    /**
      * Prints the exemplar beast's part state — what a scripted client's swing actually did,
      * read from the engine rather than inferred from the swing that caused it.
      */

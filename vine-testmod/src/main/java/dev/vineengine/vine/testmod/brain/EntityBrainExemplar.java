@@ -63,6 +63,16 @@ public final class EntityBrainExemplar {
         VineEntityRef ref = spawned.get();
         System.out.println("tck: beast spawned ref=" + ref + " at=" + start.asString());
 
+        attachBrain(ref, target);
+        return true;
+    }
+
+    /**
+     * Attaches this exemplar's walking brain to {@code ref}. Split out because the brain is not
+     * only for actors this exemplar spawned: the multipart exemplar attaches it to its own hosted
+     * beast so a part's flinch can interrupt a node (sub-08 Stage D's last acceptance clause).
+     */
+    public static void attachBrain(VineEntityRef ref, Vec3 target) {
         VineBrain brain = VineBrains.of(ref.entityId(),
             dev.vineengine.vine.data.VineData.create(BrainExemplar.BRAIN_SCHEMA_ID));
         brain.blackboard().set(TARGET, target.asString());
@@ -71,7 +81,6 @@ public final class EntityBrainExemplar {
             .state("walk", walkTo(target))
             .build());
         VineEntities.attach(ref, brain);
-        return true;
     }
 
     /**
@@ -81,6 +90,14 @@ public final class EntityBrainExemplar {
      */
     private static dev.vineengine.vine.brain.Node walkTo(Vec3 target) {
         return Action.of("walk-to-target", ctx -> {
+            // A part crossing its flinch threshold interrupts this node: the signal is consumed
+            // once, so the node that reads it first is the one that reacts, and the walk reports
+            // the interrupt rather than continuing to a target it can no longer be sure about.
+            if (ctx.primitives().consumeFlinch()) {
+                System.out.println("tck: beast interrupted by flinch at="
+                    + ctx.primitives().position().asString() + " tick=" + ctx.tick());
+                return NodeStatus.FAILURE;
+            }
             if (ctx.blackboard().get(STARTED, 0L) == 0L) {
                 ctx.blackboard().set(STARTED, ctx.tick());
             }

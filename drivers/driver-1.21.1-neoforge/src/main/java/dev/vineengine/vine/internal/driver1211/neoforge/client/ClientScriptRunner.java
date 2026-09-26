@@ -449,7 +449,10 @@ public final class ClientScriptRunner {
         // Cheats on: the script's commands are the point, and an integrated server without
         // them refuses every one of them. Creative + peaceful keeps a scripted run from
         // being ended by a mob while a step is waiting.
-        LevelSettings settings = new LevelSettings(step.worldName(), GameType.CREATIVE, false, Difficulty.PEACEFUL,
+        // NORMAL, not PEACEFUL: the scripted world is a fixture, and Peaceful deletes hostile mobs
+        // the moment they exist — a summon returns 1 and nothing is selectable afterwards, which
+        // silently breaks any check about how vanilla content behaves (measured 2026-09-26).
+        LevelSettings settings = new LevelSettings(step.worldName(), GameType.CREATIVE, false, Difficulty.NORMAL,
             true, new GameRules(), WorldDataConfiguration.DEFAULT);
         // A *fresh* world, not the last run's. `createFreshLevel` opens an existing save of the
         // same name instead of replacing it, so a second run would inherit the first run's
