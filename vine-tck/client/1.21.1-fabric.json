@@ -29,6 +29,15 @@
       "ticks": 30
     },
     {
+      "type": "play_cutscene",
+      "cutscene": "vine_test:wyvern_strike",
+      "waitForEnd": false
+    },
+    {
+      "type": "wait",
+      "ticks": 30
+    },
+    {
       "type": "screenshot",
       "name": "1.21.1-fabric-cutscene"
     },

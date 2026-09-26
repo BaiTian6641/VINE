@@ -68,13 +68,14 @@ import dev.vineengine.vine.cutscene.VineCutscenes;
  *
  * <p><b>Two honest notes on step implementations.</b>
  * <ul>
- *   <li>{@code play_cutscene} triggers on the integrated server for this client's own player
- *       and, while it waits for the end, advances the cutscene clock with
- *       {@link VineCutscenes#tick()} once per client tick — the same thing the testmod
- *       exemplar does. No cell ticks cutscenes yet (sub-23's per-tick wiring is still open),
- *       and this cell must not start: the sub-23 scenario pins the exemplar's own frame count
- *       and sample ticks, so a global clock would move numbers it asserts. With no other
- *       caller, the step's ticking is the cutscene's only clock, exactly once per tick.</li>
+ *   <li>{@code play_cutscene} triggers on the integrated server for this client's own player —
+ *       the viewer the frame will actually be addressed to. The cutscene's clock is not the
+ *       step's: this run advances whatever cutscene is playing once per client tick
+ *       ({@link VineCutscenes#tick()}, issued on the server thread) across every step, because
+ *       the runtime is pure and has no clock of its own. Keeping it out of the step is what
+ *       lets a script screenshot a cinematic mid-play; keeping it out of the *driver* is what
+ *       keeps the sub-23 scenario's own frame counts and sample ticks true (it drives the
+ *       exemplar, with no client and no scripted run anywhere near it).</li>
  *   <li>{@code command} runs the text through the server's own dispatcher with the player's
  *       command source — byte for byte the work a chat command does once its packet lands
  *       ({@code CommandManager.executeWithPrefix(player.getCommandSource(), …)}) — except
@@ -82,9 +83,9 @@ import dev.vineengine.vine.cutscene.VineCutscenes;
  *       player's chat. With no integrated server (a remote server) it falls back to the plain
  *       chat path, where the result is the remote server's to report.</li>
  * </ul>
- * The client's own visual application of a cutscene (camera/actor/title) is sub-23's next
- * piece of work: this class proves the step runs and the client survives it, not that the
- * camera moved.
+ * A cutscene's visual application is {@code VineCutsceneClient}'s job (sub-23's client half,
+ * armed from the client entrypoint): this class proves the step runs and the client receives,
+ * the receiver proves the camera, title and sound were applied.
  */
 public final class ClientScriptRunner {
 
@@ -206,6 +207,7 @@ public final class ClientScriptRunner {
                 // A run that never quits is a hung harness, not a result: say so instead.
                 throw new ScriptFailure("the script ended without a quit step, so the client would never exit");
             }
+            advanceCutsceneClock(client);
             ClientScript.Step step = script.steps().get(nextStep);
             if (!stepBegun) {
                 stepBegun = true;
@@ -596,14 +598,32 @@ public final class ClientScriptRunner {
             LOGGER.info("[VINE] cutscene {} ended on client tick {}", step.cutscene(), cutsceneTicks);
             return true;
         }
-        MinecraftServer server = client.getServer();
-        if (server == null) {
+        if (client.getServer() == null) {
             throw new ScriptFailure("the integrated server stopped while the cutscene was playing");
         }
-        // The cell has no per-tick cutscene clock yet: advance it on the server, which is
-        // where a cinematic's clock belongs and where the testmod exemplar advances it too.
-        server.execute(VineCutscenes::tick);
         return timeout(client, CUTSCENE_END_TIMEOUT_TICKS, "cutscene " + step.cutscene() + " never ended");
+    }
+
+    /**
+     * Advances whatever cutscene is playing, once per client tick — the scripted run's own
+     * clock for sub-23's runtime, which is pure and has no clock of its own.
+     *
+     * <p><b>Why it is here and not inside {@code play_cutscene}.</b> A step only completes when
+     * it is done, so a clock owned by the step stops the moment the step ends — a script could
+     * then never screenshot a cinematic mid-play (the frame the screenshot would capture would
+     * always be the last one the step advanced to, or the first one after it). Ticking from the
+     * run's tick loop instead advances the clock across *every* step, so {@code play_cutscene}
+     * with {@code waitForEnd: false} followed by a {@code wait} lands the screenshot anywhere in
+     * the cinematic. The tick is issued on the server thread because the runtime is server state.
+     */
+    private static void advanceCutsceneClock(MinecraftClient client) {
+        if (!VineCutscenes.playing()) {
+            return;
+        }
+        MinecraftServer server = client.getServer();
+        if (server != null) {
+            server.execute(VineCutscenes::tick);
+        }
     }
 
     // ---------------------------------------------------------------------------------------

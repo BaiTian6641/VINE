@@ -59,15 +59,28 @@ contains, never how a cell draws it.
   needs to *see* a cutscene: the client creates a world, runs engine commands, plays the
   cutscene through the testmod command and screenshots the result. Evidence:
   `vine-tck/fixtures/client/1.21.1-{fabric,neoforge}-cutscene.png`.
-- [ ] **Stage C — client application (remaining):** the frames are produced and delivered, but
-  a cell does not yet move the camera/actors or draw the titles, so the screenshot shows the
-  world rather than the shot. The pieces are in place: the frame carries position/yaw/pitch/fov,
-  actor clips with seconds and title lines, and the runner proves the client survives a
-  cinematic.
+- [x] **Stage C — client application, 1.21.1-fabric (landed v1).** The Fabric cell installs the
+  runtime's sender at bootstrap (`FabricCutsceneTransport`, wire id `vine:cutscene_frame`,
+  versioned payload) and sends each frame to the one viewer it is addressed to; its client half
+  (`VineCutsceneClient`) applies the camera yaw/pitch, the title lines through vanilla's
+  title/subtitle API, and the frame's sounds as positioned client sounds at the camera position.
+  An ending is a message, not a silence: the transport sends an end marker when the runtime stops
+  playing, and the client then returns the camera to where it was pointing and clears the title
+  (a staleness fallback covers a transport that dies mid-cutscene). Evidence: the scripted run
+  `vine-tck/client/1.21.1-fabric.json` screenshots the cinematic mid-shot
+  (`run/screenshots/1.21.1-fabric-cutscene.png` — title visible, view at the frame's yaw).
+- [ ] **Stage C — remaining gaps (stated, not hidden):** `actors()` is not applied (the cell has no
+  engine entity model — engine entity types still register an empty renderer); the frame's `fov` is
+  carried but not applied (1.21.1 computes FOV inside `GameRenderer` with no per-frame hook, and v1
+  adds no Mixin); the camera's authored *position* is not applied either, because moving the camera
+  body without a Mixin means moving the player, which v1 rules out; an audio track's authored
+  `volume` stops at the engine seam (`CutsceneFrame.sounds()` carries ids only); and the 1.21.1
+  NeoForge cell still needs its own delivery + client half (the wire format is deliberately per cell,
+  like the part-delta envelope).
 
 ## 4. Problems & blockers
 
-- **Camera authority vs vanilla.** Taking over a player's camera is exactly the kind of thing a loader or another mod may also want to do. v1 keeps it *presentational*: the server sends a frame, the client applies it only while the cutscene it was told about is still playing, and any player input or a `stop` cancels it. No Mixin is used for the camera in v1; if one is needed, it stays in the driver jar per §5.9.
+- **Camera authority vs vanilla.** Taking over a player's camera is exactly the kind of thing a loader or another mod may also want to do. v1 keeps it *presentational*: the server sends a frame, the client applies it only while the cutscene it was told about is still playing (the end marker or the staleness fallback releases it), and a server-side `stop` ends it for everyone. No Mixin is used for the camera in v1; if one is needed, it stays in the driver jar per §5.9. A *client-side* input cancel is not implemented: it would need a C2S path of its own, and the yaw/pitch are re-applied every frame the server sends, so input during a cutscene is overridden rather than able to end it.
 - **Time base.** Cutscene ticks are server ticks. A client that lags does not slow the cinematic down; it sees fewer frames. This is the same trade the rest of the engine makes (strict server authority, no rewind), stated here because cinematics are where it is most visible.
 - **Actor selection.** v1 addresses actors by `VineId` (an engine actor reference is not stable across a reload); a cutscene that must name *specific* entities needs the sub-15/session identity surface, which is a later decision rather than a guess.
 

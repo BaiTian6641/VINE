@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import dev.vineengine.vine.internal.driver1211.fabric.client.ClientScriptRunner;
+import dev.vineengine.vine.internal.driver1211.fabric.client.VineCutsceneClient;
 import dev.vineengine.vine.internal.driver1211.fabric.client.VineEntityRenderers;
 import dev.vineengine.vine.internal.driver1211.fabric.net.FabricNetDriver;
 
@@ -20,6 +21,10 @@ import dev.vineengine.vine.internal.driver1211.fabric.net.FabricNetDriver;
  * scripted client run (sub-21's client half) when the harness set
  * {@code -Dvine.tck.clientScript}: with the property absent this entrypoint
  * behaves exactly as it always has, and nothing auto-quits.
+ *
+ * <p>Also arms sub-23's client half ({@code VineCutsceneClient}): the receiver that
+ * applies a cutscene frame the server addressed to this player. It is client-dist by
+ * construction — this entrypoint is what a dedicated server never loads.
  */
 public final class VineFabricClient implements ClientModInitializer {
     private static final Logger LOGGER = LoggerFactory.getLogger(VineFabricClient.class);
@@ -31,6 +36,10 @@ public final class VineFabricClient implements ClientModInitializer {
         // Client renderers for the engine's own entity types (sub-08 Stage A's client half):
         // without them the first engine entity in view kills the render thread.
         VineEntityRenderers.register();
+        // Cutscene application (sub-23's client half): the receiver for the frames this server
+        // addresses to this player, and the tick that applies them. Armed before any script step
+        // can produce one — the scripted run below triggers cutscenes the moment it starts.
+        VineCutsceneClient.install();
         // A scripted run drives the client from the tick loop; arming it last keeps the
         // engine's networking wiring in place before any step can produce a packet.
         ClientScriptRunner.installIfRequested();

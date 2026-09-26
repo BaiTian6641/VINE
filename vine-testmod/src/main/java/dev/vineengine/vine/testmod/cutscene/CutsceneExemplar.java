@@ -34,11 +34,26 @@ public final class CutsceneExemplar {
     private CutsceneExemplar() {
     }
 
-    /** Plays the cutscene for two viewers and reports the frame two ticks in. */
-    public static void play() {
+    /**
+     * Plays the cutscene for two viewers and reports the frame two ticks in.
+     *
+     * <p><b>Who watches.</b> The two fixed viewers are the scenario's own subjects — they exist
+     * so a clientless run can compare two frame streams, and the headless scenario counts them
+     * ({@code viewers=2}). {@code caller} is the player who ran the command, when one did: a
+     * real client can only be shown a cutscene it is *addressed* in, so without it the command
+     * would play a cinematic no client ever receives. A console source passes {@code null} and
+     * the viewer set is exactly the two fixed ones.
+     */
+    public static void play(UUID caller) {
         installSenderOnce();
         RECEIVED.clear();
-        VineCutscenes.play(CUTSCENE, Set.of(VIEWER_A, VIEWER_B));
+        Set<UUID> viewers = new java.util.LinkedHashSet<>();
+        viewers.add(VIEWER_A);
+        viewers.add(VIEWER_B);
+        if (caller != null) {
+            viewers.add(caller);
+        }
+        VineCutscenes.play(CUTSCENE, viewers);
         System.out.println("tck: cutscene playing=" + VineCutscenes.playing()
             + " id=" + VineCutscenes.current().orElse(null)
             + " viewers=" + VineCutscenes.viewers().size());

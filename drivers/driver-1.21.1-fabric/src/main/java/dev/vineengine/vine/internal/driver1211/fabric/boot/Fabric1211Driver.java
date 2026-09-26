@@ -29,6 +29,7 @@ import dev.vineengine.vine.internal.driver1211.fabric.data.FabricVoxelStorage;
 import dev.vineengine.vine.internal.driver1211.fabric.data.FabricWorldView;
 import dev.vineengine.vine.internal.driver1211.fabric.entity.FabricEntityDriver;
 import dev.vineengine.vine.internal.driver1211.fabric.events.FabricHookInstallers;
+import dev.vineengine.vine.internal.driver1211.fabric.net.FabricCutsceneTransport;
 import dev.vineengine.vine.internal.driver1211.fabric.net.FabricNetDriver;
 import dev.vineengine.vine.internal.driver1211.fabric.net.FabricPartTransport;
 import dev.vineengine.vine.internal.driver1211.fabric.registry.FabricBehaviorWiring;
@@ -181,6 +182,13 @@ public final class Fabric1211Driver implements VineDriver {
         // payload type must be bound at mod init (Fabric's registration moment) —
         // before any world can host a multipart actor.
         FabricPartTransport.install();
+        // Cutscene delivery (sub-23): the engine produces one frame per tick and hands it to a
+        // seam; resolving the frame's viewer id to a connection is this cell's half, and the
+        // payload type must be bound at mod init (Fabric's registration moment) — before any
+        // world can play a cutscene. Its clock is *not* installed here: whose tick advances a
+        // cinematic is the runtime's decision, and a driver clock would move the frame numbers
+        // the sub-23 scenario asserts.
+        FabricCutsceneTransport.install();
         // Capability interop (sub-04 Stage C/D): native queries answer from the
         // same item payload the storage driver writes.
         dev.vineengine.vine.internal.capability.CapabilityDriverBinding.bind(
@@ -195,6 +203,11 @@ public final class Fabric1211Driver implements VineDriver {
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             VineCombat.state().tick();
             VineQuests.tick();
+            // Cutscene endings (sub-23): a cutscene that stopped playing produces no frame, so
+            // the viewers it reached are told explicitly — the client has nothing to infer an
+            // ending from otherwise, and a title would outlive the cinematic that put it there.
+            // This reads the runtime's playing state; it never advances the clock.
+            FabricCutsceneTransport.tick(server);
         });
         ServerWorldEvents.LOAD.register((server, world) -> {
             if (mounted.compareAndSet(false, true)) {

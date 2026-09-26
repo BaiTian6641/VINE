@@ -148,7 +148,11 @@ public final class EchoCommand {
                 }))
             .then(VineCommand.literal("tck_cutscene_play")
                 .executes(ctx -> {
-                    dev.vineengine.vine.testmod.cutscene.CutsceneExemplar.play();
+                    // The player who ran the command watches too, when there is one: the fixed
+                    // viewers keep the headless scenario's assertions true, and the caller is
+                    // what lets a real client be shown a cutscene it is actually addressed in.
+                    dev.vineengine.vine.testmod.cutscene.CutsceneExemplar.play(
+                        ctx.source().player().map(dev.vineengine.vine.VinePlayer::uniqueId).orElse(null));
                     return 1;
                 }))
             .then(VineCommand.literal("tck_cutscene_finish")
