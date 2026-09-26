@@ -151,7 +151,7 @@
       "trace": "command",
       "expect": [
         "Invalid value: voxel path 'Bad.Path' has an invalid segment 'Bad'",
-        "suggestid: vine_test:counterblock,vine_test:ember_blade,vine_test:ember_cleave,vine_test:hunt_board,vine_test:hunt_status,vine_test:stateblock,vine_test:testbeast,vine_test:testblock,vine_test:testitem,vine_test:wide_slash,vine_test:wyvern_strike",
+        "suggestid: vine_test:counterblock,vine_test:ember_blade,vine_test:ember_cleave,vine_test:hunt_board,vine_test:hunt_status,vine_test:partner_blade,vine_test:stateblock,vine_test:testbeast,vine_test:testblock,vine_test:testitem,vine_test:wide_slash,vine_test:wyvern_strike",
         "sessionplayers: none"
       ]
     },
