@@ -48,6 +48,17 @@ import dev.vineengine.vine.cutscene.VineCutscenes;
  * rendering and ticking, and a blocked thread would deadlock the integrated server. That is
  * also why the pause-on-lost-focus menu is turned off — an unfocused window must not pause
  * the world the script is waiting on.
+ *
+ * <p><b>{@code play_cutscene} (sub-23's client half).</b> The step triggers on the integrated
+ * server for this client's own player — the viewer the frame will actually be addressed to —
+ * and the run advances whatever cutscene is playing once per client tick
+ * ({@link VineCutscenes#tick()}, issued on the server thread) across every step, because the
+ * runtime is pure and has no clock of its own. Keeping the clock out of the step is what lets
+ * a script screenshot a cinematic mid-play; keeping it out of the <em>driver</em> is what keeps
+ * the sub-23 scenario's own frame counts and sample ticks true. A cutscene's visual application
+ * is {@code VineCutsceneClient}'s job (armed from the client entrypoint): this class proves the
+ * step runs and the client receives, the receiver proves the camera, title and sound were
+ * applied.
  */
 public final class ClientScriptRunner {
 
@@ -65,6 +76,9 @@ public final class ClientScriptRunner {
     /** A cutscene longer than this is a bug in the script, not a slow cinematic. */
     private static final int CUTSCENE_TIMEOUT_TICKS = 20 * 120;
 
+    /** 5 s for a triggered cutscene to report itself playing. */
+    private static final int CUTSCENE_START_TIMEOUT_TICKS = 100;
+
     private enum Phase {
         AWAIT_READY, RUN, WAIT, AWAIT_WORLD, AWAIT_CUTSCENE, AWAIT_SCREENSHOT, DONE
     }
@@ -78,6 +92,15 @@ public final class ClientScriptRunner {
     private long deadline;
     private Path screenshotFile;
     private boolean failed;
+
+    /** The play_cutscene step the run is currently inside, while it waits for start/end. */
+    private ClientScript.Step.PlayCutscene pendingCutscene;
+    /** The trigger's own refusal (an unregistered cutscene), surfaced as a named failure. */
+    private volatile Throwable cutsceneFailure;
+    /** Whether the triggered cutscene has been observed playing — "not yet" and "ended" differ. */
+    private boolean cutsceneStarted;
+    /** Client ticks spent inside the current play_cutscene step. */
+    private int cutsceneTicks;
 
     public ClientScriptRunner(Path scriptFile) {
         this.scriptFile = Objects.requireNonNull(scriptFile, "scriptFile");
@@ -98,6 +121,12 @@ public final class ClientScriptRunner {
                 LOGGER.info("vine-tck: client script '{}' armed ({} steps from {})", script.name(),
                     script.steps().size(), scriptFile);
             }
+            // The cutscene's clock (sub-23): the runtime is pure and has no clock of its own, and
+            // this cell drives it from no server tick, so the scripted run advances whatever is
+            // playing once per client tick — across *every* step, which is what lets a script
+            // screenshot a cinematic mid-play (a clock owned by the play_cutscene step would stop
+            // the moment that step ended). Issued on the server thread: the runtime is server state.
+            advanceCutsceneClock(minecraft);
             switch (phase) {
                 case AWAIT_READY -> {
                     if (clientReady(minecraft)) {
@@ -124,17 +153,49 @@ public final class ClientScriptRunner {
                     }
                 }
                 case AWAIT_CUTSCENE -> {
-                    // The engine has no server-tick driver for cutscenes yet (nothing calls
-                    // VineCutscenes#tick), so the run advances the clock it is waiting on. When
-                    // a server-side tick lands this degrades to a plain poll.
-                    VineCutscenes.tick();
-                    if (!VineCutscenes.playing()) {
+                    // The clock is advanced once per client tick by advanceCutsceneClock, so this
+                    // phase only watches the runtime: is the cutscene the step triggered playing
+                    // yet, and has it ended? "Not playing" before the trigger lands means "not
+                    // yet", never "already over" — the two must not be confused, or a cutscene the
+                    // step itself advances to its end would fail a run that worked.
+                    if (cutsceneFailure != null) {
+                        throw new StepFailure(stepName(index),
+                            "playing " + pendingCutscene.cutscene() + " failed: " + cutsceneFailure.getMessage());
+                    }
+                    cutsceneTicks++;
+                    boolean playing = VineCutscenes.playing();
+                    if (!cutsceneStarted) {
+                        if (!playing) {
+                            if (cutsceneTicks < CUTSCENE_START_TIMEOUT_TICKS) {
+                                return;
+                            }
+                            throw new StepFailure(stepName(index),
+                                "cutscene " + pendingCutscene.cutscene() + " never reported itself playing");
+                        }
+                        cutsceneStarted = true;
+                        LOGGER.info("vine-tck: cutscene {} started for {} viewer(s)", pendingCutscene.cutscene(),
+                            VineCutscenes.viewers().size());
+                        if (!pendingCutscene.waitForEnd()) {
+                            phase = Phase.RUN;
+                            index++;
+                            runSteps(minecraft);
+                            return;
+                        }
+                    } else if (!playing) {
+                        LOGGER.info("vine-tck: cutscene {} ended on client tick {}", pendingCutscene.cutscene(),
+                            cutsceneTicks);
                         phase = Phase.RUN;
                         index++;
                         runSteps(minecraft);
-                    } else if (clock > deadline) {
-                        throw new StepFailure(stepName(index), "the cutscene was still playing after "
-                            + (CUTSCENE_TIMEOUT_TICKS / 20) + "s");
+                        return;
+                    }
+                    if (minecraft.getSingleplayerServer() == null) {
+                        throw new StepFailure(stepName(index),
+                            "the integrated server stopped while the cutscene was playing");
+                    }
+                    if (clock > deadline) {
+                        throw new StepFailure(stepName(index), "cutscene " + pendingCutscene.cutscene()
+                            + " was still playing after " + (CUTSCENE_TIMEOUT_TICKS / 20) + "s");
                     }
                 }
                 case AWAIT_SCREENSHOT -> {
@@ -187,11 +248,11 @@ public final class ClientScriptRunner {
                     continue;
                 }
                 case ClientScript.Step.PlayCutscene cutscene -> {
-                    playCutscene(minecraft, cutscene);
-                    if (!cutscene.waitForEnd()) {
-                        index++;
-                        continue;
-                    }
+                    beginCutscene(minecraft, cutscene);
+                    // Even with waitForEnd=false the step waits for the start before it completes:
+                    // a step that returned as soon as the trigger was queued would let the next
+                    // step (a `wait`, then the screenshot) run against a cinematic that had not
+                    // begun. The AWAIT_CUTSCENE poll advances it for waitForEnd=false.
                     phase = Phase.AWAIT_CUTSCENE;
                     deadline = clock + CUTSCENE_TIMEOUT_TICKS;
                     return;
@@ -252,16 +313,58 @@ public final class ClientScriptRunner {
         minecraft.player.connection.sendCommand(command);
     }
 
-    private static void playCutscene(Minecraft minecraft, ClientScript.Step.PlayCutscene step) {
+    /**
+     * Triggers the step's cutscene for this client's own player — the viewer the frame will
+     * actually be addressed to. The call is handed to the integrated server's thread because the
+     * runtime is server state; the thread it runs on is therefore the one a real server tick
+     * would have produced the frames on.
+     */
+    private void beginCutscene(Minecraft minecraft, ClientScript.Step.PlayCutscene step) {
         if (minecraft.player == null) {
             throw new StepFailure("play_cutscene(" + step.cutscene() + ")", "there is no client player to watch it");
         }
-        // The integrated server shares this JVM, so the engine call reaches the same runtime
-        // the server tick would; the viewer is this player, which is what makes the cutscene
-        // something this client could apply once the visual half lands.
+        var server = minecraft.getSingleplayerServer();
+        if (server == null) {
+            throw new StepFailure("play_cutscene(" + step.cutscene() + ")",
+                "no integrated server: this cell cannot play a cutscene for a remote client");
+        }
         UUID viewer = minecraft.player.getUUID();
-        VineCutscenes.play(step.cutscene(), Set.of(viewer));
-        LOGGER.info("vine-tck: cutscene {} playing for {}", step.cutscene(), viewer);
+        pendingCutscene = step;
+        cutsceneFailure = null;
+        cutsceneStarted = false;
+        cutsceneTicks = 0;
+        server.execute(() -> {
+            try {
+                VineCutscenes.play(step.cutscene(), Set.of(viewer));
+            } catch (Throwable t) {
+                // The trigger's own refusal (an unregistered cutscene, say) reaches the step
+                // through the poll as a named failure rather than a stack trace in a log.
+                cutsceneFailure = t;
+            }
+        });
+        LOGGER.info("vine-tck: play_cutscene {} for viewer {}", step.cutscene(), viewer);
+    }
+
+    /**
+     * Advances whatever cutscene is playing, once per client tick — the scripted run's own clock
+     * for sub-23's runtime, which is pure and has no clock of its own.
+     *
+     * <p><b>Why it is here and not inside {@code play_cutscene}.</b> A step only completes when it
+     * is done, so a clock owned by the step stops the moment the step ends — a script could then
+     * never screenshot a cinematic mid-play (the frame the screenshot would capture would always
+     * be the last one the step advanced to, or the first one after it). Ticking from the run's
+     * tick loop instead advances the clock across <em>every</em> step, so {@code play_cutscene}
+     * with {@code waitForEnd: false} followed by a {@code wait} lands the screenshot anywhere in
+     * the cinematic. The tick is issued on the server thread because the runtime is server state.
+     */
+    private static void advanceCutsceneClock(Minecraft minecraft) {
+        if (!VineCutscenes.playing()) {
+            return;
+        }
+        var server = minecraft.getSingleplayerServer();
+        if (server != null) {
+            server.execute(VineCutscenes::tick);
+        }
     }
 
     private void requestScreenshot(Minecraft minecraft, String name) {

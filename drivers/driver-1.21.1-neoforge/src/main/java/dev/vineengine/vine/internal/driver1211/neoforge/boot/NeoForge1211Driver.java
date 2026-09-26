@@ -32,6 +32,7 @@ import dev.vineengine.vine.internal.driver1211.common.DriverRuntime;
 import dev.vineengine.vine.internal.driver1211.common.command.EngineCommands;
 import dev.vineengine.vine.internal.driver1211.neoforge.command.NeoForgeCommandFactory;
 import dev.vineengine.vine.internal.driver1211.neoforge.events.NeoForgeHookInstallers;
+import dev.vineengine.vine.internal.driver1211.neoforge.net.NeoForgeCutsceneTransport;
 import dev.vineengine.vine.internal.driver1211.neoforge.net.NeoForgeNetDriver;
 import dev.vineengine.vine.internal.driver1211.neoforge.net.NeoForgePartTransport;
 import dev.vineengine.vine.internal.driver1211.neoforge.registry.NeoForgeBehaviorWiring;
@@ -245,6 +246,11 @@ public final class NeoForge1211Driver implements VineDriver {
             net.neoforged.neoforge.event.tick.ServerTickEvent.Post.class, event -> {
                 dev.vineengine.vine.combat.VineCombat.state().tick();
                 dev.vineengine.vine.quest.VineQuests.tick();
+                // Cutscene endings (sub-23): a cutscene that stopped playing produces no frame, so
+                // the viewers it reached are told explicitly — the client has nothing to infer an
+                // ending from otherwise, and a title would outlive the cinematic that put it there.
+                // This reads the runtime's playing state; it never advances the clock.
+                NeoForgeCutsceneTransport.tick(event.getServer());
             });
 
         NeoForgeHookInstallers.bind(ctx, ctx.bus());
@@ -260,6 +266,14 @@ public final class NeoForge1211Driver implements VineDriver {
         // and its envelope is registered next to the engine's own channels.
         NeoForgePartTransport.install();
         modBus.addListener(RegisterPayloadHandlersEvent.class, NeoForgePartTransport::bindNative);
+        // Cutscene delivery (sub-23): the engine produces one frame per tick and hands it to a
+        // seam; resolving the frame's viewer id to a connection is this cell's half, and the
+        // payload type must be bound when NF fires its payload event — before any world can play
+        // a cutscene. Its clock is *not* installed here: whose tick advances a cinematic is the
+        // runtime's decision, and a driver clock would move the frame numbers the sub-23
+        // scenario asserts (the scripted client run ticks it instead).
+        NeoForgeCutsceneTransport.install();
+        modBus.addListener(RegisterPayloadHandlersEvent.class, NeoForgeCutsceneTransport::bindNative);
 
         // Commands (sub-06 Stage A): every native dispatcher build attaches the
         // engine's descriptor snapshot (fires post-REGISTRIES_FROZEN on NF).

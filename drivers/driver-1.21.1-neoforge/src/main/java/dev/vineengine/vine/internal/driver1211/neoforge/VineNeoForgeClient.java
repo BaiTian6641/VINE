@@ -15,6 +15,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import dev.vineengine.vine.internal.driver1211.neoforge.client.ClientScriptRunner;
+import dev.vineengine.vine.internal.driver1211.neoforge.client.VineCutsceneClient;
 import dev.vineengine.vine.internal.driver1211.neoforge.client.VineEntityRenderer;
 import dev.vineengine.vine.internal.driver1211.neoforge.net.NeoForgeNetDriver;
 import dev.vineengine.vine.internal.driver1211.neoforge.net.VineNeoForgePayload;
@@ -50,6 +51,10 @@ public final class VineNeoForgeClient {
                 event.registerEntityRenderer(entityType, VineEntityRenderer::new);
             }
         });
+        // Cutscene application (sub-23's client half): the tick that applies the frames this
+        // server addresses to this player. Armed before any script step can produce one — the
+        // scripted run below triggers cutscenes the moment it starts.
+        VineCutsceneClient.install();
         armClientScript();
     }
 

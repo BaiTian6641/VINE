@@ -69,14 +69,25 @@ contains, never how a cell draws it.
   (a staleness fallback covers a transport that dies mid-cutscene). Evidence: the scripted run
   `vine-tck/client/1.21.1-fabric.json` screenshots the cinematic mid-shot
   (`run/screenshots/1.21.1-fabric-cutscene.png` — title visible, view at the frame's yaw).
+- [x] **Stage C — client application, 1.21.1-neoforge (landed v1).** The NeoForge cell mirrors
+  the same design with only loader differences: the sender is installed at bootstrap and the
+  payload (`NeoForgeCutsceneTransport`, the same `vine:cutscene_frame` wire id and v1 layout, a
+  per-cell copy like the part-delta envelope) is registered through
+  `RegisterPayloadHandlersEvent`, which on NeoForge carries the client handler too (no separate
+  client-side receiver registration). Its client half (`VineCutsceneClient`) applies the camera
+  yaw/pitch, the titles through `Gui`'s title/subtitle API, and the sounds as positioned sounds
+  at the frame's camera position; the end marker (sent from this cell's server tick when the
+  runtime stops playing) restores the camera and clears the title, with the same staleness
+  fallback. The scripted run advances the cutscene's clock once per client tick — the runtime is
+  pure and this cell drives it from no server tick — so a script can screenshot mid-cinematic.
+  Evidence: `vine-tck/client/1.21.1-neoforge.json` screenshots the cinematic mid-shot
+  (`run/screenshots/1.21.1-neoforge-cutscene.png` — title visible, view at the frame's yaw).
 - [ ] **Stage C — remaining gaps (stated, not hidden):** `actors()` is not applied (the cell has no
   engine entity model — engine entity types still register an empty renderer); the frame's `fov` is
   carried but not applied (1.21.1 computes FOV inside `GameRenderer` with no per-frame hook, and v1
   adds no Mixin); the camera's authored *position* is not applied either, because moving the camera
   body without a Mixin means moving the player, which v1 rules out; an audio track's authored
-  `volume` stops at the engine seam (`CutsceneFrame.sounds()` carries ids only); and the 1.21.1
-  NeoForge cell still needs its own delivery + client half (the wire format is deliberately per cell,
-  like the part-delta envelope).
+  `volume` stops at the engine seam (`CutsceneFrame.sounds()` carries ids only).
 
 ## 4. Problems & blockers
 
